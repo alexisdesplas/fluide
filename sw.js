@@ -1,4 +1,4 @@
-const CACHE = "fluide-v6";
+const CACHE = "fluide-v7";
 const ASSETS = [
   "./",
   "./index.html",
@@ -19,7 +19,7 @@ const ASSETS = [
 ];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", e => {
@@ -37,7 +37,8 @@ self.addEventListener("fetch", e => {
   const font = url.host === "fonts.googleapis.com" || url.host === "fonts.gstatic.com";
   if (url.origin !== self.location.origin && !font) return;
   e.respondWith(
-    fetch(req).then(res => {
+    // « no-cache » : on revalide auprès du serveur au lieu de servir le cache HTTP (GitHub Pages garde 10 min).
+    fetch(req, font ? undefined : { cache: "no-cache" }).then(res => {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(req, copy));
       return res;

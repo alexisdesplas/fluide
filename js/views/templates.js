@@ -54,8 +54,8 @@ export function templatesView() {
         const muscles = [...new Set(t.items.map(i => exercise(i.exerciseId)?.muscle))].join(" · ");
         return h("button", { class: "card tap", onClick: () => go(`#/seances/${t.id}`) },
           h("div", { class: "card-head" }, h("span", { class: "display-xs" }, t.name), icon("caretRight", "chev discret")),
-          h("span", { class: "body-sm num" }, `${t.items.length} exercices · ${t.items.reduce((a, i) => a + itemSets(i), 0)} séries · ~${estimate(t)} min`),
-          h("span", { class: "caption" }, muscles || "Aucun exercice", last ? ` — faite ${ago(last.startedAt)}` : ""));
+          h("span", { class: "body-sm num" }, `${t.items.length} exercice${t.items.length > 1 ? "s" : ""} · ${t.items.reduce((a, i) => a + itemSets(i), 0)} séries · ~${estimate(t)} min`),
+          h("span", { class: "caption" }, muscles || "Aucun exercice", last ? ` — faite ${ago(last.startedAt)}` : muscles ? " — jamais faite" : ""));
       }) : h("div", { class: "card empty" },
         h("p", { class: "body-md fort medium", style: { margin: 0 } }, "Aucune séance type"),
         h("p", { class: "body-sm discret", style: { margin: 0 } }, "Choisis un programme (full body, haut / bas, push / pull / legs…) ou crée tes séances toi-même."),
@@ -220,7 +220,8 @@ export function programView() {
     Object.entries(SPLITS).map(([k, sp]) => h("button", { type: "button", class: "radio-card", role: "radio", "aria-checked": String(k === chosen), onClick: () => pick(k) },
       h("span", { class: "radio-dot", "aria-hidden": "true" }),
       h("span", { class: "radio-text" },
-        h("span", { class: "body-md fort semibold" }, sp.label, sp.days ? h("span", { class: "caption" }, ` · ${sp.days} séances / semaine`) : null),
+        h("span", { class: "body-md fort semibold" }, sp.label),
+        sp.days && h("span", { class: "caption" }, `${sp.days} séances / semaine`),
         h("span", { class: "caption" }, sp.desc)))));
   const el = h("div", { class: "screen no-tabs" },
     navbar({ back: { label: "Séances", onClick: leave }, title: "Programme", subtitle: "Réglé sur Fluide" }),

@@ -267,6 +267,9 @@ textarea.input { height: 88px; padding: var(--spacing-12); resize: none; }
 /* ——— Séance en cours */
 .workout { padding-bottom: 0; }
 .workout .scroll { padding-bottom: var(--spacing-16); }
+.workout .scroll.wo-center { justify-content: center; }
+.trophy { display: flex; color: var(--etat-succes); }
+.trophy svg { width: 20px; height: 20px; }
 .wo-head { padding: calc(var(--safe-top) + 12px) var(--spacing-20) var(--spacing-12); display: flex; flex-direction: column; gap: var(--spacing-12); }
 .wo-top { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-8); }
 .wo-hero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--spacing-4); padding: var(--spacing-8) 0; }

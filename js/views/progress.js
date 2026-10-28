@@ -70,14 +70,15 @@ export function exerciseProgressView({ id }) {
     navbar({ back: { label: "Progrès", href: "#/progres" }, title: e.name, subtitle: e.muscle }),
     h("div", { class: "scroll" },
       segmented(Object.entries(labels), metric, v => { metric = v; dispatchEvent(new HashChangeEvent("hashchange")); }, "sm"),
-      h("div", { class: "card" },
-        h("span", { class: "caption" }, `Meilleur ${labels[metric].toLowerCase()}`),
+      !rows.length && h("div", { class: "card empty" }, icon("chart"), h("p", { class: "body-md", style: { margin: 0 } }, "Pas encore fait. Ta courbe démarre à la première série validée.")),
+      rows.length > 0 && h("div", { class: "card" },
+        h("span", { class: "caption" }, { best1rm: "Meilleur 1RM estimé", maxWeight: "Meilleure charge", volume: "Meilleur volume" }[metric]),
         h("span", { class: "display-sm num" }, `${fmt(best)} kg`),
         top && h("span", { class: "body-sm num" }, `Meilleure série : ${kg(top.weight)} × ${top.reps} · ${dateShort(top.date)}`),
         lineChart(rows.map(r => ({ x: r.date, y: r[metric] })), { format: fmt })),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Séances")),
       h("div", { class: "list" }, [...rows].reverse().map(r => h("button", { class: "row", onClick: () => go(`#/progres/historique/${r.sessionId}`) },
-        h("div", { class: "row-main" }, h("span", { class: "body-md fort num" }, r.sets.map(s => `${s.reps}×${num(s.weight)}`).join(" · ")), h("span", { class: "caption" }, dateLong(r.date))),
+        h("div", { class: "row-main" }, h("span", { class: "body-md fort num" }, r.sets.map(s => `${s.reps}×${s.weight ? num(s.weight) : "PDC"}`).join(" · ")), h("span", { class: "caption" }, dateLong(r.date))),
         h("span", { class: "caption num" }, `${num(r.best1rm)} kg`))))));
   return { el, tab: "progres" };
 }
@@ -90,13 +91,13 @@ export function historyView() {
     months.set(k, [...(months.get(k) || []), s]);
   }
   const el = h("div", { class: "screen" },
-    navbar({ back: { label: "Progrès", href: "#/progres" }, title: "Historique", subtitle: `${all.length} séances` }),
+    navbar({ back: { label: "Progrès", href: "#/progres" }, title: "Historique", subtitle: `${all.length} séance${all.length > 1 ? "s" : ""}` }),
     h("div", { class: "scroll" },
       all.length ? [...months].map(([m, list]) => h("div", null,
         h("div", { class: "overline", style: { margin: "0 0 8px" } }, m),
         h("div", { class: "list" }, list.map(s => h("button", { class: "row", onClick: () => go(`#/progres/historique/${s.id}`) },
           h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, s.name),
-            h("span", { class: "caption num" }, `${dateLong(s.startedAt)} · ${sessionSets(s)} séries · ${int(sessionVolume(s))} kg`)),
+            h("span", { class: "caption num" }, `${dateLong(s.startedAt)} · ${sessionSets(s)} série${sessionSets(s) > 1 ? "s" : ""} · ${int(sessionVolume(s))} kg`)),
           s.feeling && pill(...FEELING[s.feeling]), icon("caretRight", "chev"))))))
         : h("div", { class: "card empty" }, icon("timer"), h("p", { class: "body-md", style: { margin: 0 } }, "Aucune séance enregistrée."))));
   return { el, tab: "progres" };
@@ -121,7 +122,7 @@ export function sessionView({ id }) {
         return h("div", { class: "row" },
           h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, exercise(e.exerciseId)?.name || "Exercice supprimé"),
             (e.swappedFrom || e.extra) && h("span", { class: "caption" }, e.extra ? "Hors programme" : `À la place de ${exercise(e.swappedFrom)?.name || "—"}`),
-            h("span", { class: "caption num" }, (e.format === "emom" || e.format === "tabata" ? `${e.format === "emom" ? "EMOM" : "Tabata"} · ${e.sets.length} rounds · ` : "") + e.sets.map(x => `${x.reps}×${num(x.weight)}${x.rpe ? ` @${x.rpe}` : ""}`).join(" · "))),
+            h("span", { class: "caption num" }, (e.format === "emom" || e.format === "tabata" ? `${e.format === "emom" ? "EMOM" : "Tabata"} · ${e.sets.length} rounds · ` : "") + e.sets.map(x => `${x.reps}×${x.weight ? num(x.weight) : "PDC"}${x.rpe ? ` @${x.rpe}` : ""}`).join(" · "))),
           rec && pill("Record", "succes"));
       })),
       s.note && h("div", { class: "card flat" }, h("span", { class: "overline" }, "Journal"), h("p", { class: "body-md", style: { margin: 0 } }, s.note)),
