@@ -1,0 +1,363 @@
+/* Hardwood, mode « Indigo DT » — valeurs relevées dans Figma Perso (Tabatime · App, écrans Hardwood). */
+:root {
+  --fond-page: #0f1016;
+  --fond-carte: #1a1b24;
+  --fond-discret: #22232e;
+  --bord-discret: #2e303d;
+  --bord-base: #636883;
+  --texte-fort: #f5f6fa;
+  --texte-base: #c9ccd8;
+  --texte-discret: #9da1b8;
+  --texte-inverse: #15161e;
+  --accent-texte: #b3bcff;
+  --accent-soft: #262b4d;
+  --etat-succes: #4ade80;
+  --etat-danger: #ff7a88;
+  --etat-attention: #ffa24d;
+  --etat-attention-soft: #3a2612;
+  --etat-succes-soft: #12301f;
+  --etat-danger-soft: #3a1a20;
+
+  --spacing-4: 4px; --spacing-8: 8px; --spacing-12: 12px; --spacing-16: 16px;
+  --spacing-20: 20px; --spacing-24: 24px; --spacing-32: 32px;
+  --radius-sm: 8px; --radius-md: 12px; --radius-full: 999px;
+
+  --font: Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --ease: cubic-bezier(.25, .1, .25, 1);
+  --sheet: cubic-bezier(.32, .72, 0, 1);
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--fond-page); }
+body {
+  color: var(--texte-base); font: 400 14px/20px var(--font);
+  -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent-texte); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ——— Styles de texte Hardwood */
+.display-lg { font: 700 64px/64px var(--font); letter-spacing: -0.03em; color: var(--texte-fort); }
+.display-sm { font: 700 44px/44px var(--font); letter-spacing: -0.02em; color: var(--texte-fort); }
+.display-xs { font: 600 20px/24px var(--font); color: var(--texte-fort); }
+.heading-xl { font: 600 28px/32px var(--font); letter-spacing: -0.01em; color: var(--texte-fort); margin: 0; }
+.heading-md { font: 600 16px/24px var(--font); color: var(--texte-fort); margin: 0; }
+.body-lg { font: 400 16px/24px var(--font); }
+.body-md { font: 400 14px/20px var(--font); }
+.body-sm { font: 400 13px/20px var(--font); }
+.caption { font: 400 12px/16px var(--font); color: var(--texte-discret); }
+.overline { font: 500 11px/16px var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--texte-discret); }
+.fort { color: var(--texte-fort); }
+.discret { color: var(--texte-discret); }
+.medium { font-weight: 500; }
+.semibold { font-weight: 600; }
+
+/* ——— Coque */
+.app { height: 100dvh; display: flex; flex-direction: column; max-width: 480px; margin: 0 auto; position: relative; }
+.screen { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.scroll {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: var(--spacing-16) var(--spacing-20) calc(96px + var(--safe-bottom));
+  display: flex; flex-direction: column; gap: var(--spacing-16);
+}
+.screen.no-tabs .scroll { padding-bottom: calc(var(--spacing-24) + var(--safe-bottom)); }
+
+/* Grand titre d'écran racine (Heading/xl + sous-titre), bouton rond à droite comme Tabatime. */
+.page-head {
+  padding: calc(var(--safe-top) + 12px) var(--spacing-20) 0;
+  display: grid; grid-template-columns: 1fr auto; align-items: start; gap: var(--spacing-12);
+}
+.page-head p { margin: 8px 0 0; }
+
+.icon-round {
+  width: 40px; height: 40px; border-radius: var(--radius-full); border: 0;
+  background: var(--fond-carte); color: var(--texte-fort);
+  display: grid; place-items: center; flex: none;
+}
+.icon-round svg { width: 18px; height: 18px; }
+
+/* ——— Mobile Navigation Bar (Hardwood) */
+.navbar {
+  padding-top: var(--safe-top); background: var(--fond-page);
+  border-bottom: 1px solid var(--bord-discret); position: sticky; top: 0; z-index: 5;
+}
+.navbar-inner { height: 56px; display: flex; align-items: center; padding: var(--spacing-4) var(--spacing-8); }
+.navbar-side { width: 112px; height: 48px; display: flex; align-items: center; flex: none; }
+.navbar-side.end { justify-content: flex-end; }
+.navbar-back, .navbar-action {
+  height: 48px; border: 0; background: none; color: var(--accent-texte);
+  display: inline-flex; align-items: center; gap: var(--spacing-4); padding: 0 var(--spacing-8) 0 0;
+  font: 400 16px/24px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 112px;
+}
+.navbar-back svg { width: 20px; height: 20px; flex: none; }
+.navbar-action { font-weight: 500; padding: 0 var(--spacing-8); }
+.navbar-action.danger { color: var(--etat-danger); }
+.navbar-title { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; align-items: center; }
+.navbar-title h1 { font: 600 16px/24px var(--font); color: var(--texte-fort); margin: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.navbar-title span { font: 400 12px/16px var(--font); color: var(--texte-discret); white-space: nowrap; }
+
+/* ——— Barre d'onglets (écart local : Hardwood n'a pas d'onglets mobiles) */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+  max-width: 480px; margin: 0 auto;
+  background: rgba(15, 16, 22, .92); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--bord-discret);
+  padding-bottom: var(--safe-bottom);
+}
+.tabbar-active { padding: var(--spacing-8) var(--spacing-12) 0; }
+.tabbar nav { display: grid; grid-template-columns: repeat(4, 1fr); height: 56px; }
+.tab {
+  border: 0; background: none; color: var(--texte-discret);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font: 500 11px/16px var(--font);
+}
+.tab svg { width: 24px; height: 24px; }
+.tab[aria-current="page"] { color: var(--accent-texte); }
+
+/* ——— Bouton (Hardwood) */
+.btn {
+  height: 40px; padding: 0 var(--spacing-12); border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--spacing-8);
+  border: 1px solid transparent; font: 500 13px/20px var(--font); white-space: nowrap;
+  transition: background-color 150ms var(--ease), opacity 150ms var(--ease), transform 100ms var(--ease);
+}
+.btn:active { transform: scale(.98); }
+.btn svg { width: 16px; height: 16px; flex: none; }
+.btn.lg { height: 48px; padding: 0 var(--spacing-16); font-size: 14px; }
+.btn.sm { height: 32px; padding: 0 var(--spacing-12); }
+.btn.xs { height: 24px; padding: 0 var(--spacing-8); font-size: 12px; }
+.btn.full { width: 100%; }
+.btn.primary { background: var(--accent-texte); color: var(--texte-inverse); }
+.btn.secondary { background: var(--fond-carte); border-color: var(--bord-base); color: var(--accent-texte); }
+.btn.ghost { background: transparent; color: var(--accent-texte); }
+/* Hardwood, état error : ghost teinté (action destructive secondaire) et primary plein (confirmation). */
+.btn.danger { background: var(--etat-danger-soft); color: var(--etat-danger); }
+.btn.destructive { background: var(--etat-danger); color: var(--texte-inverse); }
+.btn:disabled { background: var(--fond-discret); border-color: transparent; color: var(--texte-discret); cursor: default; transform: none; }
+
+/* ——— Carte */
+.card {
+  background: var(--fond-carte); border: 1px solid var(--bord-discret); border-radius: var(--radius-md);
+  padding: var(--spacing-16); display: flex; flex-direction: column; gap: var(--spacing-12);
+}
+.card.flat { border-color: transparent; }
+.card.tap { text-align: left; width: 100%; color: inherit; transition: background-color 150ms var(--ease); }
+.card.tap:active { background: var(--fond-discret); }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-8); }
+.section-title { display: flex; align-items: baseline; justify-content: space-between; margin: var(--spacing-8) 0 calc(var(--spacing-4) * -1); }
+
+/* Liste groupée dans une carte */
+.list { background: var(--fond-carte); border: 1px solid var(--bord-discret); border-radius: var(--radius-md); overflow: hidden; }
+.row {
+  display: flex; align-items: center; gap: var(--spacing-12); min-height: 56px;
+  padding: var(--spacing-12) var(--spacing-16); width: 100%; border: 0; background: none; text-align: left; color: inherit;
+}
+.row + .row { border-top: 1px solid var(--bord-discret); }
+button.row:active { background: var(--fond-discret); }
+.row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.row-main .fort { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .chev { width: 16px; height: 16px; color: var(--texte-discret); flex: none; }
+.row-end { text-align: right; flex: none; display: flex; flex-direction: column; align-items: flex-end; }
+
+/* ——— Pastille (Pill, non cliquable) */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px;
+  border-radius: var(--radius-full); font: 500 12px/16px var(--font); white-space: nowrap;
+  background: var(--fond-discret); color: var(--texte-base);
+}
+.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.accent { background: var(--accent-soft); color: var(--accent-texte); }
+.pill.succes { background: var(--etat-succes-soft); color: var(--etat-succes); }
+.pill.attention { background: var(--etat-attention-soft); color: var(--etat-attention); }
+.pill.danger { background: var(--etat-danger-soft); color: var(--etat-danger); }
+
+/* ——— Contrôle segmenté (Hardwood) */
+.segmented {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 3px 2px;
+  background: var(--fond-carte); border: 1px solid var(--bord-discret); border-radius: var(--radius-md);
+}
+.segmented button {
+  height: 28px; border-radius: var(--radius-sm); border: 1px solid transparent; background: none;
+  color: var(--texte-discret); font: 500 14px/20px var(--font); padding: 0 var(--spacing-8); white-space: nowrap;
+}
+.segmented button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-texte); color: var(--texte-fort); font-weight: 600; }
+.segmented.sm button { font-size: 13px; }
+
+/* Puces de choix (RPE, ressenti) */
+.chips { display: flex; gap: var(--spacing-8); flex-wrap: wrap; }
+.chip {
+  height: 32px; min-width: 40px; padding: 0 var(--spacing-12); border-radius: var(--radius-sm);
+  border: 1px solid var(--bord-discret); background: var(--fond-carte); color: var(--texte-base); font: 500 13px/20px var(--font);
+}
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-texte); color: var(--texte-fort); }
+
+/* ——— Stepper : un tap = un pas, maintien = répétition (comme Tabatime) */
+.stepper { display: flex; align-items: center; gap: var(--spacing-8); }
+.stepper button {
+  width: 48px; height: 48px; border-radius: var(--radius-sm); flex: none;
+  border: 1px solid var(--bord-base); background: var(--fond-carte); color: var(--accent-texte);
+  display: grid; place-items: center; touch-action: manipulation; user-select: none; -webkit-user-select: none;
+}
+.stepper button svg { width: 18px; height: 18px; }
+.stepper button:active { background: var(--fond-discret); }
+.stepper .value { flex: 1; text-align: center; min-width: 0; }
+.stepper input {
+  width: 100%; text-align: center; border: 0; background: none; padding: 0;
+  font: 700 32px/40px var(--font); letter-spacing: -0.02em; color: var(--texte-fort); font-variant-numeric: tabular-nums;
+}
+.stepper input:focus { outline: none; }
+.stepper .unit { font: 400 12px/16px var(--font); color: var(--texte-discret); }
+.stepper.compact button { width: 36px; height: 36px; }
+.stepper.compact .value { font: 600 16px/24px var(--font); color: var(--texte-fort); }
+
+.field { display: flex; flex-direction: column; gap: var(--spacing-8); }
+.field-row { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-12); min-height: 40px; }
+.input {
+  height: 48px; border-radius: var(--radius-sm); border: 1px solid var(--bord-base);
+  background: var(--fond-page); color: var(--texte-fort); padding: 0 var(--spacing-12); width: 100%;
+  font: 400 16px/24px var(--font);
+}
+.input:focus { outline: none; border-color: var(--accent-texte); box-shadow: 0 0 0 1px var(--accent-texte); }
+textarea.input { height: 88px; padding: var(--spacing-12); resize: none; }
+.input::placeholder { color: var(--texte-discret); }
+
+/* ——— Barres de volume par muscle */
+.vol { display: grid; grid-template-columns: 76px 1fr 52px; align-items: center; gap: var(--spacing-12); }
+.vol + .vol { margin-top: var(--spacing-8); }
+.vol-track { position: relative; height: 8px; border-radius: 4px; background: var(--fond-discret); overflow: hidden; }
+.vol-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--accent-texte); transition: width 400ms var(--ease); }
+.vol-fill.focus { background: var(--accent-texte); }
+.vol-fill.faible { background: var(--etat-attention); }
+.vol-fill.maintien { background: var(--bord-base); }
+.vol-fill.done { background: var(--etat-succes); }
+.vol-target { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--texte-fort); opacity: .5; }
+
+/* Frise de progression (segments comme les rounds de Tabatime) */
+.segments { display: flex; gap: 3px; height: 4px; }
+.segments i { flex: 1; border-radius: 2px; background: var(--bord-discret); position: relative; overflow: hidden; }
+.segments i.on { background: var(--etat-succes); }
+.segments i.cur { background: var(--accent-texte); }
+.segments i.deload { background: var(--etat-attention); opacity: .35; }
+.segments i.deload.on { opacity: 1; }
+
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-8); }
+.stat { background: var(--fond-carte); border: 1px solid var(--bord-discret); border-radius: var(--radius-md); padding: var(--spacing-12); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat b { font: 600 20px/24px var(--font); color: var(--texte-fort); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Graphique */
+.chart { width: 100%; height: 160px; display: block; overflow: visible; }
+.chart .grid { stroke: var(--bord-discret); stroke-width: 1; }
+.chart .line { fill: none; stroke: var(--accent-texte); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .area { fill: var(--accent-texte); opacity: .12; }
+.chart .pt { fill: var(--fond-carte); stroke: var(--accent-texte); stroke-width: 2; }
+.chart text { fill: var(--texte-discret); font: 400 11px var(--font); }
+.spark { width: 64px; height: 24px; display: block; }
+.spark path { fill: none; stroke: var(--accent-texte); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+
+.empty { text-align: center; padding: var(--spacing-32) var(--spacing-16); display: flex; flex-direction: column; align-items: center; gap: var(--spacing-12); }
+.empty svg { width: 32px; height: 32px; color: var(--texte-discret); }
+
+/* ——— Séance en cours */
+.workout { padding-bottom: 0; }
+.workout .scroll { padding-bottom: var(--spacing-16); }
+.wo-head { padding: calc(var(--safe-top) + 12px) var(--spacing-20) var(--spacing-12); display: flex; flex-direction: column; gap: var(--spacing-12); }
+.wo-top { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-8); }
+.wo-hero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--spacing-4); padding: var(--spacing-8) 0; }
+.wo-hero .overline { color: var(--accent-texte); }
+.wo-hero.rest .overline { color: var(--etat-succes); }
+.ring { position: relative; width: 208px; height: 208px; display: grid; place-items: center; }
+.ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 14; }
+.ring .track { stroke: var(--etat-succes-soft); }
+.ring .prog { stroke: var(--etat-succes); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.ring-center { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-4); }
+.wo-commands { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: var(--spacing-12); padding: var(--spacing-12) var(--spacing-20) calc(var(--spacing-12) + var(--safe-bottom)); border-top: 1px solid var(--bord-discret); background: var(--fond-page); }
+.wo-foot { text-align: center; padding-bottom: var(--spacing-4); }
+.set-row { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: var(--spacing-12); min-height: 44px; padding: 0 var(--spacing-16); }
+.set-row + .set-row { border-top: 1px solid var(--bord-discret); }
+.set-idx { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font: 600 12px/16px var(--font); background: var(--fond-discret); color: var(--texte-discret); }
+.set-row.done .set-idx { background: var(--etat-succes-soft); color: var(--etat-succes); }
+.set-row.cur .set-idx { background: var(--accent-soft); color: var(--accent-texte); }
+.set-row.cur { background: rgba(38, 43, 77, .35); }
+.hint { display: flex; gap: var(--spacing-8); align-items: flex-start; padding: var(--spacing-12); border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--texte-base); }
+.hint svg { width: 16px; height: 16px; color: var(--accent-texte); flex: none; margin-top: 2px; }
+.hint.attention { background: var(--etat-attention-soft); }
+.hint.attention svg { color: var(--etat-attention); }
+
+/* Feuille modale (dialog) qui monte du bas */
+dialog.sheet {
+  width: 100%; max-width: 480px; margin: auto auto 0; border: 0; padding: 0;
+  background: var(--fond-carte); color: var(--texte-base);
+  border-radius: 16px 16px 0 0; max-height: 92dvh;
+}
+dialog.sheet[open] { animation: sheet-in 320ms var(--sheet); }
+dialog.sheet::backdrop { background: rgba(0, 0, 0, .6); }
+.sheet-body { padding: var(--spacing-8) var(--spacing-16) calc(var(--spacing-24) + var(--safe-bottom)); display: flex; flex-direction: column; gap: var(--spacing-16); overflow-y: auto; max-height: calc(92dvh - 70px); }
+.sheet-grab { width: 36px; height: 5px; border-radius: 3px; background: var(--bord-base); margin: 8px auto 4px; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-8); height: 48px; padding: 0 var(--spacing-4) 0 var(--spacing-16); }
+.sheet-head h2 { margin: 0; font: 600 20px/24px var(--font); color: var(--texte-fort); text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-close { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border: 0; background: none; color: var(--texte-fort); border-radius: var(--radius-sm); }
+.sheet-close svg { width: 20px; height: 20px; }
+@keyframes sheet-in { from { transform: translateY(100%); } }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(96px + var(--safe-bottom)); transform: translateX(-50%);
+  background: var(--texte-fort); color: var(--texte-inverse); font: 500 13px/20px var(--font);
+  padding: var(--spacing-8) var(--spacing-16); border-radius: var(--radius-full); z-index: 50;
+  animation: toast 2.4s var(--ease) forwards; white-space: nowrap;
+}
+@keyframes toast { 0% { opacity: 0; translate: 0 8px; } 10%, 85% { opacity: 1; translate: 0 0; } 100% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+}
+
+/* Mode Modifier d'une séance : flèches à cible tactile de 44 px. */
+.btn.square { width: 44px; height: 44px; padding: 0; }
+.btn.square svg { width: 18px; height: 18px; }
+.reorder { display: flex; gap: var(--spacing-8); flex: none; }
+
+/* Carte de choix (Radio Card Hardwood) : ressenti de fin de séance. */
+.radio-cards { display: flex; flex-direction: column; gap: var(--spacing-8); }
+.radio-card {
+  display: flex; align-items: flex-start; gap: var(--spacing-12); width: 100%; text-align: left;
+  padding: var(--spacing-12) var(--spacing-16); border-radius: var(--radius-md);
+  background: var(--fond-carte); border: 1px solid var(--bord-discret); color: inherit;
+}
+.radio-card[aria-checked="true"] { background: var(--accent-soft); border: 2px solid var(--accent-texte); padding: 11px 15px; }
+.radio-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--bord-base); flex: none; margin-top: 2px; position: relative; }
+.radio-card[aria-checked="true"] .radio-dot { border-color: var(--accent-texte); }
+.radio-card[aria-checked="true"] .radio-dot::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent-texte); }
+.radio-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+textarea.input.journal { height: 140px; }
+
+/* Ligne de catalogue : la ligne choisit l'exercice, l'étoile le met en favori (cible 44 px). */
+.row.pick { padding: 0 var(--spacing-4) 0 var(--spacing-16); gap: 0; }
+.row-btn { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--spacing-12); min-height: 56px; padding: var(--spacing-8) 0; border: 0; background: none; color: inherit; text-align: left; }
+.star { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border: 0; background: none; color: var(--texte-discret); }
+.star svg { width: 20px; height: 20px; }
+.star[aria-pressed="true"] { color: var(--accent-texte); }
+.star[aria-pressed="true"] svg path { fill: currentColor; }
+
+/* Chrono EMOM / Tabata (repris de Tabatime) : effort en rose, repos en vert, EMOM en accent. */
+.ring.effort .track { stroke: var(--etat-danger-soft); }
+.ring.effort .prog { stroke: var(--etat-danger); }
+.ring.repos .track { stroke: var(--etat-succes-soft); }
+.ring.repos .prog { stroke: var(--etat-succes); }
+.ring.emom .track { stroke: var(--accent-soft); }
+.ring.emom .prog { stroke: var(--accent-texte); }
+.ring.effort .overline { color: var(--etat-danger); }
+.ring.repos .overline { color: var(--etat-succes); }
+.ring.emom .overline { color: var(--accent-texte); }
+input.input[type="search"] { -webkit-appearance: none; appearance: none; line-height: 24px; }
+.input, .segmented, .list, .card, .hint, .stepper { flex-shrink: 0; }
+/* Dans une feuille, l'intitulé d'un champ est un surtitre de section. */
+.sheet-body .field > .caption.medium { font: 500 11px/16px var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--texte-discret); }
+.chev { width: 16px; height: 16px; flex: none; color: var(--texte-discret); }
