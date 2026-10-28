@@ -10,7 +10,7 @@ Carnet de musculation installable sur iPhone (PWA), piloté par le **Système Fl
 
 ## Installer sur iPhone
 
-1. Ouvrir https://alexisdesplas.github.io/fluide/ dans **Safari**.
+1. Ouvrir https://alexis-fluide.vercel.app/ dans **Safari**.
 2. Bouton Partager → **Sur l'écran d'accueil**.
 3. Lancer l'appli depuis l'icône : plein écran, fonctionne hors connexion.
 
@@ -28,4 +28,4 @@ Les données restent sur l'iPhone (localStorage). Pour les sauvegarder : Réglag
 ## Développer
 
 Aucune dépendance, aucun build. Pour tester en local : `python3 -m http.server 8765` puis ouvrir http://localhost:8765.
-Chaque push sur `main` met à jour le site GitHub Pages.
+Hébergé sur Vercel (projet `fluide`, relié au dépôt GitHub) : chaque push sur `main` déploie en production.
