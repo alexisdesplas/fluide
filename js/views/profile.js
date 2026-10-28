@@ -29,9 +29,17 @@ function cycleSheet() {
   });
 }
 
-function download() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-  const a = h("a", { href: URL.createObjectURL(blob), download: `fluide-${new Date().toLocaleDateString("sv-SE")}.json` });
+// Sur l'iPhone (appli sur l'écran d'accueil), la feuille de partage propose « Enregistrer dans Fichiers » ;
+// ailleurs, téléchargement classique.
+async function download() {
+  const name = `fluide-${new Date().toLocaleDateString("sv-SE")}.json`;
+  const json = JSON.stringify(state, null, 2);
+  const file = new File([json], name, { type: "application/json" });
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "Sauvegarde Fluide" }); return; }
+    catch (err) { if (err?.name === "AbortError") return; }
+  }
+  const a = h("a", { href: URL.createObjectURL(file), download: name });
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -118,7 +126,7 @@ export function matrixView() {
           segmented(Object.entries(STATUS).map(([k, v]) => [k, v.label]), status, v => setMatrix(m, v), "sm"),
           h("div", { class: "field-row" },
             h("span", { class: "body-sm" }, "Cible ", h("span", { class: "discret" }, `(repère ${lo}-${hi})`)),
-            stepper({ value: target, min: 0, max: 30, compact: true, format: v => `${v} séries`, label: `séries ${m}`, onChange: v => setTarget(m, v) })));
+            stepper({ value: target, min: 0, max: 30, compact: true, format: v => `${v} série${v > 1 ? "s" : ""}`, label: `séries ${m}`, onChange: v => setTarget(m, v) })));
       })));
   return { el, tab: "profil" };
 }

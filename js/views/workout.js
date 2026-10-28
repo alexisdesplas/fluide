@@ -1,4 +1,4 @@
-import { state, save, exercise, logSet, finishWorkout, session, sessionVolume, sessionSets, sessionRecords, alternatives, swapExercise, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, CYCLES, MUSCLES, FORMATS } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, session, sessionVolume, sessionSets, sessionRecords, alternatives, swapExercise, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, CYCLES, MUSCLES, FORMATS } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, segmented, sheet, confirmSheet, toast, beep, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue } from "./templates.js";
 
@@ -6,7 +6,7 @@ const R = 97, C = 2 * Math.PI * R;
 
 const lastLine = id => {
   const last = lastPerformance(id);
-  return last ? `${last.sets.map(s => `${s.reps}×${num(s.weight)}`).join(" · ")} · ${ago(last.date)}` : "Jamais fait";
+  return last ? `${last.sets.map(s => `${s.reps}×${s.weight ? num(s.weight) : "PDC"}`).join(" · ")} · ${ago(last.date)}` : "Jamais fait";
 };
 
 // Machine prise : alternatives du même muscle, favoris d'abord.
@@ -83,8 +83,8 @@ export function finishView() {
   if (!a) { leaveIfIdle("#/seance/terminer"); return { el: h("div") }; }
   if (!a.entries.some(e => e.sets.length)) { setTimeout(() => { go("#/seance"); abandonSheet(); }); return { el: h("div") }; }
   a.finish = a.finish || { feeling: null, note: "" };
-  const done = a.entries.reduce((t, e) => t + e.sets.length, 0);
-  const planned = a.entries.reduce((t, e) => t + e.target.sets, 0);
+  const done = sessionSets(a);
+  const planned = a.entries.reduce((t, e) => t + itemSets({ format: e.format, sets: e.target.sets, rounds: e.target.rounds }), 0);
   const volume = a.entries.reduce((t, e) => t + e.sets.reduce((b, x) => b + x.weight * x.reps, 0), 0);
   const records = sessionRecords({ startedAt: a.startedAt, entries: a.entries }).length;
   const missing = a.entries.filter(e => e.sets.length < e.target.sets);
@@ -126,7 +126,7 @@ export function workoutView() {
   const e = a.entries[a.cursor];
   const ex = exercise(e.exerciseId);
   const now = Date.now();
-  const resting = a.restEndsAt && a.restEndsAt > now;
+  const resting = a.restEndsAt && a.restEndsAt > now && !e.clock;
   const exDone = e.sets.length >= e.target.sets;
   const isLast = a.cursor === a.entries.length - 1;
   const allDone = a.entries.every(x => x.sets.length >= x.target.sets);
@@ -137,20 +137,26 @@ export function workoutView() {
 
   // ——— Échauffement d'abord (corde à sauter)
   if (!a.warmupDone) {
+    const lower = ["Quadris", "Ischios", "Fessiers", "Mollets"].includes(ex.muscle);
     const el = h("div", { class: "screen workout" },
       h("div", { class: "wo-head" },
-        h("div", { class: "wo-top" }, h("span", { class: "overline" }, a.name, a.deload ? " · deload" : ""), h("span", { class: "caption num", "data-tick": "elapsed" })),
-        h("h1", { class: "heading-xl" }, "Échauffement")),
-      h("div", { class: "scroll" },
+        h("div", { class: "wo-top" },
+          h("span", { class: "overline" }, a.name, a.deload ? " · deload" : "", " · avant la première série"),
+          h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
+        h("div", null,
+          h("h1", { class: "heading-xl" }, "Échauffement"),
+          h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, "Corde à sauter, puis mobilité"))),
+      h("div", { class: "scroll wo-center" },
         h("div", { class: "wo-hero" },
           h("div", { class: "overline" }, "Corde à sauter"),
           h("div", { class: "display-sm num" }, "3–5 min"),
-          h("p", { class: "body-md discret", style: { margin: 0 } }, "Montée progressive, puis mobilité des articulations du jour.")),
+          h("p", { class: "body-md discret", style: { margin: 0 } }, `Montée progressive, puis mobilité ${lower ? "des hanches et des chevilles" : "des épaules et des coudes"}.`)),
         h("div", { class: "hint" }, icon("barbell"),
           h("span", { class: "body-sm" }, "Séries d'approche sur ", h("b", { class: "fort medium" }, ex.name), ` : 2 ou 3 séries légères avant ${kg(e.draft.weight)}.`))),
-      h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr 2fr" } },
+      h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr 1.4fr" } },
         btn("Abandonner", { variant: "secondary", size: "lg", onClick: abandonSheet }),
-        btn("C'est parti", { variant: "primary", size: "lg", onClick: () => { a.warmupDone = true; save(); } })));
+        btn("C'est parti", { variant: "primary", size: "lg", onClick: () => { a.warmupDone = true; save(); } }),
+        h("p", { class: "caption wo-foot num", style: { gridColumn: "1 / -1", margin: 0 } }, "Durée ", h("span", { "data-tick": "elapsed" }))));
     return { el };
   }
 
@@ -163,7 +169,27 @@ export function workoutView() {
     h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, repsLabel),
       stepper({ value: e.draft.reps, min: 0, max: 200, compact: true, label: "reps", onChange: v => { e.draft.reps = v; save(true); } }))];
   let hero;
-  if (interval && !exDone) {
+  if (resting) {
+    const ring = h("circle", { svg: true, class: "prog", cx: 104, cy: 104, r: R, "stroke-dasharray": C });
+    const time = h("div", { class: "display-lg num" });
+    const update = () => {
+      const left = Math.max(0, (a.restEndsAt - Date.now()) / 1000);
+      time.textContent = clock(Math.ceil(left));
+      ring.setAttribute("stroke-dashoffset", String(C * (1 - left / a.restTotal)));
+    };
+    update();
+    const shift = d => { a.restEndsAt = Math.max(Date.now(), a.restEndsAt + d * 1000); a.restTotal = Math.max(a.restTotal + d, 1); save(true); update(); };
+    hero = h("div", { class: "wo-hero rest" },
+      h("div", { class: "ring" },
+        h("svg", { viewBox: "0 0 208 208", width: 208, height: 208, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 104, cy: 104, r: R }), ring),
+        h("div", { class: "ring-center" }, h("div", { class: "overline" }, "Repos"), time,
+          h("span", { class: "body-sm discret num" }, exDone ? (isLast ? "Exercice terminé" : `Ensuite ${exercise(a.entries[a.cursor + 1].exerciseId).name}`) : `Ensuite ${interval ? "round" : "série"} ${e.sets.length + 1} / ${e.target.sets}`))),
+      h("div", { style: { display: "flex", gap: "8px", marginTop: "8px" } },
+        btn("−15 s", { variant: "secondary", size: "sm", onClick: () => shift(-15) }),
+        btn("+15 s", { variant: "secondary", size: "sm", onClick: () => shift(15) }),
+        btn("Passer", { variant: "ghost", size: "sm", onClick: () => { a.restEndsAt = null; save(); } })));
+    hero.update = update;
+  } else if (interval && !exDone) {
     const st = intervalState(e);
     if (!st) {
       hero = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
@@ -195,31 +221,12 @@ export function workoutView() {
         ...draftSteppers("Reps du round"));
       hero.update = update;
     }
-  } else if (resting) {
-    const ring = h("circle", { svg: true, class: "prog", cx: 104, cy: 104, r: R, "stroke-dasharray": C });
-    const time = h("div", { class: "display-lg num" });
-    const update = () => {
-      const left = Math.max(0, (a.restEndsAt - Date.now()) / 1000);
-      time.textContent = clock(Math.ceil(left));
-      ring.setAttribute("stroke-dashoffset", String(C * (1 - left / a.restTotal)));
-    };
-    update();
-    const shift = d => { a.restEndsAt = Math.max(Date.now(), a.restEndsAt + d * 1000); a.restTotal = Math.max(a.restTotal + d, 1); save(true); update(); };
-    hero = h("div", { class: "wo-hero rest" },
-      h("div", { class: "ring" },
-        h("svg", { viewBox: "0 0 208 208", width: 208, height: 208, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 104, cy: 104, r: R }), ring),
-        h("div", { class: "ring-center" }, h("div", { class: "overline" }, "Repos"), time,
-          h("span", { class: "body-sm discret num" }, exDone ? "Exercice terminé" : `Ensuite série ${e.sets.length + 1} / ${e.target.sets}`))),
-      h("div", { style: { display: "flex", gap: "8px", marginTop: "8px" } },
-        btn("−15 s", { variant: "secondary", size: "sm", onClick: () => shift(-15) }),
-        btn("+15 s", { variant: "secondary", size: "sm", onClick: () => shift(15) }),
-        btn("Passer", { variant: "ghost", size: "sm", onClick: () => { a.restEndsAt = null; save(); } })));
-    hero.update = update;
   } else if (exDone) {
+    const exVolume = e.sets.reduce((b, x) => b + x.weight * x.reps, 0);
     hero = h("div", { class: "wo-hero" },
-      h("div", { class: "overline", style: { color: "var(--etat-succes)" } }, "Exercice terminé"),
-      h("div", { class: "display-sm num" }, `${e.sets.length} ${interval ? "rounds" : "séries"}`),
-      h("p", { class: "body-md discret", style: { margin: 0 } }, allDone ? "Toutes les séries sont faites. Bien joué." : "Passe à l'exercice suivant."));
+      h("div", { class: "overline", style: { color: "var(--etat-succes)" } }, allDone ? "Séance bouclée" : "Exercice terminé"),
+      h("span", { class: "body-sm discret num" }, allDone ? "Toutes les séries sont faites. Bien joué."
+        : `${e.sets.length} ${interval ? "rounds" : "séries"}${exVolume ? ` · volume ${int(exVolume)} kg` : ""}. ${isLast ? "Il reste des séries sur d'autres exercices." : "Passe à l'exercice suivant."}`));
   } else {
     hero = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
       h("div", { class: "wo-hero", style: { paddingBottom: 0 } },
@@ -247,13 +254,14 @@ export function workoutView() {
     }));
 
   const segs = a.entries.map((x, i) => h("i", { class: x.sets.length >= x.target.sets ? "on" : i === a.cursor ? "cur" : "" }));
-  const primary = resting
+  const canLaunch = interval && !exDone && !e.clock && !e.sets.length;
+  const primary = resting && !canLaunch
     ? btn("Repos…", { variant: "primary", size: "lg", disabled: true })
     : allDone || (exDone && isLast)
       ? btn("Terminer", { variant: "primary", size: "lg", onClick: finishSheet })
       : exDone
         ? btn("Suivant", { variant: "primary", size: "lg", onClick: () => setCursor(a.cursor + 1) })
-        : interval && !e.clock && !e.sets.length
+        : canLaunch
           ? btn("Lancer", { variant: "primary", size: "lg", icon: "timer", onClick: () => startClock(a.cursor) })
           : btn(interval ? "Round fait" : "Série faite", { variant: "primary", size: "lg", icon: "check", onClick: () => logSet() });
 
@@ -308,20 +316,22 @@ export function summaryView({ id }) {
   const records = sessionRecords(s);
   const dur = (s.endedAt - s.startedAt) / 1000;
   const el = h("div", { class: "screen no-tabs" },
-    pageHead("Séance terminée", `${s.name} · ${dateLong(s.startedAt)}`),
+    pageHead("Séance terminée", `${s.name} · ${dateLong(s.startedAt)} · Bloc ${CYCLES[s.cycle]?.label || ""} ${s.deload ? "deload" : `S${s.week}`}`),
     h("div", { class: "scroll" },
       h("div", { class: "stat-grid" },
         h("div", { class: "stat" }, h("span", { class: "caption" }, "Durée"), h("b", null, clock(dur))),
         h("div", { class: "stat" }, h("span", { class: "caption" }, "Séries"), h("b", null, sessionSets(s))),
         h("div", { class: "stat" }, h("span", { class: "caption" }, "Volume"), h("b", null, `${int(sessionVolume(s))} kg`))),
       records.length > 0 && h("div", { class: "card" },
-        h("div", { class: "card-head" }, h("h2", { class: "heading-md" }, "Records battus"), icon("trophy", "chev")),
+        h("div", { class: "card-head", style: { justifyContent: "flex-start", gap: "8px" } }, h("span", { class: "trophy" }, icon("trophy")),
+          h("h2", { class: "heading-md" }, `${records.length} record${records.length > 1 ? "s" : ""} battu${records.length > 1 ? "s" : ""}`)),
         records.map(r => h("div", { class: "field-row" },
           h("span", { class: "body-md fort" }, exercise(r.exerciseId).name),
           pill(`1RM est. ${num(r.value)} kg (+${num(r.delta)})`, "succes")))),
-      h("div", { class: "list" }, s.entries.map(e => h("div", { class: "row" },
+      h("div", { class: "list" }, s.entries.map(e => h("button", { class: "row", onClick: () => go(`#/progres/${e.exerciseId}`) },
         h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, exercise(e.exerciseId).name),
-          h("span", { class: "caption num" }, (isInterval(e) ? `${FORMATS[e.format]} · ${e.sets.length} rounds · ` : "") + e.sets.map(x => `${x.reps}×${num(x.weight)}`).join(" · ")))))),
+          h("span", { class: "caption num" }, (isInterval(e) ? `${FORMATS[e.format]} · ${e.sets.length} rounds · ` : "") + e.sets.map(x => `${x.reps}×${x.weight ? num(x.weight) : "PDC"}`).join(" · "))),
+        icon("caretRight", "chev")))),
       s.note && h("div", { class: "card flat" }, h("span", { class: "overline" }, "Journal"), h("p", { class: "body-md", style: { margin: 0 } }, s.note)),
       btn("Retour à l'accueil", { variant: "primary", size: "lg", full: true, onClick: () => go("#/") })));
   return { el };

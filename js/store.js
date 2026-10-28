@@ -128,7 +128,8 @@ export const e1rm = (w, r) => (r <= 1 ? w : w * (1 + r / 30));
 
 export const setVolume = s => s.weight * s.reps;
 export const sessionVolume = s => s.entries.reduce((a, e) => a + e.sets.reduce((b, x) => b + setVolume(x), 0), 0);
-export const sessionSets = s => s.entries.reduce((a, e) => a + e.sets.length, 0);
+// Séries au sens Fluide : un Tabata de 8 rounds compte 2 séries, un EMOM 1 série par tranche de 3 rounds.
+export const sessionSets = s => s.entries.reduce((a, e) => a + entrySets(e), 0);
 
 export const history = () => [...state.sessions].sort((a, b) => b.startedAt - a.startedAt);
 
@@ -442,6 +443,7 @@ export function intervalState(e, now = Date.now()) {
 
 export function startClock(index) {
   state.active.entries[index].clock = Date.now();
+  state.active.restEndsAt = null; // le chrono EMOM / Tabata remplace le repos en cours
   save();
 }
 
@@ -461,9 +463,9 @@ export function logSet() {
   }
   e.sets.push({ weight: e.draft.weight, reps: e.draft.reps, rpe: e.draft.rpe, doneAt: Date.now() });
   e.draft.rpe = null;
+  // Dernière série d'un exercice : on reste dessus (repos puis « Exercice terminé »), « Suivant » passe au suivant.
   const finished = e.sets.length >= e.target.sets;
   const isLast = a.cursor === a.entries.length - 1;
-  if (finished && !isLast) a.cursor += 1;
   if (!(finished && isLast)) {
     a.restTotal = e.target.rest;
     a.restEndsAt = Date.now() + e.target.rest * 1000;

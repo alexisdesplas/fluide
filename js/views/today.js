@@ -64,7 +64,7 @@ export function goalCard() {
       h("span", { class: "body-sm num" }, `${g.ok} muscle${g.ok > 1 ? "s" : ""} sur ${g.count} à la cible`)),
     h("div", { class: "vol-track", role: "progressbar", "aria-valuenow": g.pct, "aria-valuemin": 0, "aria-valuemax": 100 },
       h("div", { class: `vol-fill ${g.pct >= 100 ? "done" : "focus"}`, style: { width: `${Math.min(100, g.pct)}%` } })),
-    h("span", { class: "caption num" }, `${g.sets} séries faites sur ${g.total} prévues par tes réglages Fluide`));
+    h("span", { class: "caption num" }, `${g.sets} série${g.sets > 1 ? "s" : ""} faite${g.sets > 1 ? "s" : ""} sur ${g.total} prévues par tes réglages Fluide`));
 }
 
 export function todayView() {
@@ -88,7 +88,7 @@ export function todayView() {
             h("div", null, h("div", { class: "overline" }, "Prochaine séance"), h("div", { class: "display-xs" }, next.name)),
             h("span", { class: "caption num" }, `~${estimate(next)} min`)),
           h("p", { class: "body-sm", style: { margin: 0 } },
-            next.items.length, " exercices · ", next.items.reduce((a, i) => a + (pos.deload ? Math.ceil(itemSets(i) / 2) : itemSets(i)), 0), " séries",
+            next.items.length, next.items.length > 1 ? " exercices · " : " exercice · ", next.items.reduce((a, i) => a + (pos.deload ? Math.ceil(itemSets(i) / 2) : itemSets(i)), 0), " séries",
             pos.deload ? " (deload)" : ""),
           h("div", { class: "hint" }, icon("bolt"), h("span", { class: "body-sm" }, "Échauffement : ", h("b", { class: "fort medium" }, state.profile.warmup), ", puis séries d'approche sur le premier exercice.")),
           btn(`Démarrer ${next.name}`, { variant: "primary", size: "lg", full: true, onClick: () => { startWorkout(next.id); go("#/seance"); } }),
