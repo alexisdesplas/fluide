@@ -2,7 +2,8 @@ import { state, save, exercise, itemSets, logSet, finishWorkout, session, sessio
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, segmented, sheet, confirmSheet, toast, beep, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle } from "./templates.js";
 
-const R = 97, C = 2 * Math.PI * R;
+// Anneau de Tabatime : 312 px, trait de 34 px.
+const R = 139, C = 2 * Math.PI * R;
 
 const lastLine = id => {
   const last = lastPerformance(id);
@@ -165,9 +166,67 @@ export function workoutView() {
 
   const setCursor = i => { a.cursor = i; save(); };
 
-  // ——— Échauffement d'abord (corde à sauter)
+  // ——— Échauffement d'abord : cardio au chrono (comme Tabatime), puis mobilité et séries d'approche.
+  // Le chrono se calcule depuis l'heure de départ (survit à la mise en veille) ; la pause décale ce départ.
   if (!a.warmupDone) {
     const lower = ["Quadris", "Ischios", "Fessiers", "Mollets"].includes(ex.muscle);
+    const mobility = `mobilité ${lower ? "des hanches et des chevilles" : "des épaules et des coudes"}`;
+    const plan = state.profile.warmup || "";
+    const dur = plan.match(/(\d+)(?:\s*[-–]\s*(\d+))?\s*min/);
+    const cardio = plan.replace(/\d.*$/, "").trim() || "Cardio";
+    const total = (dur ? +(dur[2] || dur[1]) : 5) * 60;
+    const w = a.warm;
+    const left = () => Math.max(0, w.total - ((w.paused || Date.now()) - w.start) / 1000);
+    const approach = h("div", { class: "hint" }, icon("barbell"),
+      h("span", { class: "body-sm" }, "Séries d'approche sur ", h("b", { class: "fort medium" }, ex.name), ` : 2 ou 3 séries légères avant ${kg(e.draft.weight)}.`));
+    const head = h("div", { class: "wo-head" },
+      h("div", { class: "wo-top" },
+        h("span", { class: "overline" }, a.name, a.deload ? " · deload" : "", " · avant la première série"),
+        h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
+      h("div", null,
+        h("h1", { class: "heading-xl" }, "Échauffement"),
+        h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, `${cardio}, puis mobilité`)));
+    const foot = h("p", { class: "caption wo-foot num", style: { gridColumn: "1 / -1", margin: 0 } }, "Durée ", h("span", { "data-tick": "elapsed" }));
+    const begin = () => { a.warmupDone = true; save(); };
+
+    if (w) {
+      const done = w.done;
+      const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
+      const time = h("div", { class: "display-lg num" });
+      const update = () => {
+        const l = done ? 0 : left();
+        time.textContent = clock(Math.ceil(l));
+        ring.setAttribute("stroke-dashoffset", String(done ? 0 : C * (1 - l / w.total)));
+      };
+      update();
+      const toggle = () => { if (w.paused) { w.start += Date.now() - w.paused; w.paused = null; } else w.paused = Date.now(); save(); };
+      const el = h("div", { class: "screen workout" }, head,
+        h("div", { class: "scroll wo-center" },
+          h("div", { class: "wo-hero" },
+            h("div", { class: `ring ${done ? "repos" : "chauffe"}${w.paused ? " paused" : ""}` },
+              h("svg", { viewBox: "0 0 312 312", width: 312, height: 312, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
+              h("div", { class: "ring-center" }, h("div", { class: "overline" }, done ? "Terminé" : cardio), time,
+                h("span", { class: "body-sm discret" }, done ? "Cardio bouclé" : w.paused ? "En pause" : `Sur ${clock(w.total)}`))),
+            h("p", { class: "body-md discret", style: { margin: 0 } }, "Ensuite : ", h("b", { class: "fort medium" }, mobility))),
+          done && approach),
+        done
+          ? h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr 1.4fr" } },
+              btn("Refaire", { variant: "secondary", size: "lg", onClick: () => { a.warm = null; save(); } }),
+              btn("Commencer la séance", { variant: "primary", size: "lg", onClick: begin }), foot)
+          : h("div", { class: "wo-commands" },
+              btn("Reset", { variant: "secondary", size: "lg", onClick: () => { a.warm = null; save(); } }),
+              btn(w.paused ? "Reprendre" : "Pause", { variant: "primary", size: "lg", onClick: toggle }),
+              btn("Passer", { variant: "secondary", size: "lg", onClick: begin }), foot));
+      return {
+        el,
+        tick() {
+          if (done || w.paused) return;
+          if (left() <= 0) { w.done = true; beep(660, 0.15, 3); save(); return; }
+          update();
+        }
+      };
+    }
+
     const el = h("div", { class: "screen workout" },
       h("div", { class: "wo-head" },
         h("div", { class: "wo-top" },
@@ -178,15 +237,14 @@ export function workoutView() {
           h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, "Corde à sauter, puis mobilité"))),
       h("div", { class: "scroll wo-center" },
         h("div", { class: "wo-hero" },
-          h("div", { class: "overline" }, "Corde à sauter"),
-          h("div", { class: "display-sm num" }, "3–5 min"),
-          h("p", { class: "body-md discret", style: { margin: 0 } }, `Montée progressive, puis mobilité ${lower ? "des hanches et des chevilles" : "des épaules et des coudes"}.`)),
-        h("div", { class: "hint" }, icon("barbell"),
-          h("span", { class: "body-sm" }, "Séries d'approche sur ", h("b", { class: "fort medium" }, ex.name), ` : 2 ou 3 séries légères avant ${kg(e.draft.weight)}.`))),
+          h("div", { class: "overline" }, cardio),
+          h("div", { class: "display-sm num" }, dur ? dur[0].replace("-", "–") : clock(total)),
+          h("p", { class: "body-md discret", style: { margin: 0 } }, `Montée progressive, puis ${mobility}.`)),
+        approach),
       h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr 1.4fr" } },
         btn("Abandonner", { variant: "secondary", size: "lg", onClick: abandonSheet }),
-        btn("C'est parti", { variant: "primary", size: "lg", onClick: () => { a.warmupDone = true; save(); } }),
-        h("p", { class: "caption wo-foot num", style: { gridColumn: "1 / -1", margin: 0 } }, "Durée ", h("span", { "data-tick": "elapsed" }))));
+        btn("C'est parti", { variant: "primary", size: "lg", icon: "timer", onClick: () => { a.warm = { start: Date.now(), paused: null, total }; save(); } }),
+        foot));
     return { el };
   }
 
@@ -200,26 +258,27 @@ export function workoutView() {
       stepper({ value: e.draft.reps, min: 0, max: 200, compact: true, label: "reps", onChange: v => { e.draft.reps = v; save(true); } }))];
   let hero, restBtn;
   if (resting) {
-    const ring = h("circle", { svg: true, class: "prog", cx: 104, cy: 104, r: R, "stroke-dasharray": C });
+    const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
     const time = h("div", { class: "display-lg num" });
     // Bouton principal pendant le repos : il se remplit avec le temps écoulé, un tap lance la suite sans attendre.
-    const next = exDone ? (isLast ? "Fin du repos" : "Exercice suivant") : `Série ${e.sets.length + 1}`;
+    // Après la dernière série d'un exercice, le bouton n'affiche que le temps (l'anneau dit déjà la suite).
+    const next = exDone ? null : `Série ${e.sets.length + 1}`;
     const fill = h("span", { class: "rest-fill", "aria-hidden": "true" }), btnTime = h("span", { class: "num" });
-    restBtn = h("button", { class: "btn lg rest-btn", type: "button", onClick: () => { a.restEndsAt = null; save(); } },
-      fill, h("span", { class: "rest-label" }, next), btnTime);
+    restBtn = h("button", { class: `btn lg rest-btn${next ? "" : " solo"}`, type: "button", onClick: () => { a.restEndsAt = null; save(); } },
+      fill, next && h("span", { class: "rest-label" }, next), btnTime);
     const update = () => {
       const left = Math.max(0, (a.restEndsAt - Date.now()) / 1000);
       time.textContent = clock(Math.ceil(left));
       ring.setAttribute("stroke-dashoffset", String(C * (1 - left / a.restTotal)));
       btnTime.textContent = clock(Math.ceil(left));
       fill.style.transform = `scaleX(${Math.min(1, 1 - left / a.restTotal)})`;
-      restBtn.setAttribute("aria-label", `${next} maintenant, repos restant ${clock(Math.ceil(left))}`);
+      restBtn.setAttribute("aria-label", `${next || "Fin du repos"} maintenant, repos restant ${clock(Math.ceil(left))}`);
     };
     update();
     const shift = d => { a.restEndsAt = Math.max(Date.now(), a.restEndsAt + d * 1000); a.restTotal = Math.max(a.restTotal + d, 1); save(true); update(); };
     hero = h("div", { class: "wo-hero rest" },
       h("div", { class: "ring" },
-        h("svg", { viewBox: "0 0 208 208", width: 208, height: 208, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 104, cy: 104, r: R }), ring),
+        h("svg", { viewBox: "0 0 312 312", width: 312, height: 312, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
         h("div", { class: "ring-center" }, h("div", { class: "overline" }, "Repos"), time,
           h("span", { class: "body-sm discret num" }, exDone ? (isLast ? "Exercice terminé" : `Ensuite ${exercise(a.entries[a.cursor + 1].exerciseId).name}`) : `Ensuite ${interval ? "round" : "série"} ${e.sets.length + 1} / ${e.target.sets}`))),
       h("div", { style: { display: "flex", gap: "8px", marginTop: "8px" } },
@@ -238,10 +297,10 @@ export function workoutView() {
         ...draftSteppers(e.format === "emom" ? "Reps par round" : "Reps du round"));
     } else {
       const kind = e.format === "emom" ? "emom" : st.phase;
-      const ring = h("circle", { svg: true, class: "prog", cx: 104, cy: 104, r: R, "stroke-dasharray": C });
+      const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
       const time = h("div", { class: "display-lg num" }), over = h("div", { class: "overline" }), sub = h("span", { class: "body-sm discret num" });
       const wrap = h("div", { class: `ring ${kind}` },
-        h("svg", { viewBox: "0 0 208 208", width: 208, height: 208, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 104, cy: 104, r: R }), ring),
+        h("svg", { viewBox: "0 0 312 312", width: 312, height: 312, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
         h("div", { class: "ring-center" }, over, time, sub));
       const update = () => {
         const x = intervalState(e); if (!x) return;
