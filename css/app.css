@@ -292,6 +292,8 @@ textarea.input { height: 88px; padding: var(--spacing-12); resize: none; }
 .ex-link svg { width: 22px; height: 22px; margin-left: var(--spacing-8); vertical-align: -2px; color: var(--accent-texte); }
 .movement { position: relative; aspect-ratio: 3 / 2; border-radius: var(--radius-sm); overflow: hidden; background: #fff; }
 .movement img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.movement.gif { aspect-ratio: 1; background: #fff; }
+.movement.gif img { image-rendering: auto; }
 .movement img + img { animation: movement 2.4s ease-in-out infinite; }
 @keyframes movement { 0%, 30% { opacity: 0; } 50%, 80% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
