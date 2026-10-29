@@ -1,4 +1,4 @@
-import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, createExercise, setPref, toggleFav, setItemFormat, itemSets, generateProgram, applyProgram, plannedSetsOf, SPLITS, suggestion, lastPerformance, plannedSets, startWorkout, history, MUSCLES, PREFS, FORMATS } from "../store.js";
+import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, generateProgram, applyProgram, plannedSetsOf, SPLITS, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, MUSCLES, GROUPS, PREFS, FORMATS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
@@ -10,25 +10,49 @@ export const itemLine = it =>
   : it.format === "tabata" ? `Tabata ${it.rounds} × ${it.work} s / ${it.off} s · ${kg(it.weight)}`
   : `${it.sets} × ${reps(it.repsMin, it.repsMax)} · ${kg(it.weight)} · repos ${clock(it.rest)}`;
 
-// Catalogue partagé (ajout à une séance, hors programme, mes exercices) : favoris en tête, étoile au toucher.
-export function catalogue(list, query, { onPick, note, pickIcon = "plus" }) {
+// Catalogue partagé (ajout à une séance, hors programme, machine prise) : plus de 1000 exercices,
+// filtrés par muscle et par matériel. Sans recherche ni filtre, chaque muscle montre ses 5 plus utiles.
+// Le premier dessin d'un écran passe muscle (null pour tout voir) pour repartir des filtres à zéro.
+const filter = { muscle: null, equip: null };
+export function catalogue(list, query, { onPick, note, pickIcon = "plus", muscle }) {
+  if (muscle !== undefined) Object.assign(filter, { muscle, equip: null }); // ouverture : muscle imposé (ou aucun), matériel libre
   const q = query.trim().toLowerCase();
-  const match = e => !q || e.name.toLowerCase().includes(q);
-  const rank = { neutre: 0, evite: 1, douleur: 2 };
+  const match = e => (!q || e.name.toLowerCase().includes(q)) && (!filter.muscle || e.muscle === filter.muscle) && (!filter.equip || e.equip === filter.equip);
+  const short = !q && !filter.muscle;
   const favs = state.exercises.filter(e => e.pref === "aime" && match(e)).sort((a, b) => a.name.localeCompare(b.name));
-  const groups = MUSCLES.map(m => [m, state.exercises.filter(e => e.muscle === m && e.pref !== "aime" && match(e)).sort((a, b) => rank[a.pref] - rank[b.pref] || a.name.localeCompare(b.name))])
+  const groups = GROUPS.map(m => [m, state.exercises.filter(e => e.muscle === m && e.pref !== "aime" && match(e)).sort(byUsefulness)])
     .filter(([, xs]) => xs.length);
   const redraw = () => catalogue(list, query, { onPick, note, pickIcon });
+  const chipRow = (options, key) => h("div", { class: "chips scroll-x" }, options.map(([v, label]) =>
+    h("button", { type: "button", class: "chip", "aria-pressed": String(filter[key] === v), onClick: () => { filter[key] = filter[key] === v ? null : v; redraw(); } }, label)));
   const row = e => h("div", { class: "row pick", style: e.pref === "douleur" ? { opacity: .6 } : null },
     h("button", { class: "row-btn", onClick: () => onPick(e) },
-      h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, e.name), h("span", { class: "caption num" }, note(e))),
+      h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, e.name), h("span", { class: "caption num" }, [EQUIPS[e.equip], note(e)].filter(Boolean).join(" · "))),
       e.pref !== "aime" && prefPill(e.pref), icon(pickIcon, "chev")),
     e.pref !== "douleur" && h("button", { class: "star", "aria-pressed": String(e.pref === "aime"), "aria-label": e.pref === "aime" ? `Retirer ${e.name} des favoris` : `Mettre ${e.name} en favori`,
       onClick: () => { toggleFav(e.id); redraw(); } }, icon("star")));
-  const block = (title, xs) => h("div", null, h("div", { class: "overline", style: { margin: "0 0 8px" } }, title), h("div", { class: "list" }, xs.map(row)));
-  list.replaceChildren(...[favs.length && block("★ Favoris", favs), ...groups.map(([m, xs]) => block(m, xs))].filter(Boolean));
+  const block = (title, xs, m) => h("div", null, h("div", { class: "overline", style: { margin: "0 0 8px" } }, short && m ? `${title} · ${xs.length}` : title),
+    h("div", { class: "list" }, (short && m ? xs.slice(0, 5) : xs.slice(0, 150)).map(row)),
+    short && m && xs.length > 5 && btn(`Voir les ${xs.length} exercices`, { variant: "ghost", full: true, onClick: () => { filter.muscle = m; redraw(); } }));
+  list.replaceChildren(
+    chipRow(GROUPS.map(m => [m, m]), "muscle"),
+    chipRow(Object.entries(EQUIPS), "equip"),
+    ...[favs.length && block("★ Favoris", favs), ...groups.map(([m, xs]) => block(m, xs, m))].filter(Boolean));
   if (!favs.length && !groups.length) list.append(h("p", { class: "body-sm discret", style: { margin: 0 } }, "Aucun exercice ne correspond."));
 }
+
+// Mouvement d'un exercice dans une feuille : les deux photos (départ, arrivée) s'enchaînent en fondu.
+export function movementSheet(e) {
+  const [start, end] = exercisePhotos(e);
+  sheet({ title: e.name, body:
+    h("div", { class: "movement", role: "img", "aria-label": `${e.name} : position de départ puis d'arrivée` },
+      h("img", { src: start, alt: "", decoding: "async" }), h("img", { src: end, alt: "", decoding: "async" })) });
+}
+
+// Nom d'exercice : quand des photos existent, il ouvre le mouvement sans quitter l'app.
+export const exerciseTitle = (e, attrs = {}) => exercisePhotos(e)
+  ? h("button", { ...attrs, type: "button", class: `${attrs.class || ""} ex-link`, "aria-label": `${e.name}, voir le mouvement`, onClick: () => movementSheet(e) }, e.name, icon("play"))
+  : h("span", attrs, e.name);
 
 function nameSheet({ title, value = "", okLabel, onOk }) {
   const input = h("input", { class: "input", value, placeholder: "Ex. Haut A, Push, Full body", maxLength: 40, "aria-label": "Nom" });
@@ -128,6 +152,8 @@ export function itemView({ id, item }) {
   const done = () => { save(); go(`#/seances/${t.id}`); };
   const set = k => v => { it[k] = v; if (k === "repsMin" && it.repsMax < v) it.repsMax = v; if (k === "repsMax" && it.repsMin > v) it.repsMin = v; save(true); };
   const field = (label, s) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), s);
+  const weight = label => field(label, stepper({ value: it.weight, values: weightScale(ex.equip), max: 500, format: num, editable: true, label: "charge",
+    unit: v => [ex.equip === "halteres" ? "kg par haltère" : "kg", lbs(ex.equip, v), "0 = poids du corps"].filter(Boolean).join(" · "), onChange: set("weight") }));
 
   const el = h("div", { class: "screen no-tabs" },
     navbar({ back: { label: t.name, onClick: done }, title: ex.name, subtitle: ex.muscle, action: { label: "OK", onClick: done } }),
@@ -145,20 +171,24 @@ export function itemView({ id, item }) {
           h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
             field("Toutes les", stepper({ value: it.every, step: 15, min: 30, max: 300, format: clock, compact: true, label: "intervalle", onChange: set("every") })),
             field("Reps par round", stepper({ value: it.repsMin, min: 1, max: 50, compact: true, label: "reps par round", onChange: v => { it.repsMin = it.repsMax = v; save(true); } }))),
-          field("Charge", stepper({ value: it.weight, step: 2.5, max: 500, format: num, unit: "kg · 0 = poids du corps", editable: true, label: "charge", onChange: set("weight") })))
+          weight("Charge"))
       : it.format === "tabata" ? h("div", { class: "card" },
           field("Rounds", stepper({ value: it.rounds, min: 2, max: 30, unit: "rounds", label: "rounds", onChange: set("rounds") })),
           h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
             field("Effort", stepper({ value: it.work, step: 5, min: 10, max: 120, format: clock, compact: true, label: "effort", onChange: set("work") })),
             field("Repos", stepper({ value: it.off, step: 5, min: 5, max: 120, format: clock, compact: true, label: "repos", onChange: set("off") }))),
-          field("Charge", stepper({ value: it.weight, step: 2.5, max: 500, format: num, unit: "kg · 0 = poids du corps", editable: true, label: "charge", onChange: set("weight") })))
+          weight("Charge"))
       : h("div", { class: "card" },
           field("Séries", stepper({ value: it.sets, min: 1, max: 10, label: "séries", onChange: set("sets") })),
           h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
             field("Reps min", stepper({ value: it.repsMin, min: 1, max: 50, compact: true, label: "reps min", onChange: set("repsMin") })),
             field("Reps max", stepper({ value: it.repsMax, min: 1, max: 50, compact: true, label: "reps max", onChange: set("repsMax") }))),
-          field("Charge de départ", stepper({ value: it.weight, step: 2.5, max: 500, format: num, unit: "kg · 0 = poids du corps", editable: true, label: "charge", onChange: set("weight") })),
+          weight("Charge de départ"),
           field("Repos", stepper({ value: it.rest, step: 15, min: 15, max: 600, format: clock, compact: true, label: "repos", onChange: set("rest") }))),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Matériel")),
+      h("div", { class: "chips" }, Object.entries(EQUIPS).map(([k, l]) => h("button", { type: "button", class: "chip", "aria-pressed": String(k === ex.equip),
+        onClick: () => { setEquip(ex.id, k); dispatchEvent(new HashChangeEvent("hashchange")); } }, l))),
+      exercisePhotos(ex) && btn("Voir le mouvement", { variant: "secondary", full: true, icon: "play", onClick: () => movementSheet(ex) }),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Ton avis sur l'exercice")),
       segmented(Object.entries(PREFS), ex.pref, v => { setPref(ex.id, v); }, "sm"),
       ex.pref === "douleur" && h("div", { class: "hint attention" }, icon("warning"),
@@ -174,19 +204,24 @@ export function pickerView({ id }) {
   const results = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } });
   const add = exId => { const it = addItem(t.id, exId); toast(`${exercise(exId).name} ajouté`); go(`#/seances/${t.id}/${it.id}`); };
 
+  let first = true;
   const draw = q => {
     q = q.trim();
     const exact = state.exercises.some(e => e.name.toLowerCase() === q.toLowerCase());
-    catalogue(results, q, { onPick: e => add(e.id), note: e => [e.muscle, t.items.some(i => i.exerciseId === e.id) && "déjà dans la séance"].filter(Boolean).join(" · ") });
+    catalogue(results, q, { muscle: first ? null : undefined, onPick: e => add(e.id), note: e => [t.items.some(i => i.exerciseId === e.id) && "déjà dans la séance"].filter(Boolean).join(" · ") });
     list.replaceChildren(
       q && !exact && btn(`Créer « ${q} »`, { variant: "secondary", full: true, icon: "plus", onClick: () => {
-        let muscle = MUSCLES[0];
+        let muscle = filter.muscle && MUSCLES.includes(filter.muscle) ? filter.muscle : MUSCLES[0], equip = filter.equip || "barre";
+        const pick = (options, value, onPick) => h("div", { class: "chips" }, options.map(([k, l]) => h("button", { class: "chip", type: "button", "aria-pressed": String(k === value),
+          onClick: e => { onPick(k); e.target.parentNode.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === e.target))); } }, l)));
         sheet({ title: "Quel muscle ?", okLabel: "Créer l'exercice",
-          body: h("div", { class: "chips" }, MUSCLES.map(m => h("button", { class: "chip", "aria-pressed": String(m === muscle),
-            onClick: e => { muscle = m; e.target.parentNode.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === e.target))); } }, m))),
-          ok: () => { const name = q[0].toUpperCase() + q.slice(1); setTimeout(() => add(createExercise(name, muscle).id)); } });
+          body: [pick(MUSCLES.map(m => [m, m]), muscle, m => { muscle = m; }),
+            h("span", { class: "overline" }, "Matériel"),
+            pick(Object.entries(EQUIPS), equip, k => { equip = k; })],
+          ok: () => { const name = q[0].toUpperCase() + q.slice(1); setTimeout(() => add(createExercise(name, muscle, equip).id)); } });
       } }),
       results);
+    first = false;
   };
 
   const search = h("input", { class: "input", type: "search", placeholder: "Chercher ou créer un exercice", "aria-label": "Chercher un exercice", onInput: e => draw(e.target.value) });

@@ -196,6 +196,9 @@ button.row:active { background: var(--fond-discret); }
   height: 32px; min-width: 40px; padding: 0 var(--spacing-12); border-radius: var(--radius-sm);
   border: 1px solid var(--bord-discret); background: var(--fond-carte); color: var(--texte-base); font: 500 13px/20px var(--font);
 }
+.chips.scroll-x { flex-wrap: nowrap; overflow-x: auto; margin: 0 calc(-1 * var(--spacing-16)); padding: 0 var(--spacing-16); scrollbar-width: none; }
+.chips.scroll-x::-webkit-scrollbar { display: none; }
+.chips.scroll-x .chip { flex: none; }
 .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent-texte); color: var(--texte-fort); }
 
 /* ——— Stepper : un tap = un pas, maintien = répétition (comme Tabatime) */
@@ -280,6 +283,22 @@ textarea.input { height: 88px; padding: var(--spacing-12); resize: none; }
 .ring circle { fill: none; stroke-width: 14; }
 .ring .track { stroke: var(--etat-succes-soft); }
 .ring .prog { stroke: var(--etat-succes); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.wo-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ex-link { color: inherit; text-decoration: none; font: inherit; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+.ex-link svg { width: 22px; height: 22px; margin-left: var(--spacing-8); vertical-align: -2px; color: var(--accent-texte); }
+.movement { position: relative; aspect-ratio: 3 / 2; border-radius: var(--radius-sm); overflow: hidden; background: #fff; }
+.movement img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.movement img + img { animation: movement 2.4s ease-in-out infinite; }
+@keyframes movement { 0%, 30% { opacity: 0; } 50%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .movement { aspect-ratio: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+  .movement img { position: static; animation: none; }
+}
+.rest-btn { position: relative; overflow: hidden; justify-content: space-between; gap: var(--spacing-8); background: var(--etat-succes-soft); color: var(--etat-succes); font-weight: 600; }
+.rest-btn > :not(.rest-fill) { position: relative; }
+.rest-btn .num { font-size: 16px; font-variant-numeric: tabular-nums; }
+.rest-fill { position: absolute; inset: 0; background: color-mix(in srgb, var(--etat-succes) 22%, transparent); transform-origin: left; transform: scaleX(0); transition: transform 1s linear; }
+@media (prefers-reduced-motion: reduce) { .rest-fill { transition: none; } }
 .ring-center { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-4); }
 .wo-commands { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: var(--spacing-12); padding: var(--spacing-12) var(--spacing-20) calc(var(--spacing-12) + var(--safe-bottom)); border-top: 1px solid var(--bord-discret); background: var(--fond-page); }
 .wo-foot { text-align: center; padding-bottom: var(--spacing-4); }
