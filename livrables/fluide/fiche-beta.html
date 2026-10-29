@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluide — bêta</title>
+<style>
+  :root { --fond: #0f1016; --carte: #1a1b24; --bord: #2a2b38; --fort: #f5f6fa; --base: #c9ccd8; --discret: #9da1b8; --accent: #b3bcff; --succes: #4ade80; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--fond); }
+  body { font: 400 16px/24px Inter, -apple-system, system-ui, sans-serif; color: var(--base); -webkit-font-smoothing: antialiased; }
+  .fiche { width: 600px; min-height: 800px; margin: 0 auto; padding: 48px 44px 40px; display: flex; flex-direction: column; gap: 28px; }
+  .tete { display: flex; align-items: center; gap: 14px; }
+  .logo { width: 44px; height: 44px; border-radius: 12px; background: var(--accent); color: #15161e; display: grid; place-items: center; font-weight: 700; font-size: 22px; }
+  h1 { margin: 0; font: 600 30px/34px Inter, system-ui, sans-serif; color: var(--fort); letter-spacing: -0.01em; }
+  .tete p { margin: 2px 0 0; color: var(--discret); font-size: 14px; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px; background: #12301f; color: var(--succes); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-left: auto; }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .qr { background: var(--carte); border: 1px solid var(--bord); border-radius: 16px; padding: 28px; display: flex; align-items: center; gap: 28px; }
+  .qr img { width: 180px; height: 180px; border-radius: 10px; background: #fff; padding: 10px; image-rendering: pixelated; }
+  .qr .txt { flex: 1; }
+  .over { font: 500 11px/16px Inter, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--discret); margin: 0 0 6px; }
+  .url { margin: 0; font: 600 22px/28px Inter, system-ui, sans-serif; color: var(--fort); word-break: break-all; }
+  .qr .txt p.small { margin: 10px 0 0; color: var(--discret); font-size: 14px; line-height: 20px; }
+  h2 { margin: 0 0 12px; font: 600 18px/24px Inter, system-ui, sans-serif; color: var(--fort); }
+  ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  li { display: flex; gap: 14px; align-items: flex-start; background: var(--carte); border: 1px solid var(--bord); border-radius: 12px; padding: 14px 16px; }
+  .n { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #262b4d; color: var(--accent); display: grid; place-items: center; font-weight: 600; font-size: 14px; }
+  li b { color: var(--fort); font-weight: 600; }
+  li span { display: block; }
+  li .d { color: var(--discret); font-size: 14px; line-height: 20px; margin-top: 2px; }
+  .note { border-radius: 12px; background: #3a2612; color: #ffd9b3; padding: 12px 16px; font-size: 14px; line-height: 20px; }
+  .note b { color: #ffa24d; }
+  .pied { margin-top: auto; color: var(--discret); font-size: 13px; line-height: 18px; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="fiche">
+  <div class="tete">
+    <div class="logo">F</div>
+    <div>
+      <h1>Fluide</h1>
+      <p>Carnet de musculation · Système Fluide</p>
+    </div>
+    <span class="pill">Bêta</span>
+  </div>
+
+  <div class="qr">
+    <img src="qr-fluide.png" alt="QR code vers l'app">
+    <div class="txt">
+      <p class="over">Ouvre dans Safari</p>
+      <p class="url">alexis-fluide.vercel.app</p>
+      <p class="small">Scanne le QR code avec l'appareil photo de l'iPhone, ou tape l'adresse.</p>
+    </div>
+  </div>
+
+  <div>
+    <h2>Installer l'app sur l'écran d'accueil</h2>
+    <ol>
+      <li><span class="n">1</span><span><b>Ouvre l'adresse dans Safari</b><span class="d">Pas depuis Instagram ou WhatsApp : il faut le vrai Safari.</span></span></li>
+      <li><span class="n">2</span><span><b>Touche le bouton Partager</b><span class="d">Le carré avec la flèche, en bas de l'écran.</span></span></li>
+      <li><span class="n">3</span><span><b>Choisis « Sur l'écran d'accueil »</b><span class="d">Puis « Ajouter ». L'icône Fluide apparaît comme une app.</span></span></li>
+      <li><span class="n">4</span><span><b>Lance Fluide depuis l'icône</b><span class="d">Choisis ton programme dans Séances, puis démarre ta première séance.</span></span></li>
+    </ol>
+  </div>
+
+  <div class="note"><b>Important :</b> tes données restent sur ton téléphone, rien n'est envoyé en ligne. Si tu n'installes pas l'app sur l'écran d'accueil, iOS peut les effacer après 7 jours sans visite. Tu peux les sauvegarder dans Réglages → Exporter.</div>
+
+  <div class="pied">
+    <span>Tes retours sont les bienvenus : ce qui bloque, ce qui manque, ce qui te plaît.</span>
+    <span>Alexis</span>
+  </div>
+</div>
+</body>
+</html>
