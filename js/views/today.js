@@ -97,8 +97,7 @@ export function todayView() {
           btn("Choisir un programme", { variant: "primary", onClick: () => go("#/seances/programme") }));
 
   const el = h("div", { class: "screen" },
-    pageHead("Aujourd'hui", `${dateLong(Date.now())}${lastSession ? ` · dernière séance ${ago(lastSession.startedAt)}` : ""}`,
-      h("button", { class: "icon-round", "aria-label": "Réglages Fluide", onClick: () => go("#/profil/matrice") }, icon("sliders"))),
+    pageHead("Aujourd'hui", `${dateLong(Date.now())}${lastSession ? ` · dernière séance ${ago(lastSession.startedAt)}` : ""}`),
     h("div", { class: "scroll" },
       goalCard(),
       sessionCard,
