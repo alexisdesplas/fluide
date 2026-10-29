@@ -276,11 +276,11 @@ export function workoutView() {
     };
     update();
     const shift = d => { a.restEndsAt = Math.max(Date.now(), a.restEndsAt + d * 1000); a.restTotal = Math.max(a.restTotal + d, 1); save(true); update(); };
+    // Repos : anneau réduit, sans « Ensuite … » (la liste des séries et le bouton du bas disent déjà la suite).
     hero = h("div", { class: "wo-hero rest" },
-      h("div", { class: "ring" },
-        h("svg", { viewBox: "0 0 312 312", width: 312, height: 312, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
-        h("div", { class: "ring-center" }, h("div", { class: "overline" }, "Repos"), time,
-          h("span", { class: "body-sm discret num" }, exDone ? (isLast ? "Exercice terminé" : `Ensuite ${exercise(a.entries[a.cursor + 1].exerciseId).name}`) : `Ensuite ${interval ? "round" : "série"} ${e.sets.length + 1} / ${e.target.sets}`))),
+      h("div", { class: "ring sm" },
+        h("svg", { viewBox: "0 0 312 312", "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
+        h("div", { class: "ring-center" }, h("div", { class: "overline" }, "Repos"), time)),
       h("div", { style: { display: "flex", gap: "8px", marginTop: "8px" } },
         btn("−15 s", { variant: "secondary", size: "sm", onClick: () => shift(-15) }),
         btn("+15 s", { variant: "secondary", size: "sm", onClick: () => shift(15) }),
