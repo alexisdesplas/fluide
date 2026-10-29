@@ -43,6 +43,7 @@ App perso de musculation (PWA iPhone) pilotée par le **Système Fluide** (skill
 - 29/10/2026 — Bouton de repos : vert, se remplit avec le temps, affiche la suite et le temps restant, un tap lance la série sans attendre.
 - 29/10/2026 — Base de 1040 exercices (`js/exercices.js`) : noms et classement d'après la bibliothèque SmartWorkout, rangés dans les muscles Fluide (+ Avant-bras, Échauffement, Mobilité hors objectif). Catalogue filtrable par muscle et matériel. Les 36 anciens exercices sont renommés, l'historique suit.
 - 29/10/2026 — Vidéos SmartWorkout : ni copiées ni liées (protégées, et le lien sortait de l'app, rejeté par Alexis). Mouvement montré dans l'app avec les photos libres de free-exercise-db (domaine public) qui alternent : 311 exercices, dont tous les habituels.
+- 29/10/2026 — Échauffement : « C'est parti » lance un chrono (durée lue dans le réglage « Corde à sauter 3-5 min », borne haute), Reset / Pause / Passer, puis mobilité et séries d'approche. Anneaux alignés sur Tabatime (frame `136:14658`) : 312 px, trait 34 px, chrono 64 px ; orange pour l'échauffement.
 
 ## Hypothèses ouvertes
 - Propositions locales : promotion dans Hardwood ou non.

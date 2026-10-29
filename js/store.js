@@ -462,7 +462,7 @@ export function startWorkout(templateId) {
   state.active = {
     id: uid(), templateId, name: t.name, startedAt: now,
     cycle: state.cycle.type, week: pos.week, deload: pos.deload,
-    warmupDone: false, cursor: 0, restEndsAt: null, restTotal: 0,
+    warmupDone: false, warm: null, cursor: 0, restEndsAt: null, restTotal: 0,
     entries: t.items.map(item => {
       if (isInterval(item)) return intervalEntry(item.exerciseId, item, pos.deload);
       const s = suggestion(item, now);
