@@ -63,10 +63,7 @@ const RENAMED = {
 const fromCatalogue = ([name, muscle, equip, photo, rank]) => ({ id: uid(), name, muscle, equip, photo, rank, pref: "neutre", note: "" });
 // Photos du mouvement (départ, arrivée) servies par jsDelivr, figées sur une version du dépôt free-exercise-db.
 const PHOTOS = "https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@f00c92c7dcf1216a928a52c3706c7ce8e2f71ed5/exercises";
-export const exercisePhotos = e => (e?.photo && !e.photo.startsWith("edb:") ? [0, 1].map(i => `${PHOTOS}/${e.photo}/${i}.jpg`) : null);
-// Essai : animation 3D d'ExerciseDB (version gratuite, licence des GIF non écrite, à ne pas garder sans accord).
-export const exerciseGif = e => (e?.photo?.startsWith("edb:") ? `https://static.exercisedb.dev/media/${e.photo.slice(4)}.gif` : null);
-export const hasMovement = e => Boolean(exercisePhotos(e) || exerciseGif(e));
+export const exercisePhotos = e => (e?.photo ? [0, 1].map(i => `${PHOTOS}/${e.photo}/${i}.jpg`) : null);
 
 // Charges possibles selon le matériel. Machine et poulie : pile par 5 lbs, affichée en kg comme sur la plaque (2,3 · 4,5 · 6,8…).
 const range = (from, to, step) => Array.from({ length: Math.round((to - from) / step) + 1 }, (_, i) => Math.round((from + i * step) * 100) / 100);
