@@ -1,4 +1,4 @@
-import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, generateProgram, applyProgram, plannedSetsOf, SPLITS, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, MUSCLES, GROUPS, PREFS, FORMATS } from "../store.js";
+import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, generateProgram, applyProgram, plannedSetsOf, SPLITS, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
@@ -41,16 +41,18 @@ export function catalogue(list, query, { onPick, note, pickIcon = "plus", muscle
   if (!favs.length && !groups.length) list.append(h("p", { class: "body-sm discret", style: { margin: 0 } }, "Aucun exercice ne correspond."));
 }
 
-// Mouvement d'un exercice dans une feuille : les deux photos (départ, arrivée) s'enchaînent en fondu.
+// Mouvement d'un exercice dans une feuille : animation 3D si on en a une, sinon les deux photos (départ, arrivée) en fondu.
 export function movementSheet(e) {
-  const [start, end] = exercisePhotos(e);
-  sheet({ title: e.name, body:
-    h("div", { class: "movement", role: "img", "aria-label": `${e.name} : position de départ puis d'arrivée` },
-      h("img", { src: start, alt: "", decoding: "async" }), h("img", { src: end, alt: "", decoding: "async" })) });
+  const gif = exerciseGif(e);
+  const body = gif
+    ? h("div", { class: "movement gif", role: "img", "aria-label": `${e.name} : animation du mouvement` }, h("img", { src: gif, alt: "", decoding: "async" }))
+    : (([start, end]) => h("div", { class: "movement", role: "img", "aria-label": `${e.name} : position de départ puis d'arrivée` },
+        h("img", { src: start, alt: "", decoding: "async" }), h("img", { src: end, alt: "", decoding: "async" })))(exercisePhotos(e));
+  sheet({ title: e.name, body });
 }
 
 // Nom d'exercice : quand des photos existent, il ouvre le mouvement sans quitter l'app.
-export const exerciseTitle = (e, attrs = {}) => exercisePhotos(e)
+export const exerciseTitle = (e, attrs = {}) => hasMovement(e)
   ? h("button", { ...attrs, type: "button", class: `${attrs.class || ""} ex-link`, "aria-label": `${e.name}, voir le mouvement`, onClick: () => movementSheet(e) }, e.name, icon("play"))
   : h("span", attrs, e.name);
 
@@ -188,7 +190,7 @@ export function itemView({ id, item }) {
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Matériel")),
       h("div", { class: "chips" }, Object.entries(EQUIPS).map(([k, l]) => h("button", { type: "button", class: "chip", "aria-pressed": String(k === ex.equip),
         onClick: () => { setEquip(ex.id, k); dispatchEvent(new HashChangeEvent("hashchange")); } }, l))),
-      exercisePhotos(ex) && btn("Voir le mouvement", { variant: "secondary", full: true, icon: "play", onClick: () => movementSheet(ex) }),
+      hasMovement(ex) && btn("Voir le mouvement", { variant: "secondary", full: true, icon: "play", onClick: () => movementSheet(ex) }),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Ton avis sur l'exercice")),
       segmented(Object.entries(PREFS), ex.pref, v => { setPref(ex.id, v); }, "sm"),
       ex.pref === "douleur" && h("div", { class: "hint attention" }, icon("warning"),
