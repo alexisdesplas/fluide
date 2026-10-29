@@ -122,6 +122,8 @@ button { cursor: pointer; }
 .tab[aria-current="page"] { color: var(--accent-texte); }
 
 /* ——— Bouton (Hardwood) */
+/* Colonnes qui défilent : quand le contenu dépasse, rien ne se tasse (sinon les boutons tombent à la hauteur du texte). */
+.scroll > *, .sheet-body > * { flex-shrink: 0; }
 .btn {
   height: 40px; padding: 0 var(--spacing-12); border-radius: var(--radius-sm);
   display: inline-flex; align-items: center; justify-content: center; gap: var(--spacing-8);
