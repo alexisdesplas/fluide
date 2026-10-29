@@ -45,7 +45,8 @@ const PATHS = {
   barbell: "M64 72h32v112H64zM160 72h32v112h-32zM96 128h64M64 96H40v64h24M192 96h24v64h-24M16 128h24M216 128h24",
   sliders: "M64 40v176M192 40v176M128 40v176M40 168h48M104 88h48M168 136h48",
   swap: "M176 32l32 32-32 32M48 64h160M80 224l-32-32 32-32M208 192H48",
-  star: "M128 28l29 63 69 7-52 47 15 68-61-35-61 35 15-68-52-47 69-7z"
+  star: "M128 28l29 63 69 7-52 47 15 68-61-35-61 35 15-68-52-47 69-7z",
+  play: "M128 224a96 96 0 1 0 0-192 96 96 0 0 0 0 192zM112 96l48 32-48 32z"
 };
 
 export function icon(name, cls) {
@@ -132,8 +133,13 @@ export function chips(options, value, onChange) {
 }
 
 // Stepper : un tap = un pas, maintien appuyé = répétition. La valeur centrale se tape aussi au clavier.
-export function stepper({ value, step = 1, min = 0, max = 9999, format = String, unit, compact, editable, label, onChange }) {
+// values : liste des valeurs possibles (charges d'une pile de machine…), les boutons passent de l'une à la suivante.
+export function stepper({ value, step = 1, min = 0, max = 9999, values, format = String, unit, compact, editable, label, onChange }) {
   let v = value;
+  const move = dir => values
+    ? (dir > 0 ? values.find(x => x > v + 0.001) : values.findLast(x => x < v - 0.001)) ?? v
+    : v + dir * step;
+  const unitText = () => (typeof unit === "function" ? unit(v) : unit);
   const clamp = x => Math.min(max, Math.max(min, Math.round(x * 100) / 100));
   const display = compact
     ? h("span", { class: "value num" }, format(v))
@@ -141,19 +147,20 @@ export function stepper({ value, step = 1, min = 0, max = 9999, format = String,
         h("input", { value: format(v), inputmode: "decimal", "aria-label": label, readOnly: !editable,
           onChange: e => { const n = parseFloat(e.target.value.replace(",", ".")); set(isNaN(n) ? v : n); },
           onFocus: e => editable && e.target.select() }),
-        unit && h("div", { class: "unit" }, unit));
+        unit && h("div", { class: "unit" }, unitText()));
   const set = x => {
     v = clamp(x);
-    if (compact) display.textContent = format(v); else display.querySelector("input").value = format(v);
+    if (compact) display.textContent = format(v);
+    else { display.querySelector("input").value = format(v); const u = display.querySelector(".unit"); if (u) u.textContent = unitText(); }
     onChange(v);
   };
   const hold = dir => {
     let timer, rep;
     const stop = () => { clearTimeout(timer); clearInterval(rep); };
     return {
-      onPointerdown: e => { e.preventDefault(); set(v + dir * step); timer = setTimeout(() => { rep = setInterval(() => set(v + dir * step), 90); }, 400); },
+      onPointerdown: e => { e.preventDefault(); set(move(dir)); timer = setTimeout(() => { rep = setInterval(() => set(move(dir)), 90); }, 400); },
       onPointerup: stop, onPointerleave: stop, onPointercancel: stop,
-      onClick: e => { if (e.detail === 0) set(v + dir * step); }
+      onClick: e => { if (e.detail === 0) set(move(dir)); }
     };
   };
   return h("div", { class: `stepper${compact ? " compact" : ""}` },

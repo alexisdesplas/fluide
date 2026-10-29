@@ -1,10 +1,14 @@
 // Données de l'appli, rangées selon le Système Fluide : profil + matrice de volume, cycle en cours,
 // exercices (avec préférences), séances types, séances faites, habitudes. Tout vit dans le localStorage.
 
+import { CATALOGUE } from "./exercices.js";
+
 const KEY = "fluid-v1";
 const DAY = 86400000;
 
 export const MUSCLES = ["Pecs", "Dos", "Épaules", "Biceps", "Triceps", "Quadris", "Ischios", "Fessiers", "Mollets", "Abdos"];
+// Groupes du catalogue hors matrice Fluide : leurs séries ne comptent pas dans l'objectif.
+export const GROUPS = [...MUSCLES, "Avant-bras", "Échauffement", "Mobilité"];
 
 export const STATUS = {
   maintien: { label: "Maintenir", range: [4, 8], def: 6 },
@@ -38,25 +42,57 @@ const roundsToSets = (format, rounds) => (format === "tabata" ? Math.ceil(rounds
 export const entrySets = e => (isInterval(e) ? roundsToSets(e.format, e.sets.length) : e.sets.length);
 export const itemSets = it => (isInterval(it) ? roundsToSets(it.format, it.rounds) : it.sets);
 
-const LIBRARY = [
-  ["Développé couché", "Pecs"], ["Développé incliné haltères", "Pecs"], ["Écarté poulie", "Pecs"], ["Dips", "Pecs"],
-  ["Tractions", "Dos"], ["Rowing barre", "Dos"], ["Tirage vertical", "Dos"], ["Tirage horizontal", "Dos"], ["Rowing haltère", "Dos"],
-  ["Développé militaire", "Épaules"], ["Élévations latérales", "Épaules"], ["Face pull", "Épaules"], ["Oiseau poulie", "Épaules"],
-  ["Curl barre", "Biceps"], ["Curl marteau", "Biceps"], ["Curl incliné", "Biceps"],
-  ["Extension poulie", "Triceps"], ["Barre au front", "Triceps"], ["Extension nuque", "Triceps"],
-  ["Squat", "Quadris"], ["Presse à cuisses", "Quadris"], ["Fentes bulgares", "Quadris"], ["Leg extension", "Quadris"],
-  ["Soulevé de terre roumain", "Ischios"], ["Leg curl", "Ischios"],
-  ["Hip thrust", "Fessiers"], ["Abduction machine", "Fessiers"],
-  ["Mollets debout", "Mollets"], ["Mollets presse", "Mollets"],
-  ["Crunch poulie", "Abdos"], ["Relevés de jambes", "Abdos"]
-];
+// Matériel d'un exercice : il fixe les pas de charge (barre, haltères à l'unité, pile de la machine en lbs).
+export const EQUIPS = { barre: "Barre", halteres: "Haltères", poulie: "Poulie", machine: "Machine", smith: "Smith", kettlebell: "Kettlebell", elastique: "Élastique", pdc: "Poids du corps" };
 
-// Haut / Bas sur 4 jours : chaque muscle 2x par semaine.
+// Anciens noms de Fluide → noms de la base d'exercices : l'historique suit, l'id ne change pas.
+const RENAMED = {
+  "Développé couché": "Développé couché avec barre", "Développé incliné haltères": "Développé incliné avec haltères", "Écarté poulie": "Écartés à la poulie",
+  "Pec deck": "Écarté à la machine pour pectoraux", "Dips": "Dips pour les pectoraux", "Tractions": "Traction", "Rowing barre": "Rowing barre buste penché",
+  "Tirage vertical": "Tirage vertical à la poulie", "Tirage horizontal": "Rowing assis à la poulie", "Rowing haltère": "Rowing unilatéral avec haltère",
+  "Rowing machine": "Rowing poitrine appuyée à la machine", "Développé épaules machine": "Presse à épaules à la machine",
+  "Élévations latérales": "Élévation latérale avec haltères", "Élévations latérales poulie": "Élévation latérale à la poulie", "Face pull": "Face pull à la poulie",
+  "Oiseau poulie": "Élévation Latérale Arrière Assise au Câble", "Curl barre": "Curl à la barre", "Curl marteau": "Curl prise marteau", "Curl incliné": "Curl incliné assis pour biceps",
+  "Curl poulie": "Curl biceps à la barre avec câble", "Extension poulie": "Extension des triceps à la poulie avec barre droite",
+  "Barre au front": "Extension des triceps allongé à la barre EZ", "Extension nuque": "Extension des triceps assis avec haltères", "Squat": "Squat avec barre",
+  "Fentes bulgares": "Squat bulgare avec haltères", "Leg extension": "Extension des jambes", "Soulevé de terre roumain": "Soulevé de terre roumain",
+  "Leg curl": "Curl des ischio-jambiers en position couchée", "Hip thrust": "Hip thrust à la barre", "Abduction machine": "Abduction de la hanche assis",
+  "Mollets debout": "Élévation des mollets debout à la machine", "Mollets presse": "Presse à mollets", "Crunch poulie": "Crunch à la poulie à genoux",
+  "Relevés de jambes": "Élévation des jambes suspendues"
+};
+const fromCatalogue = ([name, muscle, equip, photo, rank]) => ({ id: uid(), name, muscle, equip, photo, rank, pref: "neutre", note: "" });
+// Photos du mouvement (départ, arrivée) servies par jsDelivr, figées sur une version du dépôt free-exercise-db.
+const PHOTOS = "https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@f00c92c7dcf1216a928a52c3706c7ce8e2f71ed5/exercises";
+export const exercisePhotos = e => (e?.photo ? [0, 1].map(i => `${PHOTOS}/${e.photo}/${i}.jpg`) : null);
+
+// Charges possibles selon le matériel. Machine et poulie : pile par 5 lbs, affichée en kg comme sur la plaque (2,3 · 4,5 · 6,8…).
+const range = (from, to, step) => Array.from({ length: Math.round((to - from) / step) + 1 }, (_, i) => Math.round((from + i * step) * 100) / 100);
+const LB = 0.45359237;
+const SCALES = {
+  barre: range(0, 300, 2.5),
+  smith: range(0, 300, 2.5),
+  pdc: range(0, 100, 2.5),
+  elastique: range(0, 100, 2.5),
+  kettlebell: [0, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 44, 48],
+  halteres: [0, ...range(1, 10, 1), ...range(12, 60, 2)],
+  machine: range(0, 300, 5).map(lb => Math.round(lb * LB * 10) / 10),
+  poulie: range(0, 300, 5).map(lb => Math.round(lb * LB * 10) / 10)
+};
+export const weightScale = equip => SCALES[equip] || SCALES.barre;
+export const nearestWeight = (equip, w) => weightScale(equip).reduce((a, b) => (Math.abs(b - w) < Math.abs(a - w) ? b : a));
+export const nextWeight = (equip, w) => weightScale(equip).find(x => x > w + 0.01) ?? w;
+export const lbs = (equip, w) => ((equip === "machine" || equip === "poulie") && w ? `${Math.round(w / LB / 5) * 5} lbs` : null);
+// Les haltères se comptent à l'unité : la moitié de la barre, et inversement.
+const convertWeight = (from, to, w) => nearestWeight(to, to === "halteres" && from !== "halteres" ? w / 2 : from === "halteres" && to !== "halteres" ? w * 2 : w);
+// Matériel d'une ligne de séance : celui choisi pour la séance, sinon celui de l'exercice.
+export const equipOf = e => e.equip || exercise(e.exerciseId)?.equip || "barre";
+
+// Haut / Bas sur 4 jours : chaque muscle 2x par semaine (noms de la base d'exercices).
 const SEED_TEMPLATES = [
-  ["Haut A", [["Développé couché", 3, 6, 10, 60, 150], ["Rowing barre", 3, 8, 12, 50, 120], ["Développé militaire", 3, 8, 12, 35, 120], ["Élévations latérales", 3, 12, 15, 8, 60], ["Curl barre", 2, 10, 12, 25, 60], ["Extension poulie", 2, 10, 12, 25, 60]]],
-  ["Bas A", [["Squat", 3, 6, 10, 80, 180], ["Soulevé de terre roumain", 3, 8, 12, 60, 120], ["Leg extension", 2, 12, 15, 40, 60], ["Mollets debout", 3, 10, 15, 40, 60], ["Crunch poulie", 2, 10, 15, 30, 60]]],
-  ["Haut B", [["Tractions", 3, 6, 10, 0, 150], ["Développé incliné haltères", 3, 8, 12, 22, 120], ["Tirage horizontal", 3, 10, 12, 50, 90], ["Face pull", 2, 12, 15, 15, 60], ["Curl marteau", 2, 10, 12, 14, 60], ["Barre au front", 2, 10, 12, 25, 60]]],
-  ["Bas B", [["Presse à cuisses", 3, 10, 12, 120, 120], ["Hip thrust", 3, 8, 12, 80, 120], ["Leg curl", 3, 10, 12, 35, 60], ["Mollets presse", 3, 12, 15, 80, 60], ["Relevés de jambes", 2, 10, 15, 0, 60]]]
+  ["Haut A", [["Développé couché avec barre", 3, 6, 10, 60, 150], ["Rowing barre buste penché", 3, 8, 12, 50, 120], ["Développé militaire", 3, 8, 12, 35, 120], ["Élévation latérale avec haltères", 3, 12, 15, 8, 60], ["Curl à la barre", 2, 10, 12, 25, 60], ["Extension des triceps à la poulie avec barre droite", 2, 10, 12, 25, 60]]],
+  ["Bas A", [["Squat avec barre", 3, 6, 10, 80, 180], ["Soulevé de terre roumain", 3, 8, 12, 60, 120], ["Extension des jambes", 2, 12, 15, 40, 60], ["Élévation des mollets debout à la machine", 3, 10, 15, 40, 60], ["Crunch à la poulie à genoux", 2, 10, 15, 30, 60]]],
+  ["Haut B", [["Traction", 3, 6, 10, 0, 150], ["Développé incliné avec haltères", 3, 8, 12, 22, 120], ["Rowing assis à la poulie", 3, 10, 12, 50, 90], ["Face pull à la poulie", 2, 12, 15, 15, 60], ["Curl prise marteau", 2, 10, 12, 14, 60], ["Extension des triceps allongé à la barre EZ", 2, 10, 12, 25, 60]]],
+  ["Bas B", [["Presse à cuisses", 3, 10, 12, 120, 120], ["Hip thrust à la barre", 3, 8, 12, 80, 120], ["Curl des ischio-jambiers en position couchée", 3, 10, 12, 35, 60], ["Presse à mollets", 3, 12, 15, 80, 60], ["Élévation des jambes suspendues", 2, 10, 15, 0, 60]]]
 ];
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
@@ -65,11 +101,11 @@ export const startOfDay = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); 
 export const startOfWeek = t => { const d = new Date(startOfDay(t)); return d.getTime() - ((d.getDay() + 6) % 7) * DAY; };
 
 function seed() {
-  const exercises = LIBRARY.map(([name, muscle]) => ({ id: uid(), name, muscle, pref: "neutre", note: "" }));
+  const exercises = CATALOGUE.map(fromCatalogue);
   const byName = n => exercises.find(e => e.name === n).id;
   const templates = SEED_TEMPLATES.map(([name, items]) => ({
     id: uid(), name,
-    items: items.map(([ex, sets, repsMin, repsMax, weight, rest]) => ({ id: uid(), exerciseId: byName(ex), sets, repsMin, repsMax, weight, rest }))
+    items: items.map(([ex, sets, repsMin, repsMax, weight, rest]) => ({ id: uid(), exerciseId: byName(ex), sets, repsMin, repsMax, weight: nearestWeight(exercises.find(e => e.name === ex).equip, weight), rest }))
   }));
   const matrix = {};
   for (const m of MUSCLES) matrix[m] = { status: ["Pecs", "Dos", "Épaules", "Quadris"].includes(m) ? "focus" : "maintien" };
@@ -88,23 +124,42 @@ function seed() {
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return migrate(JSON.parse(raw));
   } catch {}
   return seed();
+}
+
+// Données d'avant la base d'exercices : les anciens noms sont renommés (même id, l'historique suit),
+// puis chaque exercice de la base est ajouté ou complété (muscle, matériel, photos, popularité).
+function migrate(st) {
+  for (const e of st.exercises) if (RENAMED[e.name] && !st.exercises.some(x => x.name === RENAMED[e.name])) e.name = RENAMED[e.name];
+  const byName = new Map(st.exercises.map(e => [e.name, e]));
+  for (const row of CATALOGUE) {
+    const e = byName.get(row[0]);
+    if (!e) st.exercises.push(fromCatalogue(row));
+    else { Object.assign(e, { muscle: row[1], equip: e.rank !== undefined ? e.equip : e.equip || row[2], photo: row[3], rank: row[4] }); delete e.sw; }
+  }
+  for (const e of st.exercises) e.equip = e.equip || "barre";
+  return st;
 }
 
 export let state = load();
 const listeners = new Set();
 
 // quiet : on enregistre sans redessiner (steppers, champs en cours de saisie).
+// Chaque enregistrement prévient aussi la synchro du compte, s'il y en a un.
+const persisters = new Set();
 export function save(quiet = false) {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+  persisters.forEach(fn => fn());
   if (!quiet) listeners.forEach(fn => fn());
 }
 export const subscribe = fn => listeners.add(fn);
+export const onPersist = fn => persisters.add(fn);
 
+// Import d'un fichier ou données du compte : on les remet au format du jour avant de les prendre.
 export function replaceState(next) {
-  state = next;
+  state = migrate(next);
   save();
 }
 
@@ -163,13 +218,14 @@ export function weeklyGoal(t = Date.now()) {
   return { pct: total ? Math.round((filled / total) * 100) : 0, ok, count, sets, total };
 }
 
-// Alternatives quand la machine est prise : même muscle, favoris d'abord, jamais un exercice en douleur.
+// Ordre de proposition : favoris, puis exercices déjà faits, puis les plus courants de la base.
+const PREF_RANK = { aime: 0, neutre: 1, evite: 2, douleur: 3 };
+export const byUsefulness = (a, b) => PREF_RANK[a.pref] - PREF_RANK[b.pref] || (lastPerformance(b.id) ? 1 : 0) - (lastPerformance(a.id) ? 1 : 0) || (a.rank ?? 999) - (b.rank ?? 999) || a.name.localeCompare(b.name);
+
+// Alternatives quand la machine est prise : même muscle, jamais un exercice en douleur.
 export function alternatives(exerciseId) {
   const ex = exercise(exerciseId);
-  const rank = { aime: 0, neutre: 1, evite: 2 };
-  return state.exercises
-    .filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur")
-    .sort((a, b) => rank[a.pref] - rank[b.pref] || (lastPerformance(b.id) ? 1 : 0) - (lastPerformance(a.id) ? 1 : 0) || a.name.localeCompare(b.name));
+  return state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur").sort(byUsefulness);
 }
 
 // Séries prévues par muscle si on fait chaque séance type une fois.
@@ -203,7 +259,7 @@ export function suggestion(item, before) {
   const work = last.sets.filter(s => s.weight === top);
   const minReps = Math.min(...work.map(s => s.reps));
   if (top > 0 && work.length >= item.sets && minReps >= item.repsMax) {
-    return { weight: top + 2.5, reps: item.repsMin, hint: "charge", last };
+    return { weight: nextWeight(exercise(item.exerciseId)?.equip, top), reps: item.repsMin, hint: "charge", last };
   }
   return { weight: top, reps: Math.min(item.repsMax, minReps + 1), hint: "reps", last };
 }
@@ -300,8 +356,7 @@ const BIG = ["Pecs", "Dos", "Quadris", "Ischios", "Fessiers"];
 export function generateProgram(key) {
   const split = SPLITS[key];
   const freq = {}; for (const [, ms] of split.sessions) for (const m of ms) freq[m] = (freq[m] || 0) + 1;
-  const rank = { aime: 0, neutre: 1, evite: 2 };
-  const pool = m => state.exercises.filter(e => e.muscle === m && e.pref !== "douleur").sort((a, b) => rank[a.pref] - rank[b.pref] || (lastPerformance(b.id) ? 1 : 0) - (lastPerformance(a.id) ? 1 : 0));
+  const pool = m => state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && e.equip !== "elastique" && e.equip !== "kettlebell").sort(byUsefulness);
   const used = {};
   const pick = m => { const p = pool(m); if (!p.length) return null; used[m] = used[m] || 0; return p[used[m]++ % p.length]; };
   const cyc = state.cycle.type;
@@ -386,8 +441,13 @@ export function removeItem(templateId, itemId) {
   save();
 }
 
-export function createExercise(name, muscle) {
-  const e = { id: uid(), name: name.trim(), muscle, pref: "neutre", note: "" };
+export function setEquip(exerciseId, equip) {
+  exercise(exerciseId).equip = equip;
+  save();
+}
+
+export function createExercise(name, muscle, equip = "barre") {
+  const e = { id: uid(), name: name.trim(), muscle, equip, pref: "neutre", note: "" };
   state.exercises.push(e);
   save();
   return e;
@@ -474,12 +534,34 @@ export function logSet() {
 }
 
 // Machine prise : on remplace l'exercice pour cette séance seulement, le programme ne bouge pas.
+// Si des séries sont déjà faites, elles restent sur l'exercice d'origine et l'alternative reprend les séries restantes.
 export function swapExercise(index, exerciseId) {
-  const e = state.active.entries[index];
+  const a = state.active;
+  let e = a.entries[index];
   const last = lastPerformance(exerciseId);
+  if (e.sets.length && !isInterval(e)) {
+    const left = Math.max(1, e.target.sets - e.sets.length);
+    e.target = { ...e.target, sets: e.sets.length };
+    e = { exerciseId: e.exerciseId, format: "series", target: { ...e.target, sets: left }, draft: { ...e.draft }, sets: [] };
+    a.entries.splice(index + 1, 0, e);
+    a.cursor = index + 1;
+  }
+  const from = equipOf(e);
   e.swappedFrom = e.swappedFrom || e.exerciseId;
   e.exerciseId = exerciseId;
-  e.draft = { weight: last ? Math.max(...last.sets.map(s => s.weight)) : e.draft.weight, reps: e.target.repsMin, rpe: null };
+  delete e.equip;
+  const equip = exercise(exerciseId).equip;
+  e.draft = { weight: last ? Math.max(...last.sets.map(s => s.weight)) : convertWeight(from, equip, e.draft.weight), reps: e.target.repsMin, rpe: null };
+  e.hint = null;
+  save();
+}
+
+// Même exercice, autre matériel (haltères au lieu de la barre, poulie…) : pour cette séance seulement.
+export function setEntryEquip(index, equip) {
+  const e = state.active.entries[index];
+  const from = equipOf(e);
+  e.equip = equip === exercise(e.exerciseId).equip ? undefined : equip;
+  e.draft.weight = convertWeight(from, equip, e.draft.weight);
   e.hint = null;
   save();
 }
@@ -507,7 +589,7 @@ export function finishWorkout(feeling, note) {
     startedAt: a.startedAt, endedAt: Date.now(),
     cycle: a.cycle, week: a.week, deload: a.deload, feeling, note: note.trim(),
     entries: a.entries.filter(e => e.sets.length).map(e => ({
-      exerciseId: e.exerciseId, swappedFrom: e.swappedFrom, extra: e.extra, format: e.format || "series",
+      exerciseId: e.exerciseId, swappedFrom: e.swappedFrom, extra: e.extra, equip: e.equip, format: e.format || "series",
       sets: e.sets.map(({ weight, reps, rpe }) => ({ weight, reps, rpe }))
     }))
   };

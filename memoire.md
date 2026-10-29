@@ -39,6 +39,13 @@ App perso de musculation (PWA iPhone) pilotée par le **Système Fluide** (skill
 - 28/10/2026 — Bugs corrigés : repos en cours qui bloquait le lancement d'un EMOM / Tabata ; total de fin de séance qui comptait les rounds comme des séries ; « Meilleur 1rm » ; pluriels (0 / 1 série, 1 exercice, 1 séance) ; poids du corps affiché « PDC » au lieu de 0 ; exercice jamais fait avec un état vide.
 - 28/10/2026 — Service worker v7 : cache rempli et requêtes revalidées hors cache HTTP, rechargement automatique quand une nouvelle version prend la main.
 
+- 29/10/2026 — Retours en salle : matériel par exercice (barre, haltères, poulie, machine, Smith, kettlebell, élastique, poids du corps) qui fixe les pas de charge — pile machine et poulie par 5 lbs affichée en kg (2,3 · 4,5 · 6,8…), haltères comptés à l'unité. « Machine prise » propose le même exercice avec un autre matériel ou un autre exercice du muscle, et reste visible pendant tout l'exercice ; séries déjà faites gardées sur l'exercice d'origine.
+- 29/10/2026 — Bouton de repos : vert, se remplit avec le temps, affiche la suite et le temps restant, un tap lance la série sans attendre.
+- 29/10/2026 — Base de 1040 exercices (`js/exercices.js`) : noms et classement d'après la bibliothèque SmartWorkout, rangés dans les muscles Fluide (+ Avant-bras, Échauffement, Mobilité hors objectif). Catalogue filtrable par muscle et matériel. Les 36 anciens exercices sont renommés, l'historique suit.
+- 29/10/2026 — Vidéos SmartWorkout : ni copiées ni liées (protégées, et le lien sortait de l'app, rejeté par Alexis). Mouvement montré dans l'app avec les photos libres de free-exercise-db (domaine public) qui alternent : 311 exercices, dont tous les habituels.
+
 ## Hypothèses ouvertes
 - Propositions locales : promotion dans Hardwood ou non.
+- Clips filmés par Alexis, stockés sur l'iPhone, à la place des photos.
+- Pas des haltères de la salle (1 kg jusqu'à 10, puis 2 kg) à confirmer.
 
