@@ -4,8 +4,8 @@ Connexion par e-mail et mot de passe, tout se passe dans l'app (le trousseau iCl
 
 1. **Créer le projet** sur https://supabase.com (gratuit), région Europe. Security : *Enable Data API* coché, *Automatically expose new tables* décoché, *Enable automatic RLS* coché.
 2. **Table** : SQL Editor › New query › coller `schema.sql` › Run.
-3. **Comptes utilisables tout de suite** : Authentication › Sign In / Providers › Email › décocher *Confirm email* › Save.
-4. **Lien « mot de passe oublié »** : Authentication › URL Configuration › Site URL = `https://alexis-fluide.vercel.app` ; Redirect URLs : ajouter `http://localhost:8765/**` pour tester en local.
+3. **Validation des adresses** : Authentication › Sign In / Providers › Email › *Confirm email* coché. À la création, un e-mail avec un lien part à l'adresse (l'app affiche « Ton adresse va être validée »). Pour valider à la main : Authentication › Users › la ligne › menu ⋯ › *Confirm email* ; ou SQL Editor : `update auth.users set email_confirmed_at = now() where email = 'adresse';`.
+4. **Retour des liens (confirmation, mot de passe oublié)** : Authentication › URL Configuration › Site URL = `https://alexis-fluide.vercel.app` ; Redirect URLs : `https://alexis-fluide.vercel.app/**` et `http://localhost:8765/**` pour tester en local.
 5. **Clés** : Project Settings › API Keys : l'URL du projet et la clé publique (`sb_publishable_…` ou `anon`) dans `js/config.js`. Jamais la clé `sb_secret_…` / `service_role`.
 
 Limites du plan gratuit : l'envoi intégré de Supabase (mot de passe oublié) n'écrit qu'aux membres de l'équipe du projet, environ 2 e-mails par heure. Pour les bêta-testeurs, il faudra un domaine et un SMTP (Resend…) dans Authentication › Emails › SMTP Settings. Un projet sans aucune activité pendant 7 jours est mis en pause : un usage quotidien suffit à l'éviter.

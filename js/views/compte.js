@@ -12,7 +12,7 @@ function why(e) {
   if (e.code === "invalid_credentials" || /invalid login/i.test(e.message)) return at("password", "E-mail ou mot de passe incorrect.");
   if (e.code === "user_already_exists" || /already registered/i.test(e.message)) return at("email", "Un compte existe déjà avec cet e-mail : connecte-toi.");
   if (e.code === "weak_password" || /password should/i.test(e.message)) return at("password", "Mot de passe trop court : 8 caractères au moins.");
-  if (e.code === "email_not_confirmed") return at(null, "Le compte attend une confirmation par e-mail : décoche « Confirm email » dans Supabase.");
+  if (e.code === "email_not_confirmed") return at(null, "Ton adresse n'est pas encore validée : suis le lien reçu par e-mail, ou attends que l'administrateur la valide.");
   if (e.code === "same_password") return at("password", "C'est déjà ton mot de passe actuel.");
   if (e.status === 429 || /rate limit/i.test(e.message)) return at(null, "Trop d'essais d'un coup : réessaie dans quelques minutes.");
   if (/email/i.test(e.message) && e.status === 400) return at("email", "Adresse e-mail invalide.");
@@ -37,6 +37,7 @@ const submitBtn = label => { const b = btn(label, { variant: "primary", size: "l
 // Après connexion : soit c'est réglé, soit on demande quelles données garder.
 async function landed(result) {
   if (result === "choose") return chooseSheet();
+  if (result === "confirm") return go("#/compte/valider");
   go("#/profil");
   toast(result === "pulled" ? "Données du compte récupérées" : "Connecté : tes données sont sur ton compte");
 }
@@ -87,6 +88,17 @@ export function signUpView() {
     navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Créer mon compte" }),
     h("div", { class: "scroll" }, head("userCirclePlus", "Créer ton compte", "Garde tes séances, ton programme et ta corde sur ton compte, et retrouve-les sur un autre téléphone."),
       form, bascule("Déjà un compte ?", "Me connecter", "#/compte")));
+  return { el };
+}
+
+// Compte créé, adresse à valider : le lien reçu par e-mail ou l'administrateur la valide, puis on se connecte.
+export function confirmView() {
+  if (signedIn()) { setTimeout(() => go("#/profil")); return { el: h("div") }; }
+  const el = h("div", { class: "screen no-tabs" },
+    navbar({ back: { label: "Compte", href: "#/compte" }, title: "Compte créé" }),
+    h("div", { class: "scroll" },
+      head("cloudCheck", "Ton adresse va être validée", `Un e-mail est parti à ${account().email || "ton adresse"} : suis le lien pour valider ton compte. L'administrateur peut aussi le valider rapidement. Ensuite, connecte-toi avec ton mot de passe.`),
+      btn("Me connecter", { variant: "primary", size: "lg", full: true, onClick: () => go("#/compte") })));
   return { el };
 }
 
