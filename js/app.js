@@ -2,9 +2,11 @@ import { state, subscribe } from "./store.js";
 import { h, icon, go, clock, unlockAudio } from "./ui.js";
 import { todayView, stepsLinkView } from "./views/today.js";
 import { templatesView, templateView, itemView, pickerView, programView, weekView } from "./views/templates.js";
-import { workoutView, finishView, summaryView } from "./views/workout.js";
+import { workoutView, finishView, editWorkoutView, summaryView } from "./views/workout.js";
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
 import { profileView, matrixView, prefsView } from "./views/profile.js";
+import { signInView, signUpView, confirmView, resetView } from "./views/compte.js";
+import { onAccount } from "./compte.js";
 
 // Routes : #/chemin/:param. Chaque vue renvoie { el, tab?, tick? }.
 const ROUTES = [
@@ -16,9 +18,15 @@ const ROUTES = [
   ["seances/:id", templateView],
   ["seances/:id/ajouter", pickerView],
   ["seances/:id/:item", itemView],
+  ["seances/:id/:item/remplacer", pickerView],
   ["seance", workoutView],
   ["seance/terminer", finishView],
+  ["seance/modifier", editWorkoutView],
   ["bilan/:id", summaryView],
+  ["compte", signInView],
+  ["compte/creer", signUpView],
+  ["compte/valider", confirmView],
+  ["compte/nouveau", resetView],
   ["progres", progressView],
   ["progres/historique", historyView],
   ["progres/historique/:id", sessionView],
@@ -81,6 +89,8 @@ function tick() {
 
 addEventListener("hashchange", render);
 subscribe(() => { if (!document.querySelector("dialog[open]")) render(); });
+// État du compte (synchro, déconnexion) : on redessine les Réglages, jamais une saisie en cours.
+onAccount(() => { if (location.hash === "#/profil" && !document.querySelector("dialog[open]")) render(); });
 addEventListener("pointerdown", unlockAudio, { once: true });
 document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && tick());
 setInterval(tick, 250);

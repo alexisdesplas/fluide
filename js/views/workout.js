@@ -1,6 +1,6 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, session, sessionVolume, sessionSets, sessionRecords, alternatives, swapExercise, setEntryEquip, equipOf, weightScale, lbs, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, CYCLES, MUSCLES, FORMATS, enduranceToday, blocksLabel, blocksTotal } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, swapExercise, setEntryEquip, equipOf, weightScale, lbs, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, enduranceToday, blocksLabel, blocksTotal } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, beep, dateLong, pageHead, navbar } from "../ui.js";
-import { prefPill, catalogue, exerciseTitle } from "./templates.js";
+import { prefPill, catalogue, exerciseTitle, groupTag, linkRow } from "./templates.js";
 
 // Anneau de Tabatime : 312 px, trait de 34 px.
 const R = 139, C = 2 * Math.PI * R;
@@ -10,14 +10,19 @@ const lastLine = id => {
   return last ? `${last.sets.map(s => `${s.reps}×${s.weight ? num(s.weight) : "PDC"}`).join(" · ")} · ${ago(last.date)}` : "Jamais fait";
 };
 
-// Machine prise : même exercice avec un autre matériel, ou un autre exercice du même muscle, favoris d'abord.
+// Machine prise : même exercice avec un autre matériel, ou un autre exercice du même muscle (recherche dans tout le catalogue), favoris d'abord.
 function swapSheet(index) {
   const e = state.active.entries[index];
   const ex = exercise(e.exerciseId), cur = equipOf(e);
   const alts = alternatives(e.exerciseId);
+  let query = "", closeSheet;
+  const list = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } });
+  const draw = muscle => catalogue(list, query, { muscle, pickIcon: "caretRight", note: x => lastLine(x.id),
+    onPick: x => { closeSheet(); if (x.id !== e.exerciseId) { swapExercise(index, x.id); toast(`${x.name} à la place`); } } });
+  draw(ex.muscle);
   sheet({
     title: "Machine prise ?",
-    body: close => [
+    body: close => { closeSheet = close; return [
       h("p", { class: "body-sm discret", style: { margin: 0 } }, `Le programme ne change pas : seule cette séance prend l'alternative.`),
       h("span", { class: "overline" }, `${ex.name} avec`),
       h("div", { class: "chips" }, Object.entries(EQUIPS).filter(([k]) => ["barre", "halteres", "poulie", "machine", "smith"].includes(k) || k === cur).map(([k, label]) =>
@@ -25,18 +30,11 @@ function swapSheet(index) {
           close();
           if (k !== cur) { setEntryEquip(index, k); toast(`${ex.name} · ${label.toLowerCase()}`); }
         } }, label))),
-      h("span", { class: "overline" }, `Autre exercice · ${ex.muscle}`),
-      alts.length
-        ? [h("div", { class: "list" }, alts.slice(0, 6).map(x => h("button", { class: "row", onClick: () => { close(); swapExercise(index, x.id); toast(`${x.name} à la place`); } },
-            h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, x.name), h("span", { class: "caption num" }, `${EQUIPS[x.equip] || ""} · ${lastLine(x.id)}`)),
-            prefPill(x.pref), icon("caretRight", "chev")))),
-          alts.length > 6 && btn(`Voir les ${alts.length} exercices ${ex.muscle === "Abdos" ? "d'abdos" : `pour les ${ex.muscle.toLowerCase()}`}`, { variant: "ghost", full: true, onClick: () => { close(); setTimeout(() => allAltsSheet(index)); } })]
-        : [
-            h("p", { class: "body-md", style: { margin: 0 } }, `Ton catalogue n'a pas d'autre exercice pour les ${ex.muscle}, ou ils sont tous marqués en douleur.`),
-            btn("Ajouter un exercice hors programme", { variant: "secondary", size: "lg", full: true, onClick: () => { close(); setTimeout(extraSheet); } }),
-            btn("Attendre la machine", { variant: "ghost", full: true, onClick: close })
-          ]
-    ]
+      h("span", { class: "overline" }, "Autre exercice"),
+      h("input", { class: "input", type: "search", placeholder: "Chercher un exercice", "aria-label": "Chercher un exercice", onInput: ev => { query = ev.target.value; draw(); } }),
+      !alts.length && h("p", { class: "body-sm discret", style: { margin: 0 } }, `Aucun autre exercice pour les ${ex.muscle} hors douleur : cherche dans tout le catalogue, ou attends la machine.`),
+      list,
+      btn("Attendre la machine", { variant: "ghost", full: true, onClick: close })]; }
   });
 }
 
@@ -47,19 +45,6 @@ const weightStepper = (e, unit) => {
     unit: v => [equip === "halteres" ? "kg par haltère" : "kg", lbs(equip, v), unit].filter(Boolean).join(" · "),
     onChange: v => { e.draft.weight = v; save(true); } });
 };
-
-// Tout le catalogue du muscle, avec recherche et filtre matériel, pour choisir l'alternative.
-function allAltsSheet(index) {
-  const e = state.active.entries[index], ex = exercise(e.exerciseId);
-  let query = "", closeSheet;
-  const list = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } });
-  const draw = muscle => catalogue(list, query, { muscle, pickIcon: "caretRight", note: x => lastLine(x.id),
-    onPick: x => { closeSheet(); if (x.id !== e.exerciseId) { swapExercise(index, x.id); toast(`${x.name} à la place`); } } });
-  draw(ex.muscle);
-  sheet({ title: "Autre exercice", body: close => { closeSheet = close; return [
-    h("input", { class: "input", type: "search", placeholder: "Chercher un exercice", "aria-label": "Chercher un exercice", onInput: ev => { query = ev.target.value; draw(); } }),
-    list]; } });
-}
 
 // Sans série validée, rien n'est enregistré : on le dit avant de sortir.
 function abandonSheet() {
@@ -86,6 +71,17 @@ function extraSheet() {
       radios(Object.entries(FORMATS), format, v => { format = v; }, "Format"),
       h("input", { class: "input", type: "search", placeholder: "Chercher dans le catalogue", "aria-label": "Chercher un exercice", onInput: ev => { query = ev.target.value; draw(); } }),
       list]; }
+  });
+}
+
+// Séance lancée par erreur : même avec des séries validées, on peut tout jeter.
+function discardSheet() {
+  const n = state.active.entries.reduce((t, e) => t + e.sets.length, 0);
+  confirmSheet({
+    title: "Supprimer la séance ?",
+    message: `Lancée par erreur ? ${n ? `${n} série${n > 1 ? "s" : ""} validée${n > 1 ? "s" : ""} ${n > 1 ? "sont effacées" : "est effacée"} : ` : ""}rien ne sera enregistré et l'objectif de la semaine ne bouge pas.`,
+    confirmLabel: "Supprimer la séance", cancelLabel: "Garder la séance", destructive: true,
+    onConfirm: () => { discardWorkout(); go("#/"); toast("Séance supprimée"); }
   });
 }
 
@@ -119,7 +115,15 @@ export function finishView() {
   const volume = a.entries.reduce((t, e) => t + e.sets.reduce((b, x) => b + x.weight * x.reps, 0), 0);
   const records = sessionRecords({ startedAt: a.startedAt, entries: a.entries }).length;
   const missing = a.entries.filter(e => e.sets.length < e.target.sets);
-  const save_ = () => { const s = finishWorkout(a.finish.feeling, a.finish.note); go(s ? `#/bilan/${s.id}` : "#/"); };
+  const t = template(a.templateId);
+  if (a.finish.keep === undefined) a.finish.keep = false;
+  const save_ = () => { const s = finishWorkout(a.finish.feeling, a.finish.note, a.finish.keep); go(s ? `#/bilan/${s.id}` : "#/"); };
+  // Séance personnalisée : on peut reporter les changements (ordre, séries, ajouts, supersets) dans la séance type.
+  const keepCard = a.edited && t && h("button", { type: "button", class: "radio-card", role: "checkbox", "aria-checked": String(a.finish.keep),
+    onClick: ev => { a.finish.keep = !a.finish.keep; save(true); ev.currentTarget.setAttribute("aria-checked", String(a.finish.keep)); } },
+    h("span", { class: "radio-dot", "aria-hidden": "true" }),
+    h("span", { class: "radio-text" }, h("span", { class: "body-md fort semibold" }, `Garder ces changements dans ${t.name}`),
+      h("span", { class: "caption" }, "Ordre, séries, exercices ajoutés ou retirés, supersets. Une machine prise reste une exception.")));
 
   const cards = h("div", { class: "radio-cards", role: "radiogroup", "aria-label": "Ressenti" },
     FEELINGS.map(([v, label, meta]) => h("button", { type: "button", class: "radio-card", role: "radio", "aria-checked": String(a.finish.feeling === v),
@@ -141,13 +145,56 @@ export function finishView() {
       missing.length > 0 && h("div", { class: "hint attention" }, icon("warning"),
         h("span", { class: "body-sm" }, missing.map(e => `${exercise(e.exerciseId).name} : ${e.sets.length} / ${e.target.sets}`).join(" · "),
           ". Les séries non faites ne comptent pas dans l'objectif de la semaine.")),
+      keepCard,
       h("div", { class: "field" }, h("h2", { class: "heading-md" }, "Ressenti"),
         h("p", { class: "caption", style: { margin: 0 } }, "Optionnel. Plusieurs séances « Difficile » d'affilée et le coach propose un deload."), cards),
       h("label", { class: "field" }, h("h2", { class: "heading-md" }, "Journal"),
         h("textarea", { class: "input journal", placeholder: "Sommeil, énergie, une gêne, un exercice que tu as adoré…", "aria-label": "Journal de séance", value: a.finish.note,
           onInput: e => { a.finish.note = e.target.value; save(true); } }),
         h("span", { class: "caption" }, "Le coach s'en sert pour ajuster le programme : préférences, douleurs, envies.")),
-      btn("Reprendre la séance", { variant: "ghost", full: true, onClick: () => go("#/seance") })));
+      btn("Reprendre la séance", { variant: "ghost", full: true, onClick: () => go("#/seance") }),
+      btn("Supprimer la séance", { variant: "danger", full: true, onClick: discardSheet })));
+  return { el };
+}
+
+// Séance en cours personnalisée (écran dédié) : séries en plus ou en moins, ordre, retrait, supersets, ajout hors programme.
+// Le programme ne bouge pas ; en fin de séance, on peut reporter les changements dans la séance type.
+export function editWorkoutView() {
+  const a = state.active;
+  if (!a) { leaveIfIdle("#/seance/modifier"); return { el: h("div") }; }
+  const remove = i => {
+    const e = a.entries[i], ex = exercise(e.exerciseId);
+    if (a.entries.length === 1) { toast("Il faut garder au moins un exercice"); return; }
+    if (!e.sets.length) { removeEntry(i); return; }
+    confirmSheet({
+      title: `Retirer ${ex.name} ?`,
+      message: `${e.sets.length} série${e.sets.length > 1 ? "s" : ""} déjà validée${e.sets.length > 1 ? "s" : ""} sur cet exercice : elles seront effacées de la séance.`,
+      confirmLabel: "Retirer l'exercice", cancelLabel: "Garder l'exercice", destructive: true,
+      onConfirm: () => removeEntry(i)
+    });
+  };
+  const rows = a.entries.flatMap((e, i) => {
+    const ex = exercise(e.exerciseId), g = groupTag(a.entries, i), interval = isInterval(e);
+    return [
+      h("div", { class: `row edit-entry${g ? " grouped" : ""}` },
+        h("div", { class: "row-main" },
+          h("span", { class: "body-md fort medium" }, ex.name),
+          h("span", { class: "caption num" }, g ? `${g.label} ${g.tag} · ` : "", e.extra ? "hors programme · " : "",
+            `${e.sets.length} / ${e.target.sets} ${interval ? "round" : "série"}${e.target.sets > 1 ? "s" : ""} ${interval ? "fait" : "faite"}${e.target.sets > 1 ? "s" : ""}`)),
+        h("div", { class: "edit-entry-actions" },
+          stepper({ value: e.target.sets, min: Math.max(1, e.sets.length), max: interval ? 60 : 12, compact: true, label: `${interval ? "rounds" : "séries"} ${ex.name}`, onChange: v => setEntrySets(i, v) }),
+          h("div", { class: "reorder" },
+            h("button", { class: "btn secondary square", "aria-label": `Monter ${ex.name}`, disabled: i === 0, onClick: () => moveEntry(i, -1) }, icon("up")),
+            h("button", { class: "btn secondary square", "aria-label": `Descendre ${ex.name}`, disabled: i === a.entries.length - 1, onClick: () => moveEntry(i, 1) }, icon("down")),
+            h("button", { class: "btn danger square", "aria-label": `Retirer ${ex.name}`, onClick: () => remove(i) }, icon("trash"))))),
+      linkRow(a.entries, i, () => linkEntries(i))];
+  });
+  const el = h("div", { class: "screen no-tabs" },
+    navbar({ back: { label: "Séance", href: "#/seance" }, title: "Modifier la séance", subtitle: `${a.name} · cette séance seulement`, action: { label: "OK", onClick: () => go("#/seance") } }),
+    h("div", { class: "scroll" },
+      h("p", { class: "caption", style: { margin: 0 } }, "Les changements valent pour cette séance. À la fin, tu choisis de les garder ou non dans la séance type."),
+      h("div", { class: "list" }, rows),
+      btn("Ajouter un exercice", { variant: "secondary", size: "lg", full: true, icon: "plus", onClick: extraSheet })));
   return { el };
 }
 
@@ -165,6 +212,8 @@ export function workoutView() {
   const rpeTarget = a.deload ? 6 : CYCLES[a.cycle].rpe;
 
   const setCursor = i => { a.cursor = i; save(); };
+  const grp = groupTag(a.entries, a.cursor);
+  const nextInGroup = grp && !grp.last ? exercise(a.entries[a.cursor + 1].exerciseId) : null;
 
   // ——— Échauffement d'abord : cardio au chrono (comme Tabatime), puis mobilité et séries d'approche.
   // Le chrono se calcule depuis l'heure de départ (survit à la mise en veille) ; la pause décale ce départ.
@@ -390,16 +439,18 @@ export function workoutView() {
   const el = h("div", { class: "screen workout" },
     h("div", { class: "wo-head" },
       h("div", { class: "wo-top" },
-        h("span", { class: "overline" }, `${a.name} · exercice ${a.cursor + 1} / ${a.entries.length}`),
+        h("span", { class: "overline" }, `${a.name} · exercice ${a.cursor + 1} / ${a.entries.length}`, grp ? ` · ${grp.label} ${grp.tag}` : ""),
         h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
       h("div", null,
         h("h1", { class: "heading-xl wo-title" }, exerciseTitle(ex)),
-        h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, interval ? `${ex.muscle} · ${formatLine}` : `${ex.muscle} · repos ${clock(e.target.rest)}`,
+        h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, interval ? `${ex.muscle} · ${formatLine}`
+          : nextInGroup ? `${ex.muscle} · puis ${nextInGroup.name}, sans repos` : grp ? `${ex.muscle} · repos ${clock(e.target.rest)} après le tour` : `${ex.muscle} · repos ${clock(e.target.rest)}`,
           e.equip ? ` · ${EQUIPS[e.equip].toLowerCase()}` : "", e.swappedFrom ? ` · à la place de ${exercise(e.swappedFrom).name}` : "", e.extra ? " · hors programme" : "")),
       h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
         a.deload && pill("Deload", "attention"),
         !exDone && btn("Machine prise", { variant: "secondary", size: "sm", icon: "swap", onClick: () => swapSheet(a.cursor) }),
-        btn("Hors programme", { variant: "secondary", size: "sm", icon: "plus", onClick: extraSheet })),
+        btn("Hors programme", { variant: "secondary", size: "sm", icon: "plus", onClick: extraSheet }),
+        btn("Modifier", { variant: "secondary", size: "sm", icon: "pencil", onClick: () => go("#/seance/modifier") })),
       h("div", { class: "segments", "aria-label": `${a.entries.filter(x => x.sets.length >= x.target.sets).length} exercices terminés sur ${a.entries.length}` }, segs)),
     h("div", { class: "scroll" },
       ex.pref === "douleur" && h("div", { class: "hint attention" }, icon("warning"), h("span", { class: "body-sm" }, "Tu as signalé une douleur sur cet exercice : charge allégée, amplitude confortable, ou remplace-le.")),
@@ -455,6 +506,12 @@ export function summaryView({ id }) {
           h("span", { class: "caption num" }, (isInterval(e) ? `${FORMATS[e.format]} · ${e.sets.length} rounds · ` : "") + e.sets.map(x => `${x.reps}×${x.weight ? num(x.weight) : "PDC"}`).join(" · "))),
         icon("caretRight", "chev")))),
       s.note && h("div", { class: "card flat" }, h("span", { class: "overline" }, "Journal"), h("p", { class: "body-md", style: { margin: 0 } }, s.note)),
-      btn("Retour à l'accueil", { variant: "primary", size: "lg", full: true, onClick: () => go("#/") })));
+      btn("Retour à l'accueil", { variant: "primary", size: "lg", full: true, onClick: () => go("#/") }),
+      btn("Supprimer la séance", { variant: "danger", full: true, onClick: () => confirmSheet({
+        title: "Supprimer la séance ?",
+        message: "Enregistrée par erreur ? Elle disparaît de l'historique, des courbes et de l'objectif de la semaine.",
+        confirmLabel: "Supprimer définitivement", cancelLabel: "Garder la séance", destructive: true,
+        onConfirm: () => { deleteSession(s.id); go("#/"); toast("Séance supprimée"); }
+      }) })));
   return { el };
 }

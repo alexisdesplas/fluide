@@ -1,7 +1,8 @@
-import { state, save, replaceState, ENDURANCE, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, MUSCLES, STATUS, CYCLES, PREFS } from "../store.js";
+import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, MUSCLES, STATUS, CYCLES, PREFS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, go, int, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
+import { accountCard } from "./compte.js";
 
 // Guide de construction du Raccourci iOS (les livrables ne sont pas déployés sur Vercel : on le lit sur GitHub).
 const RACCOURCI_PAS = "https://github.com/alexisdesplas/fluide/blob/main/livrables/fluide/raccourci-pas.md";
@@ -93,6 +94,11 @@ export function profileView() {
       radios(["Prise de muscle", "Force", "Sèche"].map(v => [v, v]), p.goal, v => { p.goal = v; save(); }, "Objectif du moment"),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Niveau")),
       radios(["Débutant", "Intermédiaire", "Avancé"].map(v => [v, v]), p.level, v => { p.level = v; save(); }, "Niveau"),
+      // Challenge corde : même réglage que « Objectif longue durée » dans Ta semaine (le programme s'y adapte).
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Challenge corde à sauter")),
+      radios([["corde", "Avec le challenge", "Plan 18 semaines vers 1 h non-stop : la séance corde du jour sert d'échauffement, le programme garde le jour long loin des jambes."],
+        [null, "Sans challenge", "Muscu seule : l'échauffement ci-dessous, le programme ne regarde que tes réglages Fluide."]],
+        p.endurance ? "corde" : null, v => { p.endurance = v; if (v && p.enduranceStart == null) p.enduranceStart = startOfWeek(Date.now()); save(); }, "Challenge corde à sauter"),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Routine")),
       h("div", { class: "card" },
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Séances / semaine"),
@@ -103,8 +109,10 @@ export function profileView() {
           h("a", { class: "lien", href: RACCOURCI_PAS, target: "_blank", rel: "noopener" }, "installer le Raccourci « Pas du jour »"), "."),
         field("Échauffement", h("input", { class: "input", value: p.warmup, "aria-label": "Échauffement", onChange: e => { p.warmup = e.target.value; save(true); } })),
         ENDURANCE[p.endurance] && h("p", { class: "caption", style: { margin: 0 } }, `Avec ton plan ${ENDURANCE[p.endurance].short.toLowerCase()}, l'échauffement devient la séance corde du jour (facile ou récup, semaine en cours). Celui-ci sert les jours où le plan prévoit le jour long, à faire à part.`)),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Compte")),
+      accountCard(),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Données")),
-      h("p", { class: "caption", style: { margin: 0 } }, "Tout reste sur ce téléphone. Exporte de temps en temps pour garder une sauvegarde."),
+      h("p", { class: "caption", style: { margin: 0 } }, "Une copie de tes données dans un fichier, en plus du compte."),
       h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
         btn("Exporter", { variant: "secondary", icon: "download", onClick: download }),
         btn("Importer", { variant: "secondary", icon: "upload", onClick: upload }))));
