@@ -193,6 +193,7 @@ button.row:active { background: var(--fond-discret); }
   flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; height: 28px; border-radius: var(--radius-sm); border: 0; background: none; text-align: center;
   transition: background-color 150ms var(--ease), color 150ms var(--ease);
   color: var(--texte-discret); font: 500 14px/20px var(--font); letter-spacing: -0.01em; padding: 0 var(--spacing-12); white-space: nowrap;
+  flex: 1 1 auto;
 }
 .segmented button[aria-pressed="true"] {
   background: var(--texte-fort); color: var(--texte-inverse); font-weight: 600;
@@ -295,7 +296,11 @@ textarea.input { height: 88px; padding: var(--spacing-12); resize: none; }
 .ring circle { fill: none; stroke-width: 34; }
 .ring .track { stroke: var(--etat-succes-soft); }
 .ring .prog { stroke: var(--etat-succes); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
-.wo-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Nom d'exercice sur une ligne, tronqué ; l'icône « voir le mouvement » reste visible au bout. */
+.wo-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wo-title .ex-link { display: flex; align-items: center; max-width: 100%; }
+.wo-title .ex-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.wo-title .ex-link svg { flex: none; }
 .lien { color: var(--accent-texte); font-weight: 500; text-decoration: underline; text-underline-offset: 4px; }
 .ex-link { color: inherit; text-decoration: none; font: inherit; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
 .ex-link svg { width: 22px; height: 22px; margin-left: var(--spacing-8); vertical-align: -2px; color: var(--accent-texte); }
@@ -362,6 +367,14 @@ dialog.sheet::backdrop { background: rgba(0, 0, 0, .6); }
 .btn.square { width: 44px; height: 44px; padding: 0; }
 .btn.square svg { width: 18px; height: 18px; }
 .reorder { display: flex; gap: var(--spacing-8); flex: none; }
+/* Superset / triset : trait d'accent à gauche des exercices liés, bouton « Lier » entre deux lignes. */
+.row.grouped { box-shadow: inset 4px 0 0 var(--accent-texte); }
+.link-row { display: flex; justify-content: center; padding: var(--spacing-4) 0; border-top: 1px solid var(--bord-discret); }
+.link-row.on { box-shadow: inset 4px 0 0 var(--accent-texte); }
+.link-row .btn svg { width: 16px; height: 16px; }
+.row.edit-entry { flex-direction: column; align-items: stretch; gap: var(--spacing-8); padding-top: var(--spacing-12); padding-bottom: var(--spacing-12); }
+.edit-entry-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-8); }
+.link-row + .row { border-top: 1px solid var(--bord-discret); }
 
 /* Carte de choix (Radio Card Hardwood) : ressenti de fin de séance. */
 .radio-cards { display: flex; flex-direction: column; gap: var(--spacing-8); }
@@ -415,6 +428,23 @@ textarea.input.journal { height: 140px; }
 .ring.emom .overline { color: var(--accent-texte); }
 input.input[type="search"] { -webkit-appearance: none; appearance: none; line-height: 24px; }
 .input, .segmented, .list, .card, .hint, .stepper { flex-shrink: 0; }
+[hidden] { display: none !important; }
+/* ——— Compte (Figma F · Compte) : tuile, en-tête, erreur sous le champ, lien de bascule en bas */
+.tile { width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent-texte); display: flex; align-items: center; justify-content: center; flex: none; }
+.tile svg { width: 20px; height: 20px; }
+.tile.lg { width: 56px; height: 56px; }
+.tile.lg svg { width: 28px; height: 28px; }
+.acct-head { display: flex; flex-direction: column; gap: var(--spacing-12); align-items: flex-start; }
+.acct-head h2 { margin: 0; }
+.acct-row { display: flex; align-items: center; gap: var(--spacing-12); }
+.acct-row .row-main { gap: 2px; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.input.error { border-color: var(--etat-danger); }
+.field-error { display: flex; gap: var(--spacing-4); align-items: flex-start; color: var(--etat-danger); font: 400 12px/16px var(--font); }
+.field-error svg { width: 14px; height: 14px; flex: none; margin-top: 1px; }
+.bascule { margin-top: auto; border-top: 1px solid var(--bord-discret); padding-top: var(--spacing-8); }
+.bascule button { width: 100%; min-height: 44px; background: none; border: 0; color: var(--texte-discret); font: 400 16px/24px var(--font); }
+.bascule b { color: var(--accent-texte); font-weight: 500; }
 /* Dans une feuille, l'intitulé d'un champ est un surtitre de section. */
 .sheet-body .field > .caption.medium { font: 500 11px/16px var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--texte-discret); }
 .chev { width: 16px; height: 16px; flex: none; color: var(--texte-discret); }
