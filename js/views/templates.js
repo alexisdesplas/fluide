@@ -1,4 +1,4 @@
-import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, generateProgram, applyProgram, plannedSetsOf, SPLITS, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS } from "../store.js";
+import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix } from "../store.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
@@ -73,7 +73,8 @@ export function templatesView() {
     h("div", { class: "scroll" },
       n > 0 && h("button", { class: "card tap", onClick: () => go("#/seances/programme") },
         h("div", { class: "card-head" },
-          h("div", null, h("div", { class: "overline" }, "Programme"), h("div", { class: "display-xs" }, SPLITS[state.profile.split || "perso"].label)),
+          h("div", null, h("div", { class: "overline" }, "Programme"), h("div", { class: "display-xs" }, SPLITS[state.profile.split || "perso"].label),
+            state.profile.minutes != null && h("div", { class: "caption num", style: { marginTop: "4px" } }, weekLine(state.profile))),
           h("span", { class: "btn ghost sm" }, "Changer"))),
       n ? state.templates.map(t => {
         const last = history().find(s => s.templateId === t.id);
@@ -234,15 +235,55 @@ export function pickerView({ id }) {
   return { el };
 }
 
-// Choisir un programme : un split génère les séances types, réglées sur les réglages Fluide.
-let chosen = null, preview = null;
+// Ta semaine : ce que le programme doit respecter. Une ligne sous le programme sur l'écran Séances.
+export const weekLine = p => [`${p.days} séance${p.days > 1 ? "s" : ""}`, `${p.minutes} min`, ENDURANCE[p.endurance]?.short].filter(Boolean).join(" · ");
+
+// Choisir un programme : chaque split est généré pour ta semaine (séances, temps, objectif longue durée),
+// le mieux classé est recommandé et sélectionné d'entrée.
+let chosen = null, options = null;
+
+// Pourquoi ce programme, en phrases courtes : fréquence, temps, adaptations faites pour ta semaine.
+// Une alerte seulement quand le programme ne peut pas s'adapter (pas assez de séances, muscle sous sa fourchette Fluide).
+const times = o => (o.freq === o.freqMax ? o.freq : `${o.freq} à ${o.freqMax}`);
+const list = xs => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} et ${xs.at(-1)}` : xs[0];
+function reasons(o, p, week) {
+  const sp = SPLITS[o.key], end = ENDURANCE[p.endurance];
+  const mins = o.templates.map(estimate), long = week.find(d => d.endurance === "long");
+  const kept = o.short.filter(x => !o.below.includes(x));
+  const planned = plannedSetsOf(o.templates);
+  const of = st => MUSCLES.filter(m => state.matrix[m].status === st && state.matrix[m].target > 0 && !(end && m === "Mollets"));
+  const weak = of("faible"), strong = of("maintien");
+  const define = (p.define || []).filter(m => planned[m] > 0);
+  return [
+    !o.fits && ["warning", `Demande ${sp.days} séances : ${sp.days - p.days > 1 ? `${sp.days - p.days} de plus` : "une de plus"} que ta semaine.`],
+    o.freq >= 2 ? ["trend", `Chaque muscle revient ${times(o)} fois par semaine, le rythme visé par Fluide.`]
+      : o.freq === 1 ? ["trend", "Chaque muscle ne revient qu'une fois par semaine : moins de fréquence que les autres programmes."]
+      : ["warning", "Certains muscles n'ont plus aucune série : le temps ne suffit pas pour tout le corps."],
+    ["timer", `Séances de ${Math.min(...mins) === Math.max(...mins) ? Math.max(...mins) : `${Math.min(...mins)} à ${Math.max(...mins)}`} min, sous tes ${p.minutes} min, échauffement compris.`],
+    !o.short.length && ["check", "Toute ta cible Fluide tient dans la semaine."],
+    kept.length && ["check", `Pour tenir en ${p.minutes} min : ${[...new Set(kept.map(x => x.planned))].sort((a, b) => a - b)
+      .map(n => `${list(kept.filter(x => x.planned === n).map(x => x.muscle))} à ${n} séries`).join(", ")}. Tout reste dans les fourchettes Fluide.`],
+    o.below.length && ["warning", `${list(o.below.map(x => `${x.muscle} (${x.planned} séries)`))} ${o.below.length > 1 ? "passent" : "passe"} sous ${o.below.length > 1 ? "leur" : "son"} repère Fluide : il faudrait ~${o.need} min par séance, ou une séance de plus.`],
+    weak.length && ["check", `Points faibles en priorité : ${list(weak.map(m => `${m} ${planned[m]} séries`))}, coupées en dernier.`],
+    define.length && ["check", `${list(define)} à définir : séries de 12 à 20 reps, 1 min de repos.`],
+    strong.length && ["check", `${list(strong)} ${strong.length > 1 ? "prennent" : "prend"} vite : ${strong.length > 1 ? "maintenus" : "maintenu"} à ${STATUS.maintien.range.join("-")} séries, le volume va aux autres.`],
+    end && ["bolt", `Mollets : ${end.calves.sets} × ${end.calves.reps} montées sur pointes lentes en fin de séance, ${Math.min(end.calves.per, o.templates.length)} fois par semaine : le renfo de ton plan corde. La corde fait le reste.`],
+    end && o.upper.length && ["check", `Avec la corde, les jambes travaillent 2 fois par semaine : ${list(o.upper)} ${o.upper.length > 1 ? "se font" : "se fait"} sans jambes.`],
+    end && long && ["today", o.legs ? `Jour long de corde le ${long.day.toLowerCase()}, le plus loin possible des séances jambes.` : `Jour long de corde le ${long.day.toLowerCase()}.`]
+  ].filter(Boolean);
+}
 
 export function programView() {
-  if (!chosen) { chosen = state.profile.split || "hautbas"; preview = null; }
-  if (!preview && chosen !== "perso") preview = generateProgram(chosen);
+  const p = state.profile;
+  if (p.minutes == null) { setTimeout(() => go("#/seances/programme/semaine")); return { el: h("div") }; }
+  if (!options) { options = recommend(p); chosen = options[0].key; }
+  const reco = options[0].fits ? options[0].key : null;
+  const opt = options.find(o => o.key === chosen);
+  const preview = opt?.templates || [];
   const split = SPLITS[chosen];
-  const pick = k => { chosen = k; preview = k === "perso" ? [] : generateProgram(k); dispatchEvent(new HashChangeEvent("hashchange")); };
-  const leave = () => { chosen = null; preview = null; go("#/seances"); };
+  const week = weekPlan(preview, p.endurance);
+  const pick = k => { chosen = k; dispatchEvent(new HashChangeEvent("hashchange")); };
+  const leave = () => { chosen = null; options = null; go("#/seances"); };
   const use = () => {
     if (chosen === "perso") { state.profile.split = "perso"; save(); leave(); return; }
     const apply = () => { const label = split.label; applyProgram(chosen, preview); leave(); toast(`Programme ${label} en place`); };
@@ -253,23 +294,43 @@ export function programView() {
       confirmLabel: "Remplacer mes séances", cancelLabel: "Garder mes séances", onConfirm: apply
     });
   };
+  const card = (k, meta) => h("button", { type: "button", class: "radio-card", role: "radio", "aria-checked": String(k === chosen), onClick: () => pick(k) },
+    h("span", { class: "radio-dot", "aria-hidden": "true" }),
+    h("span", { class: "radio-text" },
+      h("span", { class: "card-head" }, h("span", { class: "body-md fort semibold" }, SPLITS[k].label), k === reco && pill("Recommandé", "accent")),
+      meta && h("span", { class: "caption num" }, meta),
+      h("span", { class: "caption" }, SPLITS[k].desc)));
+  // Seuls les programmes qui tiennent dans ta semaine sont proposés (à défaut, le moins exigeant).
+  const shown = options.some(o => o.fits) ? options.filter(o => o.fits) : options.slice(0, 1);
   const cards = h("div", { class: "radio-cards", role: "radiogroup", "aria-label": "Programme" },
-    Object.entries(SPLITS).map(([k, sp]) => h("button", { type: "button", class: "radio-card", role: "radio", "aria-checked": String(k === chosen), onClick: () => pick(k) },
-      h("span", { class: "radio-dot", "aria-hidden": "true" }),
-      h("span", { class: "radio-text" },
-        h("span", { class: "body-md fort semibold" }, sp.label),
-        sp.days && h("span", { class: "caption" }, `${sp.days} séances / semaine`),
-        h("span", { class: "caption" }, sp.desc)))));
+    shown.map(o => card(o.key, o.fits
+      ? `${SPLITS[o.key].days} séances · ${o.freq ? `chaque muscle ${times(o)} fois` : "des muscles sautent"} · ${o.coverage} % de la cible`
+      : `Demande ${SPLITS[o.key].days} séances, tu en as ${p.days}`)),
+    card("perso", null));
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Séances", onClick: leave }, title: "Programme", subtitle: "Réglé sur Fluide" }),
+    navbar({ back: { label: "Séances", onClick: leave }, title: "Programme", subtitle: "Réglé sur ta semaine" }),
     h("div", { class: "scroll" },
+      h("button", { class: "card tap", onClick: () => go("#/seances/programme/semaine") },
+        h("div", { class: "card-head" },
+          h("div", null, h("div", { class: "overline" }, "Ta semaine"), h("div", { class: "body-md fort medium num" }, weekLine(p))),
+          h("span", { class: "btn ghost sm" }, "Modifier"))),
       h("p", { class: "caption", style: { margin: 0 } }, "Le programme crée tes séances types : les séries de chaque muscle visent sa cible (maintenir, progresser, point faible), tes favoris passent en premier, jamais un exercice en douleur."),
       cards,
       chosen !== "perso" && [
+        h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, chosen === reco ? "Pourquoi ce programme" : "Ce que ça donne")),
+        h("div", { class: "card" }, reasons(opt, p, week).map(([ic, text]) =>
+          h("div", { class: `hint${ic === "warning" ? " attention" : ""}` }, icon(ic), h("span", { class: "body-sm" }, text)))),
+        h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Ta semaine type")),
+        h("div", { class: "list" }, week.map(d => h("div", { class: "row" },
+          h("div", { class: "row-main" },
+            h("span", { class: "body-md fort medium" }, d.day),
+            h("span", { class: "caption" }, [d.session || "Pas de muscu", d.endurance === "facile" && "corde facile", d.endurance === "recup" && "corde récup"].filter(Boolean).join(" · "))),
+          d.endurance === "long" && pill("Corde · jour long", "accent")))),
+        h("p", { class: "caption", style: { margin: 0 } }, p.endurance ? "Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant le jour long de corde loin des jambes." : "Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant un jour de repos entre deux grosses séances."),
         h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Aperçu"), h("span", { class: "caption" }, `${preview.length} séances`)),
         preview.map(t => h("div", { class: "card" },
           h("div", { class: "card-head" }, h("span", { class: "heading-md" }, t.name), h("span", { class: "caption num" }, `~${estimate(t)} min`)),
-          estimate(t) > 75 && h("div", { class: "hint attention" }, icon("warning"), h("span", { class: "body-sm" }, "Séance longue : passe à un split avec plus de séances, ou baisse une cible dans tes réglages Fluide.")),
+          estimate(t) > p.minutes && h("div", { class: "hint attention" }, icon("warning"), h("span", { class: "body-sm" }, `Dépasse tes ${p.minutes} min : passe à un programme avec plus de séances, ou baisse une cible dans tes réglages Fluide.`)),
           h("div", { class: "list" }, t.items.map(it => h("div", { class: "row" },
             h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, exercise(it.exerciseId).name), h("span", { class: "caption num" }, itemLine(it))),
             prefPill(exercise(it.exerciseId).pref)))))),
@@ -277,5 +338,52 @@ export function programView() {
         h("div", { class: "card" }, h("p", { class: "caption", style: { margin: 0 } }, "Si tu fais chaque séance une fois. Le trait blanc est la cible de tes réglages Fluide."), volumeBars(plannedSetsOf(preview)))
       ],
       btn(chosen === "perso" ? "Créer mes séances moi-même" : "Utiliser ce programme", { variant: "primary", size: "lg", full: true, onClick: use })));
+  return { el };
+}
+
+// Points forts (maintien) et points faibles (priorité) : ils écrivent directement les réglages Fluide.
+// Retirer un muscle d'une des deux listes le remet en progresser. « À définir » change le format des séries, pas le volume.
+const strengthChips = status => h("div", { class: "chips" }, MUSCLES.map(m => h("button", { type: "button", class: "chip", "aria-pressed": String(state.matrix[m].status === status),
+  onClick: () => { options = null; setMatrix(m, state.matrix[m].status === status ? "focus" : status); } }, m)));
+
+// Ta semaine : séances de muscu dispo, temps par séance, objectif longue durée, points forts et faibles. Le programme se règle dessus.
+export function weekView() {
+  const p = state.profile;
+  p.minutes ??= 60;
+  p.endurance ??= null;
+  const done = () => { options = null; save(); go("#/seances/programme"); };
+  const set = k => v => { p[k] = v; save(true); };
+  const goals = [[null, "Aucun", "Muscu seule : le programme ne regarde que tes réglages Fluide."],
+    ...Object.entries(ENDURANCE).map(([k, e]) => [k, e.label, `${e.desc} Le programme garde ton jour long loin des séances jambes et ajoute les montées sur pointes de ton plan.`])];
+  const goalCards = h("div", { class: "radio-cards", role: "radiogroup", "aria-label": "Objectif longue durée" },
+    goals.map(([k, label, desc]) => h("button", { type: "button", class: "radio-card", role: "radio", "aria-checked": String(k === p.endurance), onClick: () => {
+      p.endurance = k; save(true);
+      goalCards.querySelectorAll(".radio-card").forEach((c, i) => c.setAttribute("aria-checked", String(goals[i][0] === k)));
+    } },
+      h("span", { class: "radio-dot", "aria-hidden": "true" }),
+      h("span", { class: "radio-text" }, h("span", { class: "body-md fort semibold" }, label), h("span", { class: "caption" }, desc)))));
+  const field = (label, control, help) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), control, help && h("p", { class: "caption", style: { margin: 0 } }, help));
+  const el = h("div", { class: "screen no-tabs" },
+    navbar({ back: { label: "Programme", onClick: done }, title: "Ta semaine", subtitle: "Séances, temps, objectif", action: { label: "OK", onClick: done } }),
+    h("div", { class: "scroll" },
+      h("div", { class: "card" },
+        field("Séances de muscu par semaine", stepper({ value: p.days, min: 2, max: 6, unit: "séances", label: "séances par semaine", onChange: set("days") })),
+        field("Temps par séance, en minutes", segmented(SESSION_MINUTES.map(m => [m, String(m)]), p.minutes, set("minutes"), "sm"),
+          "Échauffement compris. Une séance trop longue perd d'abord du repos, puis des séries sur les muscles à maintenir.")),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif longue durée")),
+      h("p", { class: "caption", style: { margin: 0 } }, "Un sport que tu prépares à côté de la muscu. Il compte dans la récupération des jambes."),
+      goalCards,
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Points forts")),
+      h("p", { class: "caption", style: { margin: 0 } }, `Les muscles qui prennent vite chez toi. Ils restent en maintien (${STATUS.maintien.range.join("-")} séries) pour laisser le volume aux autres.`),
+      strengthChips("maintien"),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Points faibles")),
+      h("p", { class: "caption", style: { margin: 0 } }, `Ceux qui suivent moins. Ils passent en priorité (${STATUS.faible.range.join("-")} séries), coupés en dernier si le temps manque.`),
+      strengthChips("faible"),
+      h("p", { class: "caption", style: { margin: 0 } }, `Les autres progressent (${STATUS.focus.range.join("-")} séries). Le détail muscle par muscle est dans Réglages Fluide.`),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "À définir")),
+      h("p", { class: "caption", style: { margin: 0 } }, "Des muscles déjà là que tu veux plus dessinés : séries longues (12-20 reps), repos d'une minute. La définition vient surtout du gras en moins (alimentation, pas, corde) : ici le muscle garde son volume sans grossir."),
+      h("div", { class: "chips" }, MUSCLES.map(m => h("button", { type: "button", class: "chip", "aria-pressed": String((p.define || []).includes(m)),
+        onClick: () => { options = null; const d = p.define || []; p.define = d.includes(m) ? d.filter(x => x !== m) : [...d, m]; save(); } }, m))),
+      btn("Voir ma recommandation", { variant: "primary", size: "lg", full: true, onClick: done })));
   return { el };
 }
