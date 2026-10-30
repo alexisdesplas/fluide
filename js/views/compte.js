@@ -1,4 +1,4 @@
-import { configured, account, signedIn, signIn, signUp, sendReset, recovering, setNewPassword, remoteSummary, resolve, signOut, syncNow } from "../compte.js";
+import { configured, account, signedIn, confirmed, clearConfirmed, signIn, signUp, sendReset, recovering, setNewPassword, remoteSummary, resolve, signOut, syncNow } from "../compte.js";
 import { state } from "../store.js";
 import { h, icon, btn, pill, go, navbar, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 
@@ -67,6 +67,9 @@ export function signInView() {
   if (signedIn()) { setTimeout(() => go("#/profil")); return { el: h("div") }; }
   const { form, email, fEmail, fail } = authForm({ label: "Me connecter", onSubmit: signIn });
   if (account().error) fail({ field: null, msg: account().error });
+  // Retour du lien de validation : l'adresse est bonne, il ne reste qu'à se connecter.
+  const validated = confirmed() && h("div", { class: "hint" }, icon("check"), h("span", { class: "body-sm" }, "Adresse validée : connecte-toi avec ton mot de passe."));
+  if (validated) clearConfirmed();
   form.append(btn("Mot de passe oublié ?", { variant: "ghost", full: true, onClick: async () => {
     const mail = email.value.trim().toLowerCase();
     if (!EMAIL.test(mail)) return fEmail.setError("Écris d'abord ton adresse e-mail, le lien y sera envoyé.");
@@ -76,7 +79,7 @@ export function signInView() {
   const el = h("div", { class: "screen no-tabs" },
     navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Se connecter" }),
     h("div", { class: "scroll" }, head("cloudCheck", "Ton compte Fluide", "Séances, programme, corde, réglages : tout est gardé sur ton compte et revient sur un autre téléphone ou après une réinstallation."),
-      form, bascule("Pas encore de compte ?", "Créer mon compte", "#/compte/creer")));
+      validated, form, bascule("Pas encore de compte ?", "Créer mon compte", "#/compte/creer")));
   return { el };
 }
 

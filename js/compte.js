@@ -84,7 +84,11 @@ export async function sendReset(email) {
   await call(`/auth/v1/recover?redirect_to=${back}`, { method: "POST", body: { email } });
 }
 
-// Retour du lien (dans l'adresse : #access_token=…&type=recovery) : on garde le jeton le temps de choisir un mot de passe.
+// Retour d'un lien reçu par e-mail (dans l'adresse : #access_token=…&type=…).
+// Validation de l'adresse (type signup) : on renvoie vers Se connecter, avec un mot pour le dire.
+// Mot de passe oublié (type recovery) : on garde le jeton le temps de choisir un mot de passe.
+export const confirmed = () => Boolean(meta.confirmed);
+export const clearConfirmed = () => { delete meta.confirmed; keep(); };
 let recovery = null;
 export const recovering = () => Boolean(recovery);
 export async function setNewPassword(password) {
@@ -98,6 +102,9 @@ export async function setNewPassword(password) {
   if (hash.get("access_token") && hash.get("type") === "recovery") {
     recovery = { access_token: hash.get("access_token"), refresh_token: hash.get("refresh_token"), expires_in: +hash.get("expires_in") || 3600 };
     history.replaceState(null, "", `${location.pathname}#/compte/nouveau`);
+  } else if (hash.get("access_token") && ["signup", "email", "magiclink"].includes(hash.get("type"))) {
+    meta.confirmed = true; keep();
+    history.replaceState(null, "", `${location.pathname}#/compte`);
   } else if (hash.get("error_code")) {
     meta.error = hash.get("error_code") === "otp_expired" ? "Lien expiré : redemande un e-mail de mot de passe oublié." : "Lien invalide : redemande un e-mail.";
     history.replaceState(null, "", `${location.pathname}#/compte`);
