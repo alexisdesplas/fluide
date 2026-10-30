@@ -1,4 +1,4 @@
-import { state, save, replaceState, ENDURANCE, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, MUSCLES, STATUS, CYCLES, PREFS } from "../store.js";
+import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, MUSCLES, STATUS, CYCLES, PREFS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, go, int, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
@@ -94,6 +94,11 @@ export function profileView() {
       radios(["Prise de muscle", "Force", "Sèche"].map(v => [v, v]), p.goal, v => { p.goal = v; save(); }, "Objectif du moment"),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Niveau")),
       radios(["Débutant", "Intermédiaire", "Avancé"].map(v => [v, v]), p.level, v => { p.level = v; save(); }, "Niveau"),
+      // Challenge corde : même réglage que « Objectif longue durée » dans Ta semaine (le programme s'y adapte).
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Challenge corde à sauter")),
+      radios([["corde", "Avec le challenge", "Plan 18 semaines vers 1 h non-stop : la séance corde du jour sert d'échauffement, le programme garde le jour long loin des jambes."],
+        [null, "Sans challenge", "Muscu seule : l'échauffement ci-dessous, le programme ne regarde que tes réglages Fluide."]],
+        p.endurance ? "corde" : null, v => { p.endurance = v; if (v && p.enduranceStart == null) p.enduranceStart = startOfWeek(Date.now()); save(); }, "Challenge corde à sauter"),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Routine")),
       h("div", { class: "card" },
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Séances / semaine"),
