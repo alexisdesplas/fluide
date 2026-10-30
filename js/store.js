@@ -5,6 +5,8 @@ import { CATALOGUE } from "./exercices.js";
 
 const KEY = "fluid-v1";
 const DAY = 86400000;
+// Challenge corde d'Alexis : semaine 1 commencée le lundi 19/10/2026.
+const CORDE_START = new Date(2026, 9, 19).getTime();
 
 export const MUSCLES = ["Pecs", "Dos", "Épaules", "Biceps", "Triceps", "Quadris", "Ischios", "Fessiers", "Mollets", "Abdos"];
 // Groupes du catalogue hors matrice Fluide : leurs séries ne comptent pas dans l'objectif.
@@ -115,7 +117,7 @@ function seed() {
   for (const m of MUSCLES) matrix[m].target = STATUS[matrix[m].status].def;
   return {
     version: 1,
-    profile: { goal: "Prise de muscle", level: "Intermédiaire", days: 4, split: "hautbas", stepsTarget: 8000, warmup: "Corde à sauter 3-5 min" },
+    profile: { goal: "Prise de muscle", level: "Intermédiaire", days: 4, split: "hautbas", stepsTarget: 8000, warmup: "Corde à sauter 3-5 min", endurance: "corde", enduranceStart: CORDE_START },
     matrix,
     cycle: { type: "volume", start: startOfWeek(Date.now()), weeks: 6 },
     cycles: [],
@@ -143,6 +145,8 @@ function migrate(st) {
     else { Object.assign(e, { muscle: row[1], equip: e.rank !== undefined ? e.equip : e.equip || row[2], photo: row[3], rank: row[4] }); delete e.sw; }
   }
   for (const e of st.exercises) e.equip = e.equip || "barre";
+  // Objectif jamais choisi : le challenge corde est en cours, il sert d'échauffement. null veut dire « aucun », on le garde.
+  if (st.profile.endurance === undefined) Object.assign(st.profile, { endurance: "corde", enduranceStart: CORDE_START });
   return st;
 }
 
