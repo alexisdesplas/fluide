@@ -1,9 +1,7 @@
-import { state, itemSets, cyclePosition, weeklySets, weeklyGoal, history, template, setHabit, habit, dayKey, stepsAverage, startWorkout, STATUS, MUSCLES, CYCLES } from "../store.js";
+import { state, estimate, itemSets, cyclePosition, weeklySets, weeklyGoal, history, template, setHabit, habit, dayKey, stepsAverage, startWorkout, STATUS, MUSCLES, CYCLES } from "../store.js";
 import { h, icon, pageHead, btn, pill, go, int, dateLong, ago, stepper } from "../ui.js";
 
-// Durée estimée : 45 s d'effort par série + le repos prévu, plus l'échauffement.
-export const estimate = t => Math.round((t.items.reduce((a, it) =>
-  a + (it.format === "emom" ? it.rounds * it.every : it.format === "tabata" ? it.rounds * (it.work + it.off) + 60 : it.sets * (45 + it.rest)), 0) + 300) / 60);
+export { estimate };
 
 // Prochaine séance : on fait tourner les séances types, la moins récente d'abord.
 export function nextTemplate() {
