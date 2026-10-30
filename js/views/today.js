@@ -1,5 +1,6 @@
 import { state, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklySets, weeklyGoal, history, template, setHabit, habit, dayKey, stepsAverage, startWorkout, STATUS, MUSCLES, CYCLES } from "../store.js";
 import { h, icon, pageHead, btn, pill, go, int, dateLong, ago, stepper, toast } from "../ui.js";
+import { account } from "../compte.js";
 
 export { estimate };
 
@@ -115,6 +116,9 @@ export function todayView() {
   const done = weeklySets();
   const today = dayKey();
   const steps = habit(today).steps || 0;
+  // Pas envoyés par le Raccourci et repris à la synchro du compte (Pas du jour automatiques).
+  const last = account().stepsLast;
+  const received = last?.day === today && last.steps === steps ? last : null;
   const target = state.profile.stepsTarget;
   const avg = stepsAverage();
   const lastSession = history()[0];
@@ -155,6 +159,7 @@ export function todayView() {
           steps >= target ? pill("Cible atteinte", "succes") : pill(`${int(Math.max(0, target - steps))} restants`)),
         stepper({ value: steps, step: 500, max: STEPS_MAX, format: int, unit: "pas", editable: true, label: "pas du jour",
           onChange: v => { setHabit(today, "steps", v, true); } }),
+        received && h("span", { class: "caption num" }, `Reçus de Santé à ${new Date(received.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} par le Raccourci.`),
         btn("Coller depuis Santé", { variant: "secondary", full: true, icon: "clipboard", onClick: () => pasteSteps(today) }))));
   return { el, tab: "" };
 }

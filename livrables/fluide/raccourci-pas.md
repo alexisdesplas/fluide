@@ -1,6 +1,9 @@
 # Raccourci « Pas du jour » — reprendre les pas de l'app Santé dans Fluide
 
-Fluide est une app web : elle n'a pas accès à Santé (HealthKit). Un Raccourci iOS lit les pas du jour dans Santé et les copie dans le presse-papiers ; dans Fluide, le bouton **Coller depuis Santé** les enregistre. Rien ne passe par un serveur.
+Fluide est une app web : elle n'a pas accès à Santé (HealthKit). Un Raccourci iOS lit les pas du jour dans Santé, puis :
+
+- **connecté à ton compte Fluide** : il les envoie lui-même au compte, et Fluide les reprend à l'ouverture, sans rien toucher (section 5) ;
+- **sans compte** : il les copie dans le presse-papiers, et le bouton **Coller depuis Santé** les enregistre (sections 1 à 3).
 
 ## 1. Créer le Raccourci
 
@@ -41,3 +44,29 @@ Ajoute en dernière action **Ouvrir l'URL** avec `https://alexis-fluide.vercel.a
 - **Safari s'ouvre** avec « 8 432 pas enregistrés dans Safari, pas dans l'app de l'écran d'accueil » : Safari et l'app de l'écran d'accueil ne partagent pas leurs données, ces pas sont perdus pour Fluide. Supprime l'action et garde le presse-papiers.
 
 Note le résultat dans `memoire.md` (hypothèse « Ouvrir l'URL → app ou Safari »).
+
+## 5. Mode automatique (compte Fluide connecté)
+
+Le Raccourci envoie tes pas à ton compte avec une **clé Raccourci** : elle ne sert qu'à écrire tes pas, et se remplace ou se supprime à tout moment. Ton mot de passe ne va jamais dans le Raccourci.
+
+**Une fois** (l'administrateur du projet Supabase) : passer la fin de `supabase/schema.sql`, à partir de « Pas du jour envoyés par le Raccourci » (voir `supabase/README.md`, étape 6).
+
+**Dans Fluide** : Réglages › Compte › **Pas du jour automatiques** › **Créer ma clé Raccourci** › **Copier la clé**.
+
+**Dans le Raccourci « Pas du jour »**, garde les actions 1 à 3 de la section 1 (rechercher, somme, arrondir), remplace « Copier dans le presse-papiers » par :
+
+4. **Obtenir le contenu de l'URL**
+   - URL : `https://rkxhntyvbbhswafyrxty.supabase.co/rest/v1/rpc/fluide_envoyer_pas`
+   - Touche « Afficher plus » : **Méthode** · **POST**.
+   - **En-têtes** : ajoute `apikey` = `sb_publishable_VpHZ23r-RNFNixR4ccQfuQ_LPkj-rq-` (la clé publique de l'app, la même que dans `js/config.js`).
+   - **Corps de la requête** · **JSON**, deux champs :
+     - `cle` · **Texte** · colle ta clé Raccourci ;
+     - `pas` · **Nombre** · variable **Nombre arrondi**.
+
+Lance-le avec ▶︎ : la réponse est le nombre de pas envoyé. Ouvre Fluide : la carte Pas du jour affiche le nombre et « Reçus de Santé à … par le Raccourci ». Si la réponse parle de « Clé Raccourci inconnue », recopie la clé depuis Fluide.
+
+Le jour est celui de Paris au moment de l'envoi. Un nouvel envoi le même jour remplace le précédent, et remplace aussi un nombre tapé à la main.
+
+**Sans aucune action** : onglet **Automatisation** › **+** › **Heure de la journée** (par exemple 12:00, 18:00 et 21:00, une automatisation par heure), **Quotidien**, **Exécuter immédiatement**, « Me notifier lors de l'exécution » décoché, action **Exécuter le raccourci** · **Pas du jour**. Fluide se met à jour à la prochaine ouverture.
+
+**À vérifier** : iOS bloque l'accès à Santé quand l'iPhone est verrouillé. Si l'automatisation part pendant que l'iPhone est verrouillé, elle peut échouer (Raccourcis › Automatisation montre les exécutions). Plusieurs heures dans la journée limitent le risque ; sinon, essaie le déclencheur **Chargeur** › « Est connecté ».

@@ -4,7 +4,7 @@
 // Pas de SDK : l'API REST de Supabase suffit. Le téléphone reste la source de travail ; chaque enregistrement
 // part vers le compte quelques secondes après, et l'app reprend la version du compte quand elle est plus récente.
 
-import { state, onPersist, replaceState } from "./store.js";
+import { state, onPersist, replaceState, setHabit, save, dayKey } from "./store.js";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 
 const META = "fluid-compte";
@@ -65,7 +65,9 @@ async function afterSignIn() {
 
 export async function signIn(email, password) {
   session(await call("/auth/v1/token?grant_type=password", { method: "POST", body: { email, password } }));
-  return afterSignIn();
+  const result = await afterSignIn();
+  if (result !== "choose") pullSteps();
+  return result;
 }
 
 // Adresse à valider (« Confirm email » coché dans Supabase) : pas de session, un e-mail avec un lien part à l'adresse,
@@ -170,9 +172,15 @@ onPersist(() => {
   timer = setTimeout(push, PUSH_DELAY);
 });
 
-// Ouverture de l'app, retour au premier plan, retour du réseau : la version la plus récente gagne.
+// Ouverture de l'app, retour au premier plan, retour du réseau : la version la plus récente gagne,
+// puis on reprend les pas envoyés par le Raccourci.
 export async function syncNow() {
   if (!configured || !signedIn() || pushing) return;
+  await syncState();
+  await pullSteps();
+}
+
+async function syncState() {
   try {
     const remote = await fetchRemote();
     const remoteAt = remote ? Date.parse(remote.updated_at) : 0;
@@ -183,6 +191,46 @@ export async function syncNow() {
   } catch (e) {
     if (signedIn()) { meta.error = offline(e) ? "Hors ligne : synchro au retour du réseau." : `Synchro impossible : ${e.message}`; keep(); }
   }
+}
+
+// ——— Pas du jour automatiques : le Raccourci iOS écrit les pas dans fluide_pas avec la clé Raccourci du compte
+// (supabase/schema.sql), l'app les reprend à chaque synchro. Les pas reçus remplacent ceux du jour.
+
+const rpc = async (name, body) => call(`/rest/v1/rpc/${name}`, { method: "POST", auth: await token(), body: body || {} });
+
+export async function shortcutKeyInfo() {
+  const rows = await call("/rest/v1/fluide_raccourci?select=created_at", { auth: await token() });
+  return rows?.[0] ? { createdAt: Date.parse(rows[0].created_at) } : null;
+}
+
+// La clé n'est rendue qu'une fois par Supabase : on la garde sur ce téléphone pour pouvoir la recopier.
+export async function newShortcutKey() {
+  meta.shortcutKey = await rpc("fluide_nouvelle_cle");
+  keep();
+  return meta.shortcutKey;
+}
+
+export async function deleteShortcutKey() {
+  await call(`/rest/v1/fluide_raccourci?user_id=eq.${meta.userId}`, { method: "DELETE", auth: await token() });
+  delete meta.shortcutKey;
+  keep();
+}
+
+// Lignes plus récentes que la dernière reprise (la première fois : les 7 derniers jours).
+// Erreur ignorée : sans la table (SQL pas encore passé), le compte marche comme avant.
+export async function pullSteps() {
+  if (!signedIn()) return;
+  try {
+    // Horodatage gardé tel quel : Supabase compte en microsecondes, un Date l'arrondirait et reprendrait la dernière ligne.
+    const since = meta.stepsSince ? `updated_at=gt.${encodeURIComponent(meta.stepsSince)}` : `day=gte.${dayKey(Date.now() - 7 * 86400000)}`;
+    const rows = await call(`/rest/v1/fluide_pas?select=day,steps,updated_at&${since}&order=updated_at`, { auth: await token() });
+    if (!rows?.length) return;
+    for (const r of rows) setHabit(r.day, "steps", r.steps, true);
+    const last = rows.at(-1);
+    Object.assign(meta, { stepsSince: last.updated_at, stepsLast: { day: last.day, steps: last.steps, at: Date.parse(last.updated_at) } });
+    keep();
+    save();
+  } catch {}
 }
 
 if (configured) {
