@@ -1,4 +1,4 @@
-import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix } from "../store.js";
+import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek } from "../store.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
@@ -325,10 +325,10 @@ export function programView() {
           h("div", { class: "row-main" },
             h("span", { class: "body-md fort medium" }, d.day),
             h("span", { class: "caption" }, [d.session || "Pas de muscu",
-              d.endurance === "facile" && (d.session ? "corde facile à part" : "corde facile"),
+              d.endurance === "facile" && (d.session ? "corde facile en échauffement" : "corde facile"),
               d.endurance === "recup" && (d.session ? "corde récup en échauffement" : "corde récup")].filter(Boolean).join(" · "))),
           d.endurance === "long" && pill("Corde · jour long", "accent")))),
-        h("p", { class: "caption", style: { margin: 0 } }, p.endurance ? `Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant le jour long de corde loin des jambes. Corde facile à part : à un autre moment de la journée, ou après la muscu les jours haut du corps.${week.some(d => d.endurance === "recup" && d.session) ? " Le jour récup (5 × 1 min) sert d'échauffement." : ""}` : "Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant un jour de repos entre deux grosses séances."),
+        h("p", { class: "caption", style: { margin: 0 } }, p.endurance ? `Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant le jour long de corde loin des jambes. Les jours de muscu, la séance corde du jour (facile ou récup) sert d'échauffement.` : "Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant un jour de repos entre deux grosses séances."),
         h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Aperçu"), h("span", { class: "caption" }, `${preview.length} séances`)),
         preview.map(t => h("div", { class: "card" },
           h("div", { class: "card-head" }, h("span", { class: "heading-md" }, t.name), h("span", { class: "caption num" }, `~${estimate(t)} min`)),
@@ -359,8 +359,9 @@ export function weekView() {
     ...Object.entries(ENDURANCE).map(([k, e]) => [k, e.label, `${e.desc} Le programme garde ton jour long loin des séances jambes et ajoute les montées sur pointes de ton plan.`])];
   const goalCards = h("div", { class: "radio-cards", role: "radiogroup", "aria-label": "Objectif longue durée" },
     goals.map(([k, label, desc]) => h("button", { type: "button", class: "radio-card", role: "radio", "aria-checked": String(k === p.endurance), onClick: () => {
-      p.endurance = k; save(true);
-      goalCards.querySelectorAll(".radio-card").forEach((c, i) => c.setAttribute("aria-checked", String(goals[i][0] === k)));
+      p.endurance = k;
+      if (k && p.enduranceStart == null) p.enduranceStart = startOfWeek(Date.now());
+      save();
     } },
       h("span", { class: "radio-dot", "aria-hidden": "true" }),
       h("span", { class: "radio-text" }, h("span", { class: "body-md fort semibold" }, label), h("span", { class: "caption" }, desc)))));
@@ -375,6 +376,16 @@ export function weekView() {
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif longue durée")),
       h("p", { class: "caption", style: { margin: 0 } }, "Un sport que tu prépares à côté de la muscu. Il compte dans la récupération des jambes."),
       goalCards,
+      ENDURANCE[p.endurance]?.weeks && (() => {
+        const e = ENDURANCE[p.endurance], line = h("p", { class: "caption num", style: { margin: 0 } });
+        const show = w => { const wk = e.weeks[w - 1]; line.textContent = `Faciles ${blocksLabel(wk.easy)} · jour long ${blocksLabel(wk.long)}${wk.deload ? " · deload" : ""}`; };
+        show(enduranceWeek());
+        return h("div", { class: "card" },
+          h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Semaine du plan"),
+            stepper({ value: enduranceWeek(), min: 1, max: e.weeks.length, compact: true, format: v => `S${v}`, label: "semaine du plan", onChange: v => { setEnduranceWeek(v); show(v); } })),
+          line,
+          h("p", { class: "caption", style: { margin: 0 } }, "Elle avance chaque lundi. Une semaine trop dure se refait : recule d'une semaine."));
+      })(),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Points forts")),
       h("p", { class: "caption", style: { margin: 0 } }, `Les muscles qui prennent vite chez toi. Ils restent en maintien (${STATUS.maintien.range.join("-")} séries) pour laisser le volume aux autres.`),
       strengthChips("maintien"),

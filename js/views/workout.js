@@ -1,4 +1,4 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, session, sessionVolume, sessionSets, sessionRecords, alternatives, swapExercise, setEntryEquip, equipOf, weightScale, lbs, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, CYCLES, MUSCLES, FORMATS } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, session, sessionVolume, sessionSets, sessionRecords, alternatives, swapExercise, setEntryEquip, equipOf, weightScale, lbs, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, CYCLES, MUSCLES, FORMATS, enduranceToday, blocksLabel, blocksTotal } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, segmented, sheet, confirmSheet, toast, beep, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle } from "./templates.js";
 
@@ -171,10 +171,19 @@ export function workoutView() {
   if (!a.warmupDone) {
     const lower = ["Quadris", "Ischios", "Fessiers", "Mollets"].includes(ex.muscle);
     const mobility = `mobilité ${lower ? "des hanches et des chevilles" : "des épaules et des coudes"}`;
+    // Plan d'endurance : la séance corde du jour (facile ou récup) sert d'échauffement, bloc par bloc.
+    // Le jour long se fait à part : on garde alors l'échauffement des réglages.
+    const rope = enduranceToday();
+    const ropeDay = rope && rope.kind !== "long" ? rope : null;
     const plan = state.profile.warmup || "";
     const dur = plan.match(/(\d+)(?:\s*[-–]\s*(\d+))?\s*min/);
-    const cardio = plan.replace(/\d.*$/, "").trim() || "Cardio";
-    const total = (dur ? +(dur[2] || dur[1]) : 5) * 60;
+    const cardio = ropeDay ? `Corde · S${ropeDay.week}` : plan.replace(/\d.*$/, "").trim() || "Cardio";
+    const total = ropeDay ? blocksTotal(ropeDay.blocks) : (dur ? +(dur[2] || dur[1]) : 5) * 60;
+    const blocks = ropeDay && ropeDay.blocks[0] > 1 ? ropeDay.blocks : null;
+    const ropeNote = rope && h("div", { class: "hint" }, icon("bolt"), h("span", { class: "body-sm" },
+      rope.kind === "long" ? `Jour long de corde aujourd'hui (${blocksLabel(rope.blocks)}) : fais-le à part, loin de la muscu.`
+      : rope.kind === "recup" ? "Jour récup : technique pure, pas alterné, sauts bas."
+      : "Séance facile : tu dois pouvoir la refaire juste après. Sauts de 2 à 3 cm, 110 à 130 tours par minute."));
     const w = a.warm;
     const left = () => Math.max(0, w.total - ((w.paused || Date.now()) - w.start) / 1000);
     const approach = h("div", { class: "hint" }, icon("barbell"),
@@ -193,20 +202,34 @@ export function workoutView() {
       const done = w.done;
       const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
       const time = h("div", { class: "display-lg num" });
-      const update = () => {
-        const l = done ? 0 : left();
-        time.textContent = clock(Math.ceil(l));
-        ring.setAttribute("stroke-dashoffset", String(done ? 0 : C * (1 - l / w.total)));
+      const label = h("div", { class: "overline" }, done ? "Terminé" : cardio);
+      const sub = h("span", { class: "body-sm discret" }, done ? "Cardio bouclé" : w.paused ? "En pause" : `Sur ${clock(w.total)}`);
+      // Séance en blocs : l'anneau suit le bloc en cours (effort en orange, repos en vert).
+      const phase = () => {
+        if (!w.blocks) return null;
+        const [n, work, rest] = w.blocks, cyc = work + rest, el = ((w.paused || Date.now()) - w.start) / 1000;
+        const round = Math.min(n, Math.floor(el / cyc) + 1), inCycle = el - (round - 1) * cyc, effort = inCycle < work;
+        return { round, n, effort, left: effort ? work - inCycle : cyc - inCycle, len: effort ? work : rest, key: `${round}-${effort}` };
       };
+      let lastKey = phase()?.key;
+      const update = () => {
+        const l = done ? 0 : left(), ph = !done && phase();
+        time.textContent = clock(Math.ceil(ph ? ph.left : l));
+        ring.setAttribute("stroke-dashoffset", String(done ? 0 : C * (1 - (ph ? ph.left / ph.len : l / w.total))));
+        if (!ph) return;
+        label.textContent = ph.effort ? `Effort ${ph.round} / ${ph.n}` : "Repos";
+        sub.textContent = w.paused ? "En pause" : `Reste ${clock(Math.ceil(l))} au total`;
+        ringBox.classList.toggle("chauffe", ph.effort);
+      };
+      const ringBox = h("div", { class: `ring ${done ? "repos" : "chauffe"}${w.paused ? " paused" : ""}` },
+        h("svg", { viewBox: "0 0 312 312", width: 312, height: 312, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
+        h("div", { class: "ring-center" }, label, time, sub));
       update();
       const toggle = () => { if (w.paused) { w.start += Date.now() - w.paused; w.paused = null; } else w.paused = Date.now(); save(); };
       const el = h("div", { class: "screen workout" }, head,
         h("div", { class: "scroll wo-center" },
           h("div", { class: "wo-hero" },
-            h("div", { class: `ring ${done ? "repos" : "chauffe"}${w.paused ? " paused" : ""}` },
-              h("svg", { viewBox: "0 0 312 312", width: 312, height: 312, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
-              h("div", { class: "ring-center" }, h("div", { class: "overline" }, done ? "Terminé" : cardio), time,
-                h("span", { class: "body-sm discret" }, done ? "Cardio bouclé" : w.paused ? "En pause" : `Sur ${clock(w.total)}`))),
+            ringBox,
             h("p", { class: "body-md discret", style: { margin: 0 } }, "Ensuite : ", h("b", { class: "fort medium" }, mobility))),
           done && approach),
         done
@@ -222,6 +245,8 @@ export function workoutView() {
         tick() {
           if (done || w.paused) return;
           if (left() <= 0) { w.done = true; beep(660, 0.15, 3); save(); return; }
+          const ph = phase();
+          if (ph && ph.key !== lastKey) { lastKey = ph.key; beep(ph.effort ? 880 : 660, 0.12, ph.effort ? 2 : 1); }
           update();
         }
       };
@@ -237,13 +262,13 @@ export function workoutView() {
           h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, "Corde à sauter, puis mobilité"))),
       h("div", { class: "scroll wo-center" },
         h("div", { class: "wo-hero" },
-          h("div", { class: "overline" }, cardio),
-          h("div", { class: "display-sm num" }, dur ? dur[0].replace("-", "–") : clock(total)),
-          h("p", { class: "body-md discret", style: { margin: 0 } }, `Montée progressive, puis ${mobility}.`)),
-        approach),
+          h("div", { class: "overline" }, ropeDay ? `${cardio} · ${ropeDay.kind === "recup" ? "jour récup" : "séance facile"}${ropeDay.deload ? " · deload" : ""}` : cardio),
+          h("div", { class: "display-sm num" }, ropeDay ? `${Math.round(total / 60)} min` : dur ? dur[0].replace("-", "–") : clock(total)),
+          h("p", { class: "body-md discret", style: { margin: 0 } }, ropeDay ? `${blocksLabel(ropeDay.blocks)}, puis ${mobility}.` : `Montée progressive, puis ${mobility}.`)),
+        ropeNote, approach),
       h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr 1.4fr" } },
         btn("Abandonner", { variant: "secondary", size: "lg", onClick: abandonSheet }),
-        btn("C'est parti", { variant: "primary", size: "lg", icon: "timer", onClick: () => { a.warm = { start: Date.now(), paused: null, total }; save(); } }),
+        btn("C'est parti", { variant: "primary", size: "lg", icon: "timer", onClick: () => { a.warm = { start: Date.now(), paused: null, total, blocks }; save(); } }),
         foot));
     return { el };
   }
