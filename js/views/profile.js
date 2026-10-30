@@ -1,4 +1,4 @@
-import { state, save, replaceState, toggleFav, cyclePosition, startCycle, deloadNow, setMatrix, setTarget, plannedSets, history, sessionRecords, setPref, MUSCLES, STATUS, CYCLES, PREFS } from "../store.js";
+import { state, save, replaceState, ENDURANCE, toggleFav, cyclePosition, startCycle, deloadNow, setMatrix, setTarget, plannedSets, history, sessionRecords, setPref, MUSCLES, STATUS, CYCLES, PREFS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, go, int, stepper, segmented, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
@@ -98,7 +98,8 @@ export function profileView() {
           stepper({ value: p.days, min: 1, max: 7, compact: true, label: "séances par semaine", onChange: set("days") })),
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Cible de pas / jour"),
           stepper({ value: p.stepsTarget, step: 500, min: 2000, max: 30000, compact: true, format: int, label: "pas par jour", onChange: set("stepsTarget") })),
-        field("Échauffement", h("input", { class: "input", value: p.warmup, "aria-label": "Échauffement", onChange: e => { p.warmup = e.target.value; save(true); } }))),
+        field("Échauffement", h("input", { class: "input", value: p.warmup, "aria-label": "Échauffement", onChange: e => { p.warmup = e.target.value; save(true); } })),
+        ENDURANCE[p.endurance] && h("p", { class: "caption", style: { margin: 0 } }, `L'échauffement prépare la muscu, il ne remplace pas une séance de ton plan ${ENDURANCE[p.endurance].short.toLowerCase()}. Seul le jour récup du plan (5 × 1 min) peut servir d'échauffement.`)),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Données")),
       h("p", { class: "caption", style: { margin: 0 } }, "Tout reste sur ce téléphone. Exporte de temps en temps pour garder une sauvegarde."),
       h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
