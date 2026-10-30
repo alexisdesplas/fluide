@@ -181,16 +181,17 @@ button.row:active { background: var(--fond-discret); }
 .pill.danger { background: var(--etat-danger-soft); color: var(--etat-danger); }
 
 /* ——— Contrôle segmenté (Hardwood) */
-/* Sélection en monochrome inversé (l'accent reste au bouton primaire) : la pastille blanche épouse le libellé,
-   les segments se répartissent sur le rail — un libellé long ne déborde jamais. Aligné sur le composant Figma. */
+/* Sélection en monochrome inversé (l'accent reste au bouton primaire). Chaque segment part de son libellé
+   et reçoit la même part de la place restante : libellés centrés, rail rempli, un libellé long ne déborde jamais. */
 .segmented {
-  display: flex; justify-content: space-between; gap: var(--spacing-4); padding: var(--spacing-4); box-sizing: border-box; height: 36px;
+  display: flex; gap: var(--spacing-4); padding: var(--spacing-4); box-sizing: border-box; height: 36px;
   background: var(--fond-discret); border-radius: var(--radius-sm);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bord-discret) 60%, transparent);
 }
 .segmented button {
   height: 28px; border-radius: var(--radius-sm); border: 0; background: none;
   color: var(--texte-discret); font: 500 14px/20px var(--font); letter-spacing: -0.01em; padding: 0 var(--spacing-12); white-space: nowrap;
+  flex: 1 1 auto;
 }
 .segmented button[aria-pressed="true"] {
   background: var(--texte-fort); color: var(--texte-inverse); font-weight: 600;
@@ -204,6 +205,8 @@ button.row:active { background: var(--fond-discret); }
   height: 32px; min-width: 40px; padding: 0 var(--spacing-12); border-radius: var(--radius-sm);
   border: 1px solid var(--bord-discret); background: none; color: var(--texte-base); font: 500 13px/20px var(--font); letter-spacing: -0.01em;
 }
+/* Séances de corde de la semaine : 4 par ligne (F1-F4, puis F5, Long, Récup). */
+.chips.corde-slots { display: grid; grid-template-columns: repeat(4, 1fr); }
 .chips.scroll-x { flex-wrap: nowrap; overflow-x: auto; margin: 0 calc(-1 * var(--spacing-16)); padding: 0 var(--spacing-16); scrollbar-width: none; }
 .chips.scroll-x::-webkit-scrollbar { display: none; }
 .chips.scroll-x .chip { flex: none; }
@@ -410,6 +413,7 @@ textarea.input.journal { height: 140px; }
 .ring.emom .overline { color: var(--accent-texte); }
 input.input[type="search"] { -webkit-appearance: none; appearance: none; line-height: 24px; }
 .input, .segmented, .list, .card, .hint, .stepper { flex-shrink: 0; }
+[hidden] { display: none !important; }
 /* Dans une feuille, l'intitulé d'un champ est un surtitre de section. */
 .sheet-body .field > .caption.medium { font: 500 11px/16px var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--texte-discret); }
 .chev { width: 16px; height: 16px; flex: none; color: var(--texte-discret); }

@@ -1,4 +1,4 @@
-import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, generateProgram, applyProgram, plannedSetsOf, SPLITS, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS } from "../store.js";
+import { state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, generateProgram, applyProgram, plannedSetsOf, SPLITS, GROUPINGS, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
@@ -120,7 +120,10 @@ export function templateView({ id }) {
   const t = template(id);
   if (!t) { setTimeout(() => go("#/seances")); return { el: h("div") }; }
   const edit = editing === t.id;
-  const leave = () => { editing = null; go("#/seances"); };
+  // Séance de l'aperçu d'un programme : on revient au programme, pas de démarrage avant de l'avoir validé.
+  const draft = isDraft(t.id);
+  const home = draft ? "#/seances/programme" : "#/seances";
+  const leave = () => { editing = null; go(home); };
   const toggle = () => { editing = edit ? null : t.id; save(); };
 
   const rows = t.items.flatMap((it, i) => {
@@ -142,7 +145,7 @@ export function templateView({ id }) {
         h("p", { class: "body-sm discret", style: { margin: 0 } }, "Commence par un ou deux polyarticulaires lourds, puis l'isolation."));
 
   const el = h("div", { class: "screen" },
-    navbar({ back: { label: "Séances", onClick: leave }, title: t.name, subtitle: `${t.items.length} exercice${t.items.length > 1 ? "s" : ""} · ~${estimate(t)} min`,
+    navbar({ back: { label: draft ? "Programme" : "Séances", onClick: leave }, title: t.name, subtitle: `${t.items.length} exercice${t.items.length > 1 ? "s" : ""} · ~${estimate(t)} min${draft ? " · aperçu" : ""}`,
       action: { label: edit ? "OK" : "Modifier", onClick: toggle } }),
     h("div", { class: "scroll" }, edit
       ? [
@@ -150,19 +153,21 @@ export function templateView({ id }) {
             h("input", { class: "input", value: t.name, maxLength: 40, onChange: e => { const v = e.target.value.trim(); if (v) { t.name = v; save(); } else e.target.value = t.name; } })),
           h("p", { class: "caption", style: { margin: 0 } }, "Les flèches changent l'ordre dans la séance : les polyarticulaires lourds d'abord. « Lier » enchaîne deux ou trois exercices en superset ou triset : sans repos entre eux, le repos du dernier après le tour."),
           list,
-          btn("Supprimer la séance type", { variant: "danger", full: true, onClick: () => confirmSheet({
-            title: "Supprimer la séance type ?",
-            message: `« ${t.name} » disparaît de tes séances. Les séances déjà faites restent dans l'historique et les courbes.`,
-            confirmLabel: "Supprimer la séance type", cancelLabel: "Garder la séance", destructive: true,
-            onConfirm: () => { editing = null; deleteTemplate(t.id); go("#/seances"); }
+          btn(draft ? "Retirer du programme" : "Supprimer la séance type", { variant: "danger", full: true, onClick: () => confirmSheet({
+            title: draft ? "Retirer la séance du programme ?" : "Supprimer la séance type ?",
+            message: draft ? `« ${t.name} » ne sera pas créée quand tu utiliseras ce programme.` : `« ${t.name} » disparaît de tes séances. Les séances déjà faites restent dans l'historique et les courbes.`,
+            confirmLabel: draft ? "Retirer la séance" : "Supprimer la séance type", cancelLabel: "Garder la séance", destructive: true,
+            onConfirm: () => { editing = null; deleteTemplate(t.id); go(home); }
           }) })
         ]
       : [
           list,
           btn("Ajouter un exercice", { variant: "secondary", size: "lg", full: true, icon: "plus", onClick: () => go(`#/seances/${t.id}/ajouter`) }),
-          btn(`Démarrer ${t.name}`, { variant: "primary", size: "lg", full: true, disabled: !t.items.length || !!state.active,
-            onClick: () => { startWorkout(t.id); go("#/seance"); } }),
-          state.active && h("p", { class: "caption", style: { margin: 0, textAlign: "center" } },
+          draft
+            ? btn("Revenir au programme", { variant: "primary", size: "lg", full: true, onClick: leave })
+            : btn(`Démarrer ${t.name}`, { variant: "primary", size: "lg", full: true, disabled: !t.items.length || !!state.active,
+                onClick: () => { startWorkout(t.id); go("#/seance"); } }),
+          !draft && state.active && h("p", { class: "caption", style: { margin: 0, textAlign: "center" } },
             `Une séance est déjà en cours (${state.active?.name}). Termine-la ou reprends-la d'abord.`)
         ]));
   return { el, tab: "seances" };
@@ -217,6 +222,7 @@ export function itemView({ id, item }) {
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Matériel")),
       h("div", { class: "chips" }, Object.entries(EQUIPS).map(([k, l]) => h("button", { type: "button", class: "chip", "aria-pressed": String(k === ex.equip),
         onClick: () => { setEquip(ex.id, k); dispatchEvent(new HashChangeEvent("hashchange")); } }, l))),
+      btn("Changer d'exercice", { variant: "secondary", full: true, icon: "swap", onClick: () => go(`#/seances/${t.id}/${it.id}/remplacer`) }),
       hasMovement(ex) && btn("Voir le mouvement", { variant: "secondary", full: true, icon: "play", onClick: () => movementSheet(ex) }),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Ton avis sur l'exercice")),
       segmented(Object.entries(PREFS), ex.pref, v => { setPref(ex.id, v); }, "sm"),
@@ -226,18 +232,23 @@ export function itemView({ id, item }) {
   return { el };
 }
 
-export function pickerView({ id }) {
+// Ajouter un exercice à une séance type, ou (item donné) remplacer celui d'une ligne : même catalogue, même recherche.
+export function pickerView({ id, item }) {
   const t = template(id);
   if (!t) { setTimeout(() => go("#/seances")); return { el: h("div") }; }
+  const replacing = item && t.items.find(x => x.id === item);
   const list = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } });
   const results = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } });
-  const add = exId => { const it = addItem(t.id, exId); toast(`${exercise(exId).name} ajouté`); go(`#/seances/${t.id}/${it.id}`); };
+  const add = exId => {
+    if (replacing) { replaceItemExercise(t.id, replacing.id, exId); toast(`${exercise(exId).name} à la place`); go(`#/seances/${t.id}/${replacing.id}`); return; }
+    const it = addItem(t.id, exId); toast(`${exercise(exId).name} ajouté`); go(`#/seances/${t.id}/${it.id}`);
+  };
 
   let first = true;
   const draw = q => {
     q = q.trim();
     const exact = state.exercises.some(e => e.name.toLowerCase() === q.toLowerCase());
-    catalogue(results, q, { muscle: first ? null : undefined, onPick: e => add(e.id), note: e => [t.items.some(i => i.exerciseId === e.id) && "déjà dans la séance"].filter(Boolean).join(" · ") });
+    catalogue(results, q, { muscle: first ? (replacing ? exercise(replacing.exerciseId).muscle : null) : undefined, onPick: e => add(e.id), note: e => [t.items.some(i => i.exerciseId === e.id) && "déjà dans la séance"].filter(Boolean).join(" · ") });
     list.replaceChildren(
       q && !exact && btn(`Créer « ${q} »`, { variant: "secondary", full: true, icon: "plus", onClick: () => {
         let muscle = filter.muscle && MUSCLES.includes(filter.muscle) ? filter.muscle : MUSCLES[0], equip = filter.equip || "barre";
@@ -256,20 +267,31 @@ export function pickerView({ id }) {
   const search = h("input", { class: "input", type: "search", placeholder: "Chercher ou créer un exercice", "aria-label": "Chercher un exercice", onInput: e => draw(e.target.value) });
   draw("");
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: t.name, href: `#/seances/${t.id}` }, title: "Ajouter un exercice", subtitle: "Favoris en premier" }),
+    navbar({ back: replacing ? { label: "Exercice", href: `#/seances/${t.id}/${replacing.id}` } : { label: t.name, href: `#/seances/${t.id}` },
+      title: replacing ? "Changer d'exercice" : "Ajouter un exercice", subtitle: replacing ? `À la place de ${exercise(replacing.exerciseId).name}` : "Favoris en premier" }),
     h("div", { class: "scroll" }, search, list));
   return { el };
 }
 
+const previewRow = (t, it, i) => {
+  const g = groupTag(t.items, i), ex = exercise(it.exerciseId);
+  return h("div", { class: `row${g ? " grouped" : ""}` },
+    h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, ex.name),
+      h("span", { class: "caption num" }, g ? `${g.label} ${g.tag} · ` : "", itemLine(it, g && !g.last))),
+    prefPill(ex.pref));
+};
+
 // Choisir un programme : un split génère les séances types, réglées sur les réglages Fluide.
-let chosen = null, preview = null;
+let chosen = null, preview = null, grouping = "series";
 
 export function programView() {
-  if (!chosen) { chosen = state.profile.split || "hautbas"; preview = null; }
-  if (!preview && chosen !== "perso") preview = generateProgram(chosen);
+  if (!chosen) { chosen = state.profile.split || "hautbas"; preview = null; grouping = "series"; }
+  if (!preview && chosen !== "perso") preview = generateProgram(chosen, grouping);
+  setDrafts(preview || []); // les séances de l'aperçu s'ouvrent et se modifient comme des séances types
   const split = SPLITS[chosen];
-  const pick = k => { chosen = k; preview = k === "perso" ? [] : generateProgram(k); dispatchEvent(new HashChangeEvent("hashchange")); };
-  const leave = () => { chosen = null; preview = null; go("#/seances"); };
+  const pick = k => { chosen = k; preview = k === "perso" ? [] : generateProgram(k, grouping); dispatchEvent(new HashChangeEvent("hashchange")); };
+  const regroup = v => { grouping = v; preview = generateProgram(chosen, grouping); dispatchEvent(new HashChangeEvent("hashchange")); };
+  const leave = () => { chosen = null; preview = null; setDrafts([]); go("#/seances"); };
   const use = () => {
     if (chosen === "perso") { state.profile.split = "perso"; save(); leave(); return; }
     const apply = () => { const label = split.label; applyProgram(chosen, preview); leave(); toast(`Programme ${label} en place`); };
@@ -293,13 +315,19 @@ export function programView() {
       h("p", { class: "caption", style: { margin: 0 } }, "Le programme crée tes séances types : les séries de chaque muscle visent sa cible (maintenir, progresser, point faible), tes favoris passent en premier, jamais un exercice en douleur."),
       cards,
       chosen !== "perso" && [
+        h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Enchaînement")),
+        segmented(Object.entries(GROUPINGS), grouping, regroup),
+        h("p", { class: "caption", style: { margin: 0 } }, grouping === "series"
+          ? "Un exercice après l'autre, repos entre chaque série."
+          : `Exercices enchaînés par ${grouping === "triset" ? "3" : "2"} sans repos, muscles opposés d'abord (pecs / dos, biceps / triceps, quadris / ischios), repos après le tour. Le premier gros exercice reste seul. Séances plus courtes, même volume.`),
         h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Aperçu"), h("span", { class: "caption" }, `${preview.length} séances`)),
+        h("p", { class: "caption", style: { margin: 0 } }, "Modifie chaque séance avant de valider : exercices, séries, ordre, supersets. Changer de programme repart de zéro."),
         preview.map(t => h("div", { class: "card" },
-          h("div", { class: "card-head" }, h("span", { class: "heading-md" }, t.name), h("span", { class: "caption num" }, `~${estimate(t)} min`)),
+          h("div", { class: "card-head" },
+            h("div", null, h("span", { class: "heading-md" }, t.name), h("span", { class: "caption num", style: { display: "block" } }, `${t.items.length} exercice${t.items.length > 1 ? "s" : ""} · ~${estimate(t)} min`)),
+            btn("Modifier", { variant: "secondary", size: "sm", icon: "pencil", onClick: () => go(`#/seances/${t.id}`) })),
           estimate(t) > 75 && h("div", { class: "hint attention" }, icon("warning"), h("span", { class: "body-sm" }, "Séance longue : passe à un split avec plus de séances, ou baisse une cible dans tes réglages Fluide.")),
-          h("div", { class: "list" }, t.items.map(it => h("div", { class: "row" },
-            h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, exercise(it.exerciseId).name), h("span", { class: "caption num" }, itemLine(it))),
-            prefPill(exercise(it.exerciseId).pref)))))),
+          h("div", { class: "list" }, t.items.map((it, i) => previewRow(t, it, i))))),
         h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Séries par semaine")),
         h("div", { class: "card" }, h("p", { class: "caption", style: { margin: 0 } }, "Si tu fais chaque séance une fois. Le trait blanc est la cible de tes réglages Fluide."), volumeBars(plannedSetsOf(preview)))
       ],

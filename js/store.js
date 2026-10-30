@@ -179,6 +179,9 @@ function migrate(st) {
     else { Object.assign(e, { muscle: row[1], equip: e.rank !== undefined ? e.equip : e.equip || row[2], photo: row[3], rank: row[4] }); delete e.sw; }
   }
   for (const e of st.exercises) e.equip = e.equip || "barre";
+  // Charges hors des pas du matériel (20 kg sur une pile par 5 lbs…) : calées sur la valeur la plus proche.
+  const equipOf_ = id => st.exercises.find(e => e.id === id)?.equip || "barre";
+  for (const t of st.templates) for (const it of t.items) if (typeof it.weight === "number") it.weight = nearestWeight(equipOf_(it.exerciseId), it.weight);
   return st;
 }
 
@@ -205,7 +208,12 @@ export function replaceState(next) {
 // ——— Lecture
 
 export const exercise = id => state.exercises.find(e => e.id === id);
-export const template = id => state.templates.find(p => p.id === id);
+// Séances d'un programme pas encore validé (aperçu) : elles se modifient comme des séances types,
+// mais rien ne rejoint tes séances avant « Utiliser ce programme ».
+let drafts = [];
+export const setDrafts = list => { drafts = list; };
+export const isDraft = id => drafts.some(t => t.id === id);
+export const template = id => state.templates.find(p => p.id === id) || drafts.find(p => p.id === id);
 export const session = id => state.sessions.find(s => s.id === id);
 
 // Où on en est dans le bloc : semaines 1 à N, puis une semaine de deload.
@@ -392,7 +400,36 @@ const BIG = ["Pecs", "Dos", "Quadris", "Ischios", "Fessiers"];
 
 // Génère les séances d'un split : séries par muscle = cible ÷ nombre de séances où il revient,
 // réparties en 1 ou 2 exercices ; favoris d'abord, jamais un exercice en douleur, un exercice différent à chaque passage.
-export function generateProgram(key) {
+// Enchaînement d'un programme : séries classiques, ou exercices regroupés en supersets / trisets.
+export const GROUPINGS = { series: "Classique", superset: "Supersets", triset: "Trisets" };
+// Muscles opposés : on les enchaîne en priorité (l'un travaille pendant que l'autre récupère).
+const OPPOSITE = { Pecs: "Dos", Dos: "Pecs", Biceps: "Triceps", Triceps: "Biceps", Quadris: "Ischios", Ischios: "Quadris", Épaules: "Dos", Fessiers: "Abdos", Mollets: "Abdos", Abdos: "Mollets" };
+
+// Regroupe les exercices d'une séance générée : le premier gros polyarticulaire reste seul (charge lourde, long repos),
+// les autres vont par 2 ou 3, muscles opposés d'abord, jamais deux fois le même muscle dans un groupe.
+function groupItems(items, size) {
+  const head = items.length && items[0].rest >= 150 ? [items[0]] : [];
+  const pool = items.slice(head.length), out = [...head];
+  while (pool.length) {
+    const group = [pool.shift()];
+    while (group.length < size && pool.length) {
+      const muscles = group.map(x => exercise(x.exerciseId).muscle);
+      const ok = x => !muscles.includes(exercise(x.exerciseId).muscle);
+      const i = pool.findIndex(x => ok(x) && exercise(x.exerciseId).muscle === OPPOSITE[muscles[0]]);
+      const j = i >= 0 ? i : pool.findIndex(ok);
+      if (j < 0) break;
+      group.push(pool.splice(j, 1)[0]);
+    }
+    if (group.length > 1) {
+      const g = uid(), rest = Math.max(...group.map(x => x.rest));
+      group.forEach(x => { x.group = g; x.rest = rest; });
+    }
+    out.push(...group);
+  }
+  return out;
+}
+
+export function generateProgram(key, grouping = "series") {
   const split = SPLITS[key];
   const freq = {}; for (const [, ms] of split.sessions) for (const m of ms) freq[m] = (freq[m] || 0) + 1;
   const pool = m => state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && e.equip !== "elastique" && e.equip !== "kettlebell").sort(byUsefulness);
@@ -413,11 +450,11 @@ export function generateProgram(key) {
         const last = lastPerformance(ex.id);
         const [repsMin, repsMax] = cyc === "intensite" ? (heavy ? [4, 6] : [6, 10]) : heavy ? [6, 10] : BIG.includes(m) ? [8, 12] : [10, 15];
         const known = state.templates.flatMap(t => t.items).find(i => i.exerciseId === ex.id);
-        const weight = last ? last.maxWeight : known ? known.weight : BIG.includes(m) ? 20 : 8;
+        const weight = nearestWeight(ex.equip, last ? last.maxWeight : known ? known.weight : BIG.includes(m) ? 20 : 8);
         items.push({ id: uid(), exerciseId: ex.id, format: "series", sets: n, repsMin, repsMax, weight, rest: heavy ? 150 : BIG.includes(m) ? 120 : 75 });
       }
     }
-    return { id: uid(), name, items };
+    return { id: uid(), name, items: grouping === "series" ? items : groupItems(items, grouping === "triset" ? 3 : 2) };
   });
 }
 
@@ -445,13 +482,15 @@ export function createTemplate(name) {
 }
 
 export function deleteTemplate(id) {
+  const d = drafts.findIndex(p => p.id === id);
+  if (d >= 0) drafts.splice(d, 1);
   state.templates = state.templates.filter(p => p.id !== id);
   save();
 }
 
 export function addItem(templateId, exerciseId) {
   const last = lastPerformance(exerciseId);
-  const item = { id: uid(), exerciseId, format: "series", sets: 3, repsMin: 8, repsMax: 12, weight: last ? last.maxWeight : 20, rest: 90 };
+  const item = { id: uid(), exerciseId, format: "series", sets: 3, repsMin: 8, repsMax: 12, weight: nearestWeight(exercise(exerciseId).equip, last ? last.maxWeight : 20), rest: 90 };
   template(templateId).items.push(item);
   save();
   return item;
@@ -482,8 +521,20 @@ export function removeItem(templateId, itemId) {
   save();
 }
 
+// Changer le matériel cale les charges des séances types sur ses pas (pile de la machine, haltères à l'unité).
+// Autre exercice à la place, dans la séance type : séries, reps, repos et groupe restent, la charge part de ta dernière perf.
+export function replaceItemExercise(templateId, itemId, exerciseId) {
+  const it = template(templateId).items.find(x => x.id === itemId);
+  const last = lastPerformance(exerciseId), equip = exercise(exerciseId).equip;
+  it.weight = last ? nearestWeight(equip, last.maxWeight) : convertWeight(exercise(it.exerciseId).equip, equip, it.weight);
+  it.exerciseId = exerciseId;
+  save();
+}
+
 export function setEquip(exerciseId, equip) {
+  const from = exercise(exerciseId).equip;
   exercise(exerciseId).equip = equip;
+  for (const t of state.templates) for (const it of t.items) if (it.exerciseId === exerciseId) it.weight = convertWeight(from, equip, it.weight);
   save();
 }
 
@@ -512,7 +563,7 @@ export function startWorkout(templateId) {
       return {
         exerciseId: item.exerciseId, format: "series", itemId: item.id, startSets: sets, group: item.group,
         target: { sets, repsMin: item.repsMin, repsMax: item.repsMax, rest: item.rest },
-        draft: { weight: s.weight, reps: s.reps, rpe: null }, hint: pos.deload ? null : s.hint,
+        draft: { weight: nearestWeight(exercise(item.exerciseId).equip, s.weight), reps: s.reps, rpe: null }, hint: pos.deload ? null : s.hint,
         sets: []
       };
     })
@@ -525,7 +576,7 @@ function intervalEntry(exerciseId, item, deload) {
   return {
     exerciseId, format: item.format,
     target: { sets: rounds, rounds, every: item.every, work: item.work, off: item.off, repsMin: item.repsMin, repsMax: item.repsMax, rest: 0 },
-    draft: { weight: item.weight ?? 0, reps: item.repsMin, rpe: null }, hint: null,
+    draft: { weight: nearestWeight(exercise(exerciseId)?.equip, item.weight ?? 0), reps: item.repsMin, rpe: null }, hint: null,
     clock: null, sets: []
   };
 }
@@ -608,7 +659,7 @@ export function swapExercise(index, exerciseId) {
   e.exerciseId = exerciseId;
   delete e.equip;
   const equip = exercise(exerciseId).equip;
-  e.draft = { weight: last ? Math.max(...last.sets.map(s => s.weight)) : convertWeight(from, equip, e.draft.weight), reps: e.target.repsMin, rpe: null };
+  e.draft = { weight: last ? nearestWeight(equip, Math.max(...last.sets.map(s => s.weight))) : convertWeight(from, equip, e.draft.weight), reps: e.target.repsMin, rpe: null };
   e.hint = null;
   save();
 }
@@ -631,11 +682,12 @@ export function addExtra(exerciseId, format = "series") {
   const g = groupOf(a.entries, a.cursor);
   const at = g ? (a.entries[g.members[0]].sets.length ? g.members.at(-1) + 1 : g.members[0]) : a.cursor + (a.entries[a.cursor].sets.length ? 1 : 0);
   a.edited = true;
-  const weight = last ? Math.max(...last.sets.map(s => s.weight)) : 0;
+  const equip = exercise(exerciseId).equip;
+  const weight = nearestWeight(equip, last ? Math.max(...last.sets.map(s => s.weight)) : 0);
   a.entries.splice(at, 0, format === "series" ? {
     exerciseId, extra: true, format,
     target: { sets: 3, repsMin: 8, repsMax: 12, rest: 90 },
-    draft: { weight: last ? weight : 20, reps: 10, rpe: null }, hint: null,
+    draft: { weight: last ? weight : nearestWeight(equip, 20), reps: 10, rpe: null }, hint: null,
     sets: []
   } : { ...intervalEntry(exerciseId, { format, weight, ...FORMAT_DEFAULTS[format] }), extra: true });
   a.cursor = at;
