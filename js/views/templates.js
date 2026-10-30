@@ -73,7 +73,7 @@ export function movementSheet(e) {
 
 // Nom d'exercice : quand des photos existent, il ouvre le mouvement sans quitter l'app.
 export const exerciseTitle = (e, attrs = {}) => hasMovement(e)
-  ? h("button", { ...attrs, type: "button", class: `${attrs.class || ""} ex-link`, "aria-label": `${e.name}, voir le mouvement`, onClick: () => movementSheet(e) }, e.name, icon("play"))
+  ? h("button", { ...attrs, type: "button", class: `${attrs.class || ""} ex-link`, "aria-label": `${e.name}, voir le mouvement`, onClick: () => movementSheet(e) }, h("span", { class: "ex-name" }, e.name), icon("play"))
   : h("span", attrs, e.name);
 
 function nameSheet({ title, value = "", okLabel, onOk }) {
