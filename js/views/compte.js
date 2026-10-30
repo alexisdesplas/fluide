@@ -1,76 +1,105 @@
-import { configured, account, signedIn, sendCode, verifyCode, remoteSummary, resolve, signOut, syncNow } from "../compte.js";
+import { configured, account, signedIn, signIn, signUp, sendReset, recovering, setNewPassword, remoteSummary, resolve, signOut, syncNow } from "../compte.js";
 import { state } from "../store.js";
-import { h, icon, btn, pill, go, navbar, sheet, confirmSheet, toast, dateShort } from "../ui.js";
+import { h, icon, btn, pill, go, navbar, sheet, confirmSheet, toast, dateShort, segmented } from "../ui.js";
 
 // Messages de Supabase (en anglais) traduits pour l'écran.
 function why(e) {
   if (e instanceof TypeError) return "Pas de réseau : réessaie une fois connecté.";
-  if (e.status === 429 || /rate limit/i.test(e.message)) return "Trop d'e-mails envoyés d'un coup : réessaie dans quelques minutes.";
-  if (e.code === "otp_expired" || /expired|invalid/i.test(e.message)) return "Code faux ou expiré : vérifie le dernier e-mail reçu, ou demande un nouveau code.";
+  if (e.code === "invalid_credentials" || /invalid login/i.test(e.message)) return "E-mail ou mot de passe incorrect.";
+  if (e.code === "user_already_exists" || /already registered/i.test(e.message)) return "Un compte existe déjà avec cet e-mail : choisis « Me connecter ».";
+  if (e.code === "weak_password" || /password should/i.test(e.message)) return "Mot de passe trop court : 8 caractères au moins.";
+  if (e.code === "email_not_confirmed") return "Le compte attend une confirmation par e-mail : décoche « Confirm email » dans Supabase.";
+  if (e.code === "same_password") return "C'est déjà ton mot de passe actuel.";
+  if (e.status === 429 || /rate limit/i.test(e.message)) return "Trop d'essais d'un coup : réessaie dans quelques minutes.";
   if (/email/i.test(e.message) && e.status === 400) return "Adresse e-mail invalide.";
   return `Le compte ne répond pas (${e.message}).`;
 }
 
 const field = (label, control, help) => h("label", { class: "field" }, h("span", { class: "caption medium" }, label), control, help && h("span", { class: "caption" }, help));
+const errorBox = () => h("div", { class: "hint attention", hidden: true }, icon("warning"), h("span", { class: "body-sm" }));
+const showError = (box, msg) => { box.hidden = !msg; box.lastChild.textContent = msg || ""; };
+const busy = (b, label) => { b.disabled = Boolean(label); b.lastChild.textContent = label || b.dataset.label; };
 
-// Étape 1 : l'adresse e-mail. Pas de mot de passe : un code arrive par e-mail.
+// Après connexion : soit c'est réglé, soit on demande quelles données garder.
+async function landed(result) {
+  if (result === "choose") return chooseSheet();
+  go("#/profil");
+  toast(result === "pulled" ? "Données du compte récupérées" : "Connecté : tes données sont sur ton compte");
+}
+
+// Connexion ou création du compte, sur un seul écran. Le trousseau iCloud propose et remplit le mot de passe.
+let mode = "connexion";
 export function signInView() {
   if (signedIn()) { setTimeout(() => go("#/profil")); return { el: h("div") }; }
-  const error = h("div", { class: "hint attention", hidden: true }, icon("warning"), h("span", { class: "body-sm" }));
-  const input = h("input", { class: "input", type: "email", inputmode: "email", autocomplete: "email", autocapitalize: "off", placeholder: "prenom@exemple.fr",
-    value: account().pendingEmail || account().email || "", "aria-label": "Adresse e-mail" });
-  const submit = btn("Recevoir un code", { variant: "primary", size: "lg", full: true, type: "submit" });
+  const error = errorBox();
+  if (account().error) showError(error, account().error);
+  const email = h("input", { class: "input", type: "email", name: "email", inputmode: "email", autocomplete: "username", autocapitalize: "off", placeholder: "prenom@exemple.fr",
+    value: account().email || "", "aria-label": "Adresse e-mail" });
+  const password = h("input", { class: "input", type: "password", name: "password", minLength: 8, placeholder: "8 caractères au moins", "aria-label": "Mot de passe" });
+  const submit = btn("", { variant: "primary", size: "lg", full: true, type: "submit" });
+  const forgot = btn("Mot de passe oublié", { variant: "ghost", full: true });
+  const help = h("span", { class: "caption" });
+  const setMode = m => {
+    mode = m;
+    password.autocomplete = m === "creation" ? "new-password" : "current-password";
+    submit.dataset.label = m === "creation" ? "Créer mon compte" : "Me connecter";
+    submit.lastChild.textContent = submit.dataset.label;
+    help.textContent = m === "creation" ? "Choisis un mot de passe d'au moins 8 caractères. L'iPhone peut en proposer un et le garder dans ton trousseau." : "";
+    forgot.hidden = m === "creation";
+    showError(error, null);
+  };
+  submit.append(document.createTextNode(""));
+  const read = () => ({ mail: email.value.trim().toLowerCase(), pass: password.value });
   const form = h("form", { class: "field", style: { gap: "16px" }, onSubmit: async ev => {
     ev.preventDefault();
-    const email = input.value.trim().toLowerCase();
-    if (!/^\S+@\S+\.\S+$/.test(email)) { error.hidden = false; error.lastChild.textContent = "Adresse e-mail invalide."; input.focus(); return; }
-    submit.disabled = true; submit.lastChild.textContent = "Envoi…";
-    try { await sendCode(email); go("#/compte/code"); }
-    catch (e) { error.hidden = false; error.lastChild.textContent = why(e); submit.disabled = false; submit.lastChild.textContent = "Recevoir un code"; }
+    const { mail, pass } = read();
+    if (!/^\S+@\S+\.\S+$/.test(mail)) { showError(error, "Adresse e-mail invalide."); email.focus(); return; }
+    if (pass.length < 8) { showError(error, "Mot de passe trop court : 8 caractères au moins."); password.focus(); return; }
+    busy(submit, mode === "creation" ? "Création…" : "Connexion…");
+    try { await landed(mode === "creation" ? await signUp(mail, pass) : await signIn(mail, pass)); }
+    catch (e) { showError(error, why(e)); busy(submit); }
   } },
-    field("Adresse e-mail", input, "Tu reçois un code à 6 chiffres. Pas de mot de passe à retenir."),
+    segmented([["connexion", "Me connecter"], ["creation", "Créer mon compte"]], mode, setMode),
+    field("Adresse e-mail", email),
+    h("label", { class: "field" }, h("span", { class: "caption medium" }, "Mot de passe"), password, help),
     error, submit);
+  forgot.addEventListener("click", async () => {
+    const { mail } = read();
+    if (!/^\S+@\S+\.\S+$/.test(mail)) { showError(error, "Écris d'abord ton adresse e-mail, le lien y sera envoyé."); email.focus(); return; }
+    try { await sendReset(mail); showError(error, null); toast("E-mail envoyé : suis le lien pour choisir un nouveau mot de passe"); }
+    catch (e) { showError(error, why(e)); }
+  });
+  setMode(mode);
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Se connecter", subtitle: "Compte Fluide" }),
+    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Compte", subtitle: "Compte Fluide" }),
     h("div", { class: "scroll" },
       h("div", { class: "card flat" },
         h("span", { class: "body-md fort medium" }, "Tes données sur ton compte"),
         h("span", { class: "body-sm discret" }, "Séances, programme, corde, réglages : tout est gardé sur ton compte et revient sur un autre téléphone ou après une réinstallation. L'app marche aussi hors ligne, la synchro suit au retour du réseau.")),
-      form));
-  setTimeout(() => input.focus(), 50);
+      form, forgot));
   return { el };
 }
 
-// Étape 2 : le code reçu. Puis, si le compte a déjà des données et le téléphone aussi, on demande lesquelles garder.
-export function codeView() {
-  const email = account().pendingEmail;
-  if (signedIn() || !email) { setTimeout(() => go(signedIn() ? "#/profil" : "#/compte")); return { el: h("div") }; }
-  const error = h("div", { class: "hint attention", hidden: true }, icon("warning"), h("span", { class: "body-sm" }));
-  const input = h("input", { class: "input code-input num", inputmode: "numeric", autocomplete: "one-time-code", maxLength: 8, placeholder: "••••••", "aria-label": "Code reçu par e-mail",
-    onInput: e => { e.target.value = e.target.value.replace(/\D/g, ""); if (e.target.value.length === 6) form.requestSubmit(); } });
-  const submit = btn("Se connecter", { variant: "primary", size: "lg", full: true, type: "submit" });
-  const fail = msg => { error.hidden = false; error.lastChild.textContent = msg; submit.disabled = false; submit.lastChild.textContent = "Se connecter"; input.select(); };
+// Retour du lien « mot de passe oublié » : on choisit le nouveau, puis on est connecté.
+export function resetView() {
+  if (!recovering()) { setTimeout(() => go(signedIn() ? "#/profil" : "#/compte")); return { el: h("div") }; }
+  const error = errorBox();
+  const password = h("input", { class: "input", type: "password", autocomplete: "new-password", minLength: 8, placeholder: "8 caractères au moins", "aria-label": "Nouveau mot de passe" });
+  const submit = btn("Enregistrer le mot de passe", { variant: "primary", size: "lg", full: true, type: "submit" });
+  submit.dataset.label = "Enregistrer le mot de passe";
   const form = h("form", { class: "field", style: { gap: "16px" }, onSubmit: async ev => {
     ev.preventDefault();
-    if (input.value.length < 6) return fail("Le code fait 6 chiffres.");
-    submit.disabled = true; submit.lastChild.textContent = "Vérification…";
-    try {
-      const result = await verifyCode(input.value);
-      if (result === "choose") return chooseSheet();
-      go("#/profil");
-      toast(result === "pulled" ? "Données du compte récupérées" : "Connecté : tes données sont sur ton compte");
-    } catch (e) { fail(why(e)); }
+    if (password.value.length < 8) { showError(error, "Mot de passe trop court : 8 caractères au moins."); return; }
+    busy(submit, "Enregistrement…");
+    try { await landed(await setNewPassword(password.value)); toast("Mot de passe changé"); }
+    catch (e) { showError(error, why(e)); busy(submit); }
   } },
-    field("Code à 6 chiffres", input, `Envoyé à ${email}. Regarde aussi dans les spams.`),
+    field("Nouveau mot de passe", password, "Si ce lien s'est ouvert dans Safari, reconnecte-toi ensuite dans l'app Fluide avec ce mot de passe."),
     error, submit);
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "E-mail", href: "#/compte" }, title: "Code reçu", subtitle: email }),
-    h("div", { class: "scroll" }, form,
-      btn("Renvoyer un code", { variant: "secondary", full: true, onClick: async () => {
-        try { await sendCode(email); toast("Nouveau code envoyé"); } catch (e) { fail(why(e)); }
-      } }),
-      btn("Changer d'adresse e-mail", { variant: "ghost", full: true, onClick: () => go("#/compte") })));
-  setTimeout(() => input.focus(), 50);
+    navbar({ title: "Nouveau mot de passe", subtitle: "Compte Fluide" }),
+    h("div", { class: "scroll" }, form));
+  setTimeout(() => password.focus(), 50);
   return { el };
 }
 

@@ -1,4 +1,6 @@
-// Compte Fluide : connexion par code reçu par e-mail (Supabase Auth), données gardées sur le compte (table fluide_state).
+// Compte Fluide : connexion par e-mail et mot de passe (Supabase Auth), données gardées sur le compte (table fluide_state).
+// Pas de lien magique ni de code : sans domaine d'envoi, Supabase n'envoie que des liens, qui s'ouvrent dans Safari
+// et pas dans l'app installée sur l'écran d'accueil. Seul le mot de passe oublié passe par un e-mail.
 // Pas de SDK : l'API REST de Supabase suffit. Le téléphone reste la source de travail ; chaque enregistrement
 // part vers le compte quelques secondes après, et l'app reprend la version du compte quand elle est plus récente.
 
@@ -51,23 +53,53 @@ async function token() {
 
 // ——— Connexion
 
-export async function sendCode(email) {
-  await call("/auth/v1/otp", { method: "POST", body: { email, create_user: true } });
-  meta = { ...meta, pendingEmail: email };
-  keep();
-}
-
-// Code bon : on regarde ce que le compte a déjà. Rien → on y envoie les données du téléphone.
+// Compte connecté : on regarde ce qu'il a déjà. Rien → on y envoie les données du téléphone.
 // Des données des deux côtés → l'écran demande lesquelles garder (renvoie "choose").
-export async function verifyCode(code) {
-  const email = meta.pendingEmail;
-  session(await call("/auth/v1/verify", { method: "POST", body: { type: "email", email, token: code.trim() } }));
-  delete meta.pendingEmail; keep();
+async function afterSignIn() {
   const remote = await fetchRemote();
   if (!remote) { await push(); return "pushed"; }
   if (!hasLocalData()) { apply(remote); return "pulled"; }
   pendingRemote = remote;
   return "choose";
+}
+
+export async function signIn(email, password) {
+  session(await call("/auth/v1/token?grant_type=password", { method: "POST", body: { email, password } }));
+  return afterSignIn();
+}
+
+// « Confirm email » décoché dans Supabase : le compte est utilisable tout de suite, la réponse porte la session.
+export async function signUp(email, password) {
+  const s = await call("/auth/v1/signup", { method: "POST", body: { email, password } });
+  if (!s?.access_token) throw Object.assign(new Error("confirmation"), { code: "email_not_confirmed" });
+  session(s);
+  return afterSignIn();
+}
+
+// Mot de passe oublié : Supabase envoie un lien qui revient sur l'app avec un jeton de récupération.
+export async function sendReset(email) {
+  const back = encodeURIComponent(location.origin + location.pathname);
+  await call(`/auth/v1/recover?redirect_to=${back}`, { method: "POST", body: { email } });
+}
+
+// Retour du lien (dans l'adresse : #access_token=…&type=recovery) : on garde le jeton le temps de choisir un mot de passe.
+let recovery = null;
+export const recovering = () => Boolean(recovery);
+export async function setNewPassword(password) {
+  const user = await call("/auth/v1/user", { method: "PUT", auth: recovery.access_token, body: { password } });
+  session({ ...recovery, user });
+  recovery = null;
+  return afterSignIn();
+}
+{
+  const hash = new URLSearchParams(location.hash.replace(/^#\/?/, ""));
+  if (hash.get("access_token") && hash.get("type") === "recovery") {
+    recovery = { access_token: hash.get("access_token"), refresh_token: hash.get("refresh_token"), expires_in: +hash.get("expires_in") || 3600 };
+    history.replaceState(null, "", `${location.pathname}#/compte/nouveau`);
+  } else if (hash.get("error_code")) {
+    meta.error = hash.get("error_code") === "otp_expired" ? "Lien expiré : redemande un e-mail de mot de passe oublié." : "Lien invalide : redemande un e-mail.";
+    history.replaceState(null, "", `${location.pathname}#/compte`);
+  }
 }
 
 let pendingRemote = null;
