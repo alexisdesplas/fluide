@@ -1,5 +1,5 @@
 import { state, save, exercise, itemSets, logSet, finishWorkout, session, sessionVolume, sessionSets, sessionRecords, alternatives, swapExercise, setEntryEquip, equipOf, weightScale, lbs, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, CYCLES, MUSCLES, FORMATS, enduranceToday, blocksLabel, blocksTotal } from "../store.js";
-import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, segmented, sheet, confirmSheet, toast, beep, dateLong, pageHead, navbar } from "../ui.js";
+import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, beep, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle } from "./templates.js";
 
 // Anneau de Tabatime : 312 px, trait de 34 px.
@@ -83,7 +83,7 @@ function extraSheet() {
   sheet({
     title: "Hors programme",
     body: close => { closeSheet = close; return [
-      segmented(Object.entries(FORMATS), format, v => { format = v; }),
+      radios(Object.entries(FORMATS), format, v => { format = v; }, "Format"),
       h("input", { class: "input", type: "search", placeholder: "Chercher dans le catalogue", "aria-label": "Chercher un exercice", onInput: ev => { query = ev.target.value; draw(); } }),
       list]; }
   });
