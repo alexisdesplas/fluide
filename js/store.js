@@ -366,10 +366,46 @@ export const SESSION_MINUTES = [30, 45, 60, 75, 90];
 
 // Objectif longue durée : un sport d'endurance pratiqué à côté de la muscu. Il pèse sur les jambes :
 // le programme garde son jour long loin des séances jambes et prend en charge le renfo que son plan demande.
+// Plan corde, semaine par semaine : [blocs, effort, repos] en secondes pour les séances faciles puis le jour long.
+// Deload les semaines 3, 7, 11 et 15 ; tentative de l'heure en semaine 18. Le jour récup ne change pas.
+const CORDE = [
+  [[6, 60, 30], [5, 120, 60]], [[10, 60, 30], [4, 180, 60]], [[7, 60, 30], [5, 120, 60]], [[8, 120, 30], [2, 300, 60]],
+  [[3, 300, 60], [1, 480, 0]], [[3, 360, 60], [1, 600, 0]], [[2, 300, 60], [1, 480, 0]], [[3, 480, 60], [1, 900, 0]],
+  [[2, 720, 60], [1, 1200, 0]], [[2, 900, 60], [1, 1500, 0]], [[2, 600, 60], [1, 1200, 0]], [[1, 1500, 0], [1, 2100, 0]],
+  [[1, 1200, 0], [1, 2400, 0]], [[1, 1500, 0], [1, 2700, 0]], [[1, 900, 0], [1, 2100, 0]], [[1, 1500, 0], [1, 3000, 0]],
+  [[1, 1800, 0], [1, 3300, 0]], [[1, 900, 0], [1, 3600, 0]]
+];
 export const ENDURANCE = {
   corde: { label: "Corde à sauter · 1 h non-stop", short: "Corde à sauter", desc: "18 semaines, tous les jours : 5 séances faciles, 1 jour long, 1 jour récup.",
-    calves: { sets: 2, reps: 15, per: 3 } }
+    calves: { sets: 2, reps: 15, per: 3 },
+    weeks: CORDE.map(([easy, long], i) => ({ easy, long, deload: [3, 7, 11, 15].includes(i + 1) })), recup: [5, 60, 30] }
 };
+
+// Blocs d'une séance d'endurance : « 10 × 1 min / 30 s », « 8 min non-stop » ; et leur durée totale en secondes.
+const span = sec => (sec % 60 ? `${sec} s` : `${sec / 60} min`);
+export const blocksLabel = ([n, work, rest]) => (n === 1 ? `${span(work)} non-stop` : `${n} × ${span(work)} / ${span(rest)}`);
+export const blocksTotal = ([n, work, rest]) => n * work + (n - 1) * rest;
+
+// Semaine du plan d'endurance : comptée depuis la semaine 1 (réglée dans « Ta semaine »), bornée à la durée du plan.
+export function enduranceWeek(t = Date.now()) {
+  const p = state.profile, e = ENDURANCE[p.endurance];
+  if (!e?.weeks) return null;
+  const w = p.enduranceStart == null ? 1 : Math.floor((startOfWeek(t) - startOfWeek(p.enduranceStart)) / (7 * DAY)) + 1;
+  return Math.min(e.weeks.length, Math.max(1, w));
+}
+export function setEnduranceWeek(week) {
+  state.profile.enduranceStart = startOfWeek(Date.now()) - (week - 1) * 7 * DAY;
+  save(true);
+}
+
+// Séance d'endurance du jour : facile, longue ou récup selon la semaine type du programme en place.
+export function enduranceToday(t = Date.now()) {
+  const p = state.profile, e = ENDURANCE[p.endurance];
+  if (!e?.weeks) return null;
+  const week = enduranceWeek(t), plan = e.weeks[week - 1];
+  const kind = weekPlan(state.templates, p.endurance)[(new Date(t).getDay() + 6) % 7].endurance;
+  return { week, kind, deload: plan.deload, blocks: kind === "long" ? plan.long : kind === "recup" ? e.recup : plan.easy };
+}
 
 const musclesOf = t => new Set(t.items.map(it => exercise(it.exerciseId)?.muscle));
 export const hasLegs = t => [...musclesOf(t)].some(m => LEGS_MAIN.includes(m));
