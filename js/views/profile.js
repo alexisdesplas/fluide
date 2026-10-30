@@ -2,10 +2,7 @@ import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosi
 import { h, icon, pageHead, navbar, btn, go, int, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
-import { accountCard } from "./compte.js";
-
-// Guide de construction du Raccourci iOS (les livrables ne sont pas déployés sur Vercel : on le lit sur GitHub).
-const RACCOURCI_PAS = "https://github.com/alexisdesplas/fluide/blob/main/livrables/fluide/raccourci-pas.md";
+import { accountCard, RACCOURCI_PAS } from "./compte.js";
 
 const field = (label, control) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), control);
 

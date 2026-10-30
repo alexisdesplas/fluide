@@ -1,6 +1,9 @@
-import { configured, account, signedIn, confirmed, clearConfirmed, signIn, signUp, sendReset, recovering, setNewPassword, remoteSummary, resolve, signOut, syncNow } from "../compte.js";
+import { configured, account, signedIn, confirmed, clearConfirmed, signIn, signUp, sendReset, recovering, setNewPassword, remoteSummary, resolve, signOut, syncNow, shortcutKeyInfo, newShortcutKey, deleteShortcutKey } from "../compte.js";
 import { state } from "../store.js";
-import { h, icon, btn, pill, go, navbar, sheet, confirmSheet, toast, dateShort } from "../ui.js";
+import { h, icon, btn, pill, go, navbar, sheet, confirmSheet, toast, dateShort, int } from "../ui.js";
+
+// Guide de construction du Raccourci iOS (les livrables ne sont pas déployés sur Vercel : on le lit sur GitHub).
+export const RACCOURCI_PAS = "https://github.com/alexisdesplas/fluide/blob/main/livrables/fluide/raccourci-pas.md";
 
 // Écrans alignés sur Figma, section F · Compte : en-tête de compte (tuile + titre + texte), champs avec l'erreur
 // sous le champ, bouton, puis le lien de bascule en bas (Se connecter ↔ Créer mon compte).
@@ -154,8 +157,7 @@ export function accountCard() {
   if (!signedIn()) return h("button", { class: "card tap", onClick: () => go("#/compte") },
     row("userCircle", [h("span", { class: "body-md fort medium" }, "Se connecter"), h("span", { class: "caption" }, m.error ? "Session expirée : reconnecte-toi." : "Garde tes données sur ton compte, retrouve-les sur un autre téléphone.")],
       m.error ? pill("Reconnexion", "attention") : icon("caretRight", "chev")));
-  const time = t => `${dateShort(t)} à ${new Date(t).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
-  return h("div", { class: "card" },
+  return [h("div", { class: "card" },
     row("cloudCheck", [h("span", { class: "overline" }, "Connecté"), h("span", { class: "body-md fort medium ellipsis" }, m.email)], m.error || m.dirty ? pill("En attente", "attention") : pill("À jour", "succes")),
     h("span", { class: "caption" }, m.error || (m.dirty ? "Envoi en cours…" : m.syncedAt ? `Dernière synchro le ${time(m.syncedAt)}.` : "Première synchro en cours.")),
     h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
@@ -165,5 +167,66 @@ export function accountCard() {
         message: "Tes données restent sur ce téléphone et sur ton compte. Ce qui change ensuite ne part plus vers le compte.",
         confirmLabel: "Se déconnecter", cancelLabel: "Rester connecté",
         onConfirm: async () => { await signOut(); toast("Déconnecté"); }
-      }) })));
+      }) }))),
+    h("div", { class: "list" },
+      h("button", { class: "row", onClick: () => { keyInfo = undefined; go("#/compte/pas"); } },
+        h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, "Pas du jour automatiques"),
+          h("span", { class: "caption" }, m.stepsLast ? `Derniers reçus : ${int(m.stepsLast.steps)} pas, ${time(m.stepsLast.at)}` : "Le Raccourci iOS envoie tes pas de Santé, sans rien taper")),
+        icon("caretRight", "chev")))];
+}
+
+const time = t => `${dateShort(t)} à ${new Date(t).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+
+// Pas du jour automatiques : la clé Raccourci à copier dans le Raccourci iOS, qui envoie les pas au compte.
+// Écran dédié (pas une feuille) : on y revient pour recopier la clé ou voir les derniers pas reçus.
+let keyInfo; // undefined : pas encore lu ; null : aucune clé
+export function stepsAutoView() {
+  if (!signedIn()) { setTimeout(() => go("#/compte")); return { el: h("div") }; }
+  const m = account();
+  const refresh = () => dispatchEvent(new HashChangeEvent("hashchange"));
+  if (keyInfo === undefined) shortcutKeyInfo().then(k => { keyInfo = k; refresh(); }).catch(() => { keyInfo = null; refresh(); });
+  const create = async () => {
+    try { await newShortcutKey(); keyInfo = { createdAt: Date.now() }; refresh(); toast("Clé créée : copie-la dans le Raccourci"); }
+    catch (e) { toast(e instanceof TypeError ? "Pas de réseau : réessaie une fois connecté." : "Le compte ne répond pas : as-tu passé le SQL des pas ?"); }
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(m.shortcutKey); toast("Clé copiée"); }
+    catch { toast("Copie impossible : sélectionne la clé et copie-la."); }
+  };
+  const status = keyInfo === undefined
+    ? h("span", { class: "caption" }, "Lecture de ta clé…")
+    : keyInfo
+      ? h("div", { class: "acct-row" }, h("div", { class: "row-main" }, h("span", { class: "overline" }, "Clé Raccourci"),
+          h("span", { class: "body-md fort medium" }, `Créée le ${time(keyInfo.createdAt)}`)), pill("Active", "succes"))
+      : h("div", { class: "acct-row" }, h("div", { class: "row-main" }, h("span", { class: "overline" }, "Clé Raccourci"),
+          h("span", { class: "body-md fort medium" }, "Aucune clé pour l'instant")), pill("À créer", "attention"));
+  const keyBlock = keyInfo && (m.shortcutKey
+    ? [h("code", { class: "cle", "aria-label": "Clé Raccourci" }, m.shortcutKey),
+       btn("Copier la clé", { variant: "primary", size: "lg", full: true, icon: "clipboard", onClick: copy })]
+    : h("p", { class: "caption", style: { margin: 0 } }, "La clé a été créée sur un autre appareil et n'est montrée qu'une fois. Remplace-la pour la copier ici."));
+  const el = h("div", { class: "screen no-tabs" },
+    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Pas automatiques" }),
+    h("div", { class: "scroll" },
+      h("p", { class: "body-sm discret", style: { margin: 0 } },
+        "Le Raccourci iOS « Pas du jour » lit tes pas dans Santé et les envoie à ton compte avec cette clé, sans rien ouvrir. Fluide les reprend à l'ouverture. La clé ne sert qu'à écrire tes pas : garde-la pour toi."),
+      h("div", { class: "card" }, status, keyBlock,
+        m.stepsLast && h("span", { class: "caption num" }, `Derniers pas reçus : ${int(m.stepsLast.steps)}, ${time(m.stepsLast.at)}.`)),
+      keyInfo === null && btn("Créer ma clé Raccourci", { variant: "primary", size: "lg", full: true, onClick: create }),
+      keyInfo && btn("Remplacer la clé", { variant: "secondary", full: true, onClick: () => confirmSheet({
+        title: "Remplacer la clé ?",
+        message: "L'ancienne clé ne marchera plus : il faudra coller la nouvelle dans le Raccourci.",
+        confirmLabel: "Remplacer la clé", onConfirm: create
+      }) }),
+      keyInfo && btn("Supprimer la clé", { variant: "ghost", full: true, onClick: () => confirmSheet({
+        title: "Supprimer la clé ?",
+        message: "Le Raccourci ne pourra plus envoyer tes pas. Les pas déjà reçus restent.",
+        confirmLabel: "Supprimer la clé", destructive: true,
+        onConfirm: async () => {
+          try { await deleteShortcutKey(); keyInfo = null; refresh(); toast("Clé supprimée"); }
+          catch { toast("Le compte ne répond pas : réessaie."); }
+        }
+      }) }),
+      h("p", { class: "caption", style: { margin: 0 } }, "Construire le Raccourci : ",
+        h("a", { class: "lien", href: RACCOURCI_PAS, target: "_blank", rel: "noopener" }, "guide pas à pas"), ".")));
+  return { el };
 }
