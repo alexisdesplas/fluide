@@ -68,10 +68,12 @@ export async function signIn(email, password) {
   return afterSignIn();
 }
 
-// « Confirm email » décoché dans Supabase : le compte est utilisable tout de suite, la réponse porte la session.
+// Adresse à valider (« Confirm email » coché dans Supabase) : pas de session, un e-mail avec un lien part à l'adresse,
+// et l'administrateur peut aussi valider. Le lien revient ici (redirect_to), puis on se connecte.
 export async function signUp(email, password) {
-  const s = await call("/auth/v1/signup", { method: "POST", body: { email, password } });
-  if (!s?.access_token) throw Object.assign(new Error("confirmation"), { code: "email_not_confirmed" });
+  const back = encodeURIComponent(location.origin + location.pathname);
+  const s = await call(`/auth/v1/signup?redirect_to=${back}`, { method: "POST", body: { email, password } });
+  if (!s?.access_token) { meta.email = email; keep(); return "confirm"; }
   session(s);
   return afterSignIn();
 }
