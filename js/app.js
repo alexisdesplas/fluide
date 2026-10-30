@@ -1,6 +1,6 @@
 import { state, subscribe } from "./store.js";
 import { h, icon, go, clock, unlockAudio } from "./ui.js";
-import { todayView } from "./views/today.js";
+import { todayView, stepsLinkView } from "./views/today.js";
 import { templatesView, templateView, itemView, pickerView, programView } from "./views/templates.js";
 import { workoutView, finishView, summaryView } from "./views/workout.js";
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
@@ -9,6 +9,7 @@ import { profileView, matrixView, prefsView } from "./views/profile.js";
 // Routes : #/chemin/:param. Chaque vue renvoie { el, tab?, tick? }.
 const ROUTES = [
   ["", todayView],
+  ["pas/:n", stepsLinkView],
   ["seances", templatesView],
   ["seances/programme", programView],
   ["seances/:id", templateView],
