@@ -6,6 +6,8 @@ import { workoutView, finishView, editWorkoutView, summaryView } from "./views/w
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
 import { profileView, matrixView, prefsView } from "./views/profile.js";
 import { cordeView } from "./views/corde.js";
+import { signInView, codeView } from "./views/compte.js";
+import { onAccount } from "./compte.js";
 
 // Routes : #/chemin/:param. Chaque vue renvoie { el, tab?, tick? }.
 const ROUTES = [
@@ -21,6 +23,8 @@ const ROUTES = [
   ["seance/modifier", editWorkoutView],
   ["bilan/:id", summaryView],
   ["corde", cordeView],
+  ["compte", signInView],
+  ["compte/code", codeView],
   ["progres", progressView],
   ["progres/historique", historyView],
   ["progres/historique/:id", sessionView],
@@ -83,6 +87,8 @@ function tick() {
 
 addEventListener("hashchange", render);
 subscribe(() => { if (!document.querySelector("dialog[open]")) render(); });
+// État du compte (synchro, déconnexion) : on redessine les Réglages, jamais une saisie en cours.
+onAccount(() => { if (location.hash === "#/profil" && !document.querySelector("dialog[open]")) render(); });
 addEventListener("pointerdown", unlockAudio, { once: true });
 document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && tick());
 setInterval(tick, 250);

@@ -414,6 +414,8 @@ textarea.input.journal { height: 140px; }
 input.input[type="search"] { -webkit-appearance: none; appearance: none; line-height: 24px; }
 .input, .segmented, .list, .card, .hint, .stepper { flex-shrink: 0; }
 [hidden] { display: none !important; }
+/* Code reçu par e-mail : grands chiffres espacés, centrés. */
+.code-input { font-size: 28px; line-height: 36px; height: 56px; letter-spacing: 0.4em; text-align: center; }
 /* Dans une feuille, l'intitulé d'un champ est un surtitre de section. */
 .sheet-body .field > .caption.medium { font: 500 11px/16px var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--texte-discret); }
 .chev { width: 16px; height: 16px; flex: none; color: var(--texte-discret); }
