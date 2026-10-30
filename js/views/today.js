@@ -1,5 +1,5 @@
 import { state, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklySets, weeklyGoal, history, template, setHabit, habit, dayKey, stepsAverage, startWorkout, STATUS, MUSCLES, CYCLES } from "../store.js";
-import { h, icon, pageHead, btn, pill, go, int, dateLong, ago, stepper } from "../ui.js";
+import { h, icon, pageHead, btn, pill, go, int, dateLong, ago, stepper, toast } from "../ui.js";
 
 export { estimate };
 
@@ -71,6 +71,44 @@ export function goalCard() {
     h("span", { class: "caption num" }, `${g.sets} série${g.sets > 1 ? "s" : ""} faite${g.sets > 1 ? "s" : ""} sur ${g.total} prévues par tes réglages Fluide`));
 }
 
+// Pas copiés par le Raccourci iOS « Pas du jour » (livrables/fluide/raccourci-pas.md) : un nombre entier,
+// espaces de milliers tolérés (« 8 432 »). null si ce n'est pas un nombre de pas plausible.
+const STEPS_MAX = 60000;
+export function parseSteps(text) {
+  const s = String(text ?? "").replace(/\s/g, "");
+  if (!/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  return n <= STEPS_MAX ? n : null;
+}
+
+// Lecture du presse-papiers sur un tap : Safari affiche sa bulle « Coller » avant de donner le texte.
+async function pasteSteps(day) {
+  if (!navigator.clipboard?.readText) return toast("Ce navigateur ne laisse pas lire le presse-papiers.");
+  let text;
+  try { text = await navigator.clipboard.readText(); }
+  catch { return toast("Collage refusé. Touche « Coller » dans la bulle qui s'affiche."); }
+  const n = parseSteps(text);
+  if (n == null) return toast("Le presse-papiers ne contient pas un nombre de pas. Lance d'abord le Raccourci « Pas du jour ».");
+  setHabit(day, "steps", n);
+  toast(`${int(n)} pas repris de Santé`);
+}
+
+// Lien ouvert par le Raccourci (#/pas/8432) : enregistre les pas du jour puis revient sur Aujourd'hui.
+// Hypothèse ouverte : iOS ouvre-t-il l'app de l'écran d'accueil ou Safari, dont le stockage est séparé ?
+// navigator.standalone vaut false dans Safari sur iPhone : le toast le dit, pour trancher au premier essai.
+export function stepsLinkView({ n }) {
+  const steps = parseSteps(n);
+  window.history.replaceState(null, "", "#/");
+  if (steps == null) toast("Lien de pas invalide : rien n'a été enregistré.");
+  else {
+    setHabit(dayKey(), "steps", steps, true);
+    toast(navigator.standalone === false
+      ? `${int(steps)} pas enregistrés dans Safari, pas dans l'app de l'écran d'accueil.`
+      : `${int(steps)} pas repris de Santé`);
+  }
+  return todayView();
+}
+
 export function todayView() {
   const pos = cyclePosition();
   const next = nextTemplate();
@@ -115,7 +153,8 @@ export function todayView() {
         h("div", { class: "card-head" },
           h("span", { class: "body-sm" }, "Cible ", h("b", { class: "fort num" }, int(target))),
           steps >= target ? pill("Cible atteinte", "succes") : pill(`${int(Math.max(0, target - steps))} restants`)),
-        stepper({ value: steps, step: 500, max: 60000, format: int, unit: "pas", editable: true, label: "pas du jour",
-          onChange: v => { setHabit(today, "steps", v, true); } }))));
+        stepper({ value: steps, step: 500, max: STEPS_MAX, format: int, unit: "pas", editable: true, label: "pas du jour",
+          onChange: v => { setHabit(today, "steps", v, true); } }),
+        btn("Coller depuis Santé", { variant: "secondary", full: true, icon: "clipboard", onClick: () => pasteSteps(today) }))));
   return { el, tab: "" };
 }
