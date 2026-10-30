@@ -1,14 +1,14 @@
-import { state, exercise, itemSets, restAfter, cyclePosition, weeklySets, weeklyGoal, history, template, setHabit, habit, dayKey, stepsAverage, startWorkout, STATUS, MUSCLES, CYCLES } from "../store.js";
+import { state, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklySets, weeklyGoal, history, template, setHabit, habit, dayKey, stepsAverage, startWorkout, STATUS, MUSCLES, CYCLES } from "../store.js";
 import { h, icon, pageHead, btn, pill, go, int, dateLong, ago, stepper, toast } from "../ui.js";
-import { corde } from "../corde.js";
 import { account } from "../compte.js";
-import { cordeCard, cordeLine } from "./corde.js";
 
-// Durée estimée : 45 s d'effort par série + le repos prévu (aucun entre deux exercices d'un superset), plus l'échauffement.
-export const estimate = t => Math.round((t.items.reduce((a, it, i) =>
-  a + (it.format === "emom" ? it.rounds * it.every : it.format === "tabata" ? it.rounds * (it.work + it.off) + 60 : it.sets * (45 + restAfter(t.items, i))), 0) + 300) / 60);
+export { estimate };
 
-const LOWER = ["Quadris", "Ischios", "Fessiers", "Mollets"];
+// Échauffement du jour : la séance corde du plan (sauf le jour long, fait à part), sinon celui des réglages.
+const warmupLine = () => {
+  const r = enduranceToday();
+  return r && r.kind !== "long" ? `corde S${r.week}, ${blocksLabel(r.blocks)}` : state.profile.warmup;
+};
 
 // Prochaine séance : on fait tourner les séances types, la moins récente d'abord.
 export function nextTemplate() {
@@ -136,9 +136,7 @@ export function todayView() {
           h("p", { class: "body-sm", style: { margin: 0 } },
             next.items.length, next.items.length > 1 ? " exercices · " : " exercice · ", next.items.reduce((a, i) => a + (pos.deload ? Math.ceil(itemSets(i) / 2) : itemSets(i)), 0), " séries",
             pos.deload ? " (deload)" : ""),
-          h("div", { class: "hint" }, icon("bolt"), h("span", { class: "body-sm" }, "Échauffement : ",
-            h("b", { class: "fort medium" }, corde().on ? cordeLine(next.items.some(i => LOWER.includes(exercise(i.exerciseId)?.muscle))) : state.profile.warmup),
-            ", puis mobilité et séries d'approche sur le premier exercice.")),
+          h("div", { class: "hint" }, icon("bolt"), h("span", { class: "body-sm" }, "Échauffement : ", h("b", { class: "fort medium" }, warmupLine()), ", puis séries d'approche sur le premier exercice.")),
           btn(`Démarrer ${next.name}`, { variant: "primary", size: "lg", full: true, onClick: () => { startWorkout(next.id); go("#/seance"); } }),
           btn("Choisir une autre séance", { variant: "ghost", full: true, onClick: () => go("#/seances") }))
       : h("div", { class: "card empty" }, icon("list"), h("p", { class: "body-md", style: { margin: 0 } }, "Aucune séance type pour l'instant."),
@@ -149,7 +147,6 @@ export function todayView() {
     h("div", { class: "scroll" },
       goalCard(),
       sessionCard,
-      cordeCard(),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Par muscle"), h("button", { class: "btn ghost xs", onClick: () => go("#/profil/matrice") }, "Réglages Fluide")),
       h("div", { class: "card" },
         h("p", { class: "caption", style: { margin: 0 } }, "Séries faites cette semaine. Le trait blanc est la cible : maintenir, progresser ou point faible."),
