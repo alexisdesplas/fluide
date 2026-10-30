@@ -2,7 +2,7 @@
 
 Connexion sans mot de passe : un code à 6 chiffres arrive par e-mail et se tape dans l'app (un lien magique ouvrirait Safari, pas l'app installée sur l'écran d'accueil, qui a son propre stockage).
 
-1. **Créer le projet** sur https://supabase.com (gratuit), région Europe (Paris ou Francfort).
+1. **Créer le projet** sur https://supabase.com (gratuit), région Europe. Security : *Enable Data API* coché, *Automatically expose new tables* décoché, *Enable automatic RLS* coché.
 2. **Table** : SQL Editor › New query › coller `schema.sql` › Run.
 3. **E-mail avec le code** : Authentication › Emails › Templates › *Magic Link*. Remplacer le contenu par :
    - Sujet : `Ton code Fluide`

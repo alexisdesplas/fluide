@@ -7,6 +7,9 @@ create table if not exists public.fluide_state (
   updated_at timestamptz not null default now()
 );
 
+-- Projet créé sans « Automatically expose new tables » : seule cette table est ouverte, aux comptes connectés seulement.
+grant select, insert, update on public.fluide_state to authenticated;
+
 -- Chaque compte ne voit et ne modifie que sa propre ligne : la clé publique peut rester dans le dépôt.
 alter table public.fluide_state enable row level security;
 
