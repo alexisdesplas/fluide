@@ -424,6 +424,7 @@ input.input[type="search"] { -webkit-appearance: none; appearance: none; line-he
 .acct-head h2 { margin: 0; }
 .acct-row { display: flex; align-items: center; gap: var(--spacing-12); }
 .acct-row .row-main { gap: 2px; }
+.cle { display: block; padding: var(--spacing-12); border-radius: var(--radius-sm); background: var(--fond-discret); color: var(--texte-fort); font: 500 14px/20px ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; user-select: all; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .input.error { border-color: var(--etat-danger); }
 .field-error { display: flex; gap: var(--spacing-4); align-items: flex-start; color: var(--etat-danger); font: 400 12px/16px var(--font); }
