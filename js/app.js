@@ -1,7 +1,12 @@
 import { state, subscribe } from "./store.js";
 import { h, icon, go, clock, unlockAudio } from "./ui.js";
+<<<<<<< HEAD
 import { todayView, stepsLinkView } from "./views/today.js";
 import { templatesView, templateView, itemView, pickerView, programView } from "./views/templates.js";
+=======
+import { todayView } from "./views/today.js";
+import { templatesView, templateView, itemView, pickerView, programView, weekView } from "./views/templates.js";
+>>>>>>> origin/main
 import { workoutView, finishView, summaryView } from "./views/workout.js";
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
 import { profileView, matrixView, prefsView } from "./views/profile.js";
@@ -12,6 +17,7 @@ const ROUTES = [
   ["pas/:n", stepsLinkView],
   ["seances", templatesView],
   ["seances/programme", programView],
+  ["seances/programme/semaine", weekView],
   ["seances/:id", templateView],
   ["seances/:id/ajouter", pickerView],
   ["seances/:id/:item", itemView],

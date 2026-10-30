@@ -5,6 +5,8 @@ import { CATALOGUE } from "./exercices.js";
 
 const KEY = "fluid-v1";
 const DAY = 86400000;
+// Challenge corde d'Alexis : semaine 1 commencée le lundi 19/10/2026.
+const CORDE_START = new Date(2026, 9, 19).getTime();
 
 export const MUSCLES = ["Pecs", "Dos", "Épaules", "Biceps", "Triceps", "Quadris", "Ischios", "Fessiers", "Mollets", "Abdos"];
 // Groupes du catalogue hors matrice Fluide : leurs séries ne comptent pas dans l'objectif.
@@ -115,7 +117,7 @@ function seed() {
   for (const m of MUSCLES) matrix[m].target = STATUS[matrix[m].status].def;
   return {
     version: 1,
-    profile: { goal: "Prise de muscle", level: "Intermédiaire", days: 4, split: "hautbas", stepsTarget: 8000, warmup: "Corde à sauter 3-5 min" },
+    profile: { goal: "Prise de muscle", level: "Intermédiaire", days: 4, split: "hautbas", stepsTarget: 8000, warmup: "Corde à sauter 3-5 min", endurance: "corde", enduranceStart: CORDE_START },
     matrix,
     cycle: { type: "volume", start: startOfWeek(Date.now()), weeks: 6 },
     cycles: [],
@@ -143,6 +145,8 @@ function migrate(st) {
     else { Object.assign(e, { muscle: row[1], equip: e.rank !== undefined ? e.equip : e.equip || row[2], photo: row[3], rank: row[4] }); delete e.sw; }
   }
   for (const e of st.exercises) e.equip = e.equip || "barre";
+  // Objectif jamais choisi : le challenge corde est en cours, il sert d'échauffement. null veut dire « aucun », on le garde.
+  if (st.profile.endurance === undefined) Object.assign(st.profile, { endurance: "corde", enduranceStart: CORDE_START });
   return st;
 }
 
@@ -231,6 +235,10 @@ export function alternatives(exerciseId) {
   return state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur").sort(byUsefulness);
 }
 
+// Durée estimée : 45 s d'effort par série + le repos prévu, plus l'échauffement.
+export const estimate = t => Math.round((t.items.reduce((a, it) =>
+  a + (it.format === "emom" ? it.rounds * it.every : it.format === "tabata" ? it.rounds * (it.work + it.off) + 60 : it.sets * (45 + it.rest)), 0) + 300) / 60);
+
 // Séries prévues par muscle si on fait chaque séance type une fois.
 export const plannedSets = () => plannedSetsOf(state.templates);
 
@@ -300,6 +308,11 @@ export function setMatrix(muscle, status) {
   save();
 }
 
+export function setMuscle(muscle, status, target) {
+  state.matrix[muscle] = { status, target: Math.max(0, target) };
+  save();
+}
+
 export function setTarget(muscle, target) {
   state.matrix[muscle].target = Math.max(0, target);
   save(true);
@@ -338,6 +351,8 @@ export function setPref(exerciseId, pref) {
 const LEGS = ["Quadris", "Ischios", "Fessiers", "Mollets", "Abdos"];
 const UPPER = ["Pecs", "Dos", "Épaules", "Biceps", "Triceps"];
 export const SPLITS = {
+  fullbody2: { label: "Full body × 2", days: 2, desc: "Tout le corps deux fois par semaine : le minimum pour que chaque muscle revienne 2 fois.",
+    sessions: [["Full body A", [...UPPER, ...LEGS]], ["Full body B", [...UPPER, ...LEGS]]] },
   fullbody: { label: "Full body", days: 3, desc: "Tout le corps à chaque séance. Idéal à 3 séances, chaque muscle 3 fois par semaine.",
     sessions: [["Full body A", [...UPPER, ...LEGS]], ["Full body B", [...UPPER, ...LEGS]], ["Full body C", [...UPPER, ...LEGS]]] },
   hautbas: { label: "Haut / Bas", days: 4, desc: "Haut du corps, bas du corps, deux fois chacun. Chaque muscle 2 fois par semaine.",
@@ -353,42 +368,194 @@ export const SPLITS = {
   perso: { label: "Personnalisé", days: null, desc: "Tu crées tes séances toi-même, exercice par exercice.", sessions: [] }
 };
 const BIG = ["Pecs", "Dos", "Quadris", "Ischios", "Fessiers"];
+const LEGS_MAIN = ["Quadris", "Ischios", "Fessiers"];
+
+// Temps par séance proposé (échauffement compris).
+export const SESSION_MINUTES = [30, 45, 60, 75, 90];
+
+// Objectif longue durée : un sport d'endurance pratiqué à côté de la muscu. Il pèse sur les jambes :
+// le programme garde son jour long loin des séances jambes et prend en charge le renfo que son plan demande.
+// Plan corde, semaine par semaine : [blocs, effort, repos] en secondes pour les séances faciles puis le jour long.
+// Deload les semaines 3, 7, 11 et 15 ; tentative de l'heure en semaine 18. Le jour récup ne change pas.
+const CORDE = [
+  [[6, 60, 30], [5, 120, 60]], [[10, 60, 30], [4, 180, 60]], [[7, 60, 30], [5, 120, 60]], [[8, 120, 30], [2, 300, 60]],
+  [[3, 300, 60], [1, 480, 0]], [[3, 360, 60], [1, 600, 0]], [[2, 300, 60], [1, 480, 0]], [[3, 480, 60], [1, 900, 0]],
+  [[2, 720, 60], [1, 1200, 0]], [[2, 900, 60], [1, 1500, 0]], [[2, 600, 60], [1, 1200, 0]], [[1, 1500, 0], [1, 2100, 0]],
+  [[1, 1200, 0], [1, 2400, 0]], [[1, 1500, 0], [1, 2700, 0]], [[1, 900, 0], [1, 2100, 0]], [[1, 1500, 0], [1, 3000, 0]],
+  [[1, 1800, 0], [1, 3300, 0]], [[1, 900, 0], [1, 3600, 0]]
+];
+export const ENDURANCE = {
+  corde: { label: "Corde à sauter · 1 h non-stop", short: "Corde à sauter", desc: "18 semaines, tous les jours : 5 séances faciles, 1 jour long, 1 jour récup.",
+    calves: { sets: 2, reps: 15, per: 3 },
+    weeks: CORDE.map(([easy, long], i) => ({ easy, long, deload: [3, 7, 11, 15].includes(i + 1) })), recup: [5, 60, 30] }
+};
+
+// Blocs d'une séance d'endurance : « 10 × 1 min / 30 s », « 8 min non-stop » ; et leur durée totale en secondes.
+const span = sec => (sec % 60 ? `${sec} s` : `${sec / 60} min`);
+export const blocksLabel = ([n, work, rest]) => (n === 1 ? `${span(work)} non-stop` : `${n} × ${span(work)} / ${span(rest)}`);
+export const blocksTotal = ([n, work, rest]) => n * work + (n - 1) * rest;
+
+// Semaine du plan d'endurance : comptée depuis la semaine 1 (réglée dans « Ta semaine »), bornée à la durée du plan.
+export function enduranceWeek(t = Date.now()) {
+  const p = state.profile, e = ENDURANCE[p.endurance];
+  if (!e?.weeks) return null;
+  const w = p.enduranceStart == null ? 1 : Math.floor((startOfWeek(t) - startOfWeek(p.enduranceStart)) / (7 * DAY)) + 1;
+  return Math.min(e.weeks.length, Math.max(1, w));
+}
+export function setEnduranceWeek(week) {
+  state.profile.enduranceStart = startOfWeek(Date.now()) - (week - 1) * 7 * DAY;
+  save(true);
+}
+
+// Séance d'endurance du jour : facile, longue ou récup selon la semaine type du programme en place.
+export function enduranceToday(t = Date.now()) {
+  const p = state.profile, e = ENDURANCE[p.endurance];
+  if (!e?.weeks) return null;
+  const week = enduranceWeek(t), plan = e.weeks[week - 1];
+  const kind = weekPlan(state.templates, p.endurance)[(new Date(t).getDay() + 6) % 7].endurance;
+  return { week, kind, deload: plan.deload, blocks: kind === "long" ? plan.long : kind === "recup" ? e.recup : plan.easy };
+}
+
+const musclesOf = t => new Set(t.items.map(it => exercise(it.exerciseId)?.muscle));
+export const hasLegs = t => [...musclesOf(t)].some(m => LEGS_MAIN.includes(m));
 
 // Génère les séances d'un split : séries par muscle = cible ÷ nombre de séances où il revient,
 // réparties en 1 ou 2 exercices ; favoris d'abord, jamais un exercice en douleur, un exercice différent à chaque passage.
-export function generateProgram(key) {
+// minutes : chaque séance est ramenée sous ce temps. endurance : la corde remplace le travail des mollets par le renfo de son plan,
+// et les jambes ne travaillent que 2 fois par semaine (au-delà, la séance garde le haut du corps et les abdos).
+// pools : tri des exercices par muscle, partagé quand on génère plusieurs programmes d'affilée.
+export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
   const split = SPLITS[key];
-  const freq = {}; for (const [, ms] of split.sessions) for (const m of ms) freq[m] = (freq[m] || 0) + 1;
-  const pool = m => state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && e.equip !== "elastique" && e.equip !== "kettlebell").sort(byUsefulness);
-  const used = {};
-  const pick = m => { const p = pool(m); if (!p.length) return null; used[m] = used[m] || 0; return p[used[m]++ % p.length]; };
+  const calves = ENDURANCE[endurance]?.calves;
+  const maxLegs = ENDURANCE[endurance] ? 2 : Infinity;
+  let legs = 0;
+  const plan = split.sessions.map(([name, ms]) => (ms.some(m => LEGS_MAIN.includes(m)) && ++legs > maxLegs
+    ? [name.replace("Full body", "Haut"), ms.filter(m => !LEGS.includes(m) || m === "Abdos")] : [name, ms]));
+  const freq = {}; for (const [, ms] of plan) for (const m of ms) freq[m] = (freq[m] || 0) + 1;
+  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && e.equip !== "elastique" && e.equip !== "kettlebell").sort(byUsefulness));
+  // Un exercice différent à chaque passage ; prefer choisit d'abord parmi ceux qui conviennent (barre pour le premier d'un gros muscle).
+  const taken = new Set();
+  const pick = (m, prefer = () => true) => {
+    const p = pool(m); if (!p.length) return null;
+    let ex = p.find(e => !taken.has(e.id) && prefer(e)) || p.find(e => !taken.has(e.id));
+    if (!ex) { p.forEach(e => taken.delete(e.id)); ex = p.find(prefer) || p[0]; }
+    taken.add(ex.id);
+    return ex;
+  };
+  const free = e => e.equip === "barre" || e.equip === "smith";
   const cyc = state.cycle.type;
-  return split.sessions.map(([name, muscles]) => {
+  const known = id => state.templates.flatMap(t => t.items).find(i => i.exerciseId === id);
+  // Muscle à définir : séries longues et repos courts, pas de charge lourde.
+  const define = state.profile.define || [];
+  const item = (ex, m, sets, heavy) => {
+    if (define.includes(m)) heavy = false;
+    const last = lastPerformance(ex.id);
+    const [repsMin, repsMax] = cyc === "intensite" ? (heavy ? [4, 6] : [6, 10]) : heavy ? [6, 10] : BIG.includes(m) ? [8, 12] : [10, 15];
+    const weight = last ? last.maxWeight : known(ex.id) ? known(ex.id).weight : BIG.includes(m) ? 20 : 8;
+    if (define.includes(m)) return { id: uid(), exerciseId: ex.id, format: "series", sets, repsMin: 12, repsMax: 20, weight, rest: 60 };
+    return { id: uid(), exerciseId: ex.id, format: "series", sets, repsMin, repsMax, weight, rest: heavy ? 150 : BIG.includes(m) ? 120 : 75 };
+  };
+  const sessions = plan.map(([name, muscles]) => {
     const items = [];
     const order = [...muscles.filter(m => BIG.includes(m)), ...muscles.filter(m => !BIG.includes(m))];
     for (const m of order) {
-      const target = state.matrix[m].target; if (!target) continue;
+      const target = state.matrix[m].target; if (!target || (calves && m === "Mollets")) continue;
       const sets = Math.max(1, Math.round(target / freq[m]));
       // Pas plus de 4 séries par exercice : 12 séries deviennent 3 exercices de 4.
       const count = Math.ceil(sets / 4), parts = Array.from({ length: count }, (_, i) => Math.floor(sets / count) + (i < sets % count ? 1 : 0));
-      for (const n of parts) {
-        const ex = pick(m); if (!ex) continue;
-        const heavy = items.length === 0 && BIG.includes(m);
-        const last = lastPerformance(ex.id);
-        const [repsMin, repsMax] = cyc === "intensite" ? (heavy ? [4, 6] : [6, 10]) : heavy ? [6, 10] : BIG.includes(m) ? [8, 12] : [10, 15];
-        const known = state.templates.flatMap(t => t.items).find(i => i.exerciseId === ex.id);
-        const weight = last ? last.maxWeight : known ? known.weight : BIG.includes(m) ? 20 : 8;
-        items.push({ id: uid(), exerciseId: ex.id, format: "series", sets: n, repsMin, repsMax, weight, rest: heavy ? 150 : BIG.includes(m) ? 120 : 75 });
+      for (const [j, n] of parts.entries()) {
+        const ex = pick(m, j === 0 && BIG.includes(m) ? free : undefined); if (!ex) continue;
+        items.push(item(ex, m, n, items.length === 0 && BIG.includes(m)));
       }
     }
     return { id: uid(), name, items };
   });
+  // Corde : montées sur pointes lentes en fin de séance, 3 fois par semaine, d'abord les jours jambes.
+  const keep = new Set();
+  const ex = calves && pick("Mollets", e => !/assis/i.test(e.name));
+  if (ex) [...sessions].sort((a, b) => hasLegs(b) - hasLegs(a)).slice(0, calves.per).forEach(t => {
+    const it = { ...item(ex, "Mollets", calves.sets, false), repsMin: calves.reps, repsMax: calves.reps, rest: 60 };
+    t.items.push(it); keep.add(it.id);
+  });
+  // Plancher de la semaine : le bas de la fourchette Fluide du muscle (ou sa cible si elle est plus basse),
+  // réparti sur ses séances pour qu'une séance ne prenne pas toute la marge.
+  const setsIn = (t, m) => t.items.reduce((a, it) => a + (exercise(it.exerciseId).muscle === m ? it.sets : 0), 0);
+  const low = m => Math.min(state.matrix[m].target, STATUS[state.matrix[m].status].range[0]);
+  const canCut = (m, t) => sessions.reduce((a, s) => a + setsIn(s, m), 0) > low(m) && setsIn(t, m) > Math.floor(low(m) / freq[m]);
+  for (const t of sessions) fitTime(t, minutes, keep, canCut);
+  return sessions;
 }
 
+// Séance trop longue pour le temps donné : repos raccourcis d'abord, puis une série en moins sur les exercices
+// les moins prioritaires (maintenir avant progresser avant point faible, isolation avant polyarticulaires).
+// On reste d'abord dans la fourchette Fluide de chaque muscle ; on n'en sort que si le temps ne suffit vraiment pas.
+const PRIORITY = { maintien: 0, focus: 1, faible: 2 };
+function fitTime(t, minutes, keep, canCut) {
+  if (!minutes || estimate(t) <= minutes) return;
+  for (const it of t.items) it.rest = Math.max(60, it.rest - 30);
+  const muscle = it => exercise(it.exerciseId).muscle;
+  const score = it => PRIORITY[state.matrix[muscle(it)].status] * 10 + (BIG.includes(muscle(it)) ? 5 : 0) - it.sets;
+  const trim = ok => {
+    while (estimate(t) > minutes) {
+      const cut = t.items.filter(it => !keep.has(it.id) && ok(it));
+      if (!cut.length) return;
+      const it = cut.reduce((a, b) => (score(b) < score(a) ? b : a));
+      if (--it.sets === 0) t.items = t.items.filter(x => x !== it);
+    }
+  };
+  trim(it => it.sets > 1 && canCut(muscle(it), t));
+  trim(it => it.sets > 1);
+  trim(() => true);
+}
+
+// Recommandation pour une semaine donnée (séances dispo, minutes par séance, objectif longue durée) :
+// chaque programme est généré pour cette semaine, puis classé. Il doit tenir dans les séances dispo,
+// couvrir la cible Fluide, garder chaque muscle dans sa fourchette, le faire revenir 2 fois.
+// short : muscles ramenés vers le bas de leur fourchette pour tenir le temps ; below : muscles passés sous leur fourchette.
+export function recommend({ days, minutes, endurance }) {
+  const pools = {};
+  const calves = ENDURANCE[endurance]?.calves;
+  const counted = MUSCLES.filter(m => state.matrix[m].target > 0 && !(calves && m === "Mollets"));
+  const total = counted.reduce((a, m) => a + state.matrix[m].target, 0);
+  return Object.keys(SPLITS).filter(k => k !== "perso").map(key => {
+    const templates = generateProgram(key, { minutes, endurance }, pools);
+    const planned = plannedSetsOf(templates);
+    const coverage = total ? Math.round((counted.reduce((a, m) => a + Math.min(planned[m], state.matrix[m].target), 0) / total) * 100) : 100;
+    const freqs = counted.map(m => templates.filter(t => musclesOf(t).has(m)).length);
+    const freq = freqs.length ? Math.min(...freqs) : 0, freqMax = freqs.length ? Math.max(...freqs) : 0;
+    const legs = templates.filter(hasLegs).length;
+    const short = counted.filter(m => planned[m] < state.matrix[m].target).map(m => ({ muscle: m, planned: planned[m], target: state.matrix[m].target }));
+    const below = short.filter(x => x.planned < Math.min(x.target, STATUS[state.matrix[x.muscle].status].range[0]));
+    // Séances passées en haut du corps parce que les jambes ont déjà leurs 2 séances.
+    const upper = templates.filter((t, i) => SPLITS[key].sessions[i][1].some(m => LEGS_MAIN.includes(m)) && !hasLegs(t)).map(t => t.name);
+    const fits = SPLITS[key].days <= days;
+    // Temps qu'il faudrait pour toute la cible, quand les minutes données ne suffisent pas.
+    const need = coverage < 100 ? Math.max(...generateProgram(key, { endurance }, pools).map(estimate)) : null;
+    const score = coverage + (freq >= 2 ? 15 : 0) + (SPLITS[key].days === days ? 10 : 0) - below.length * 20;
+    return { key, templates, coverage, freq, freqMax, legs, upper, short, below, fits, need, score };
+  }).sort((a, b) => b.fits - a.fits || b.score - a.score || (a.fits ? SPLITS[b.key].days - SPLITS[a.key].days : SPLITS[a.key].days - SPLITS[b.key].days)); // à égalité : au plus près des séances dispo
+}
+
+// Semaine type : séances étalées sur la semaine. Avec la corde, le jour long tombe le plus loin possible des séances jambes
+// (plutôt un jour sans muscu, plutôt le week-end), le jour récup le lendemain, les autres jours en séance facile.
+export const WEEKDAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+const SPREAD = { 1: [0], 2: [0, 3], 3: [0, 2, 4], 4: [0, 1, 3, 4], 5: [0, 1, 2, 4, 5], 6: [0, 1, 2, 3, 4, 5], 7: [0, 1, 2, 3, 4, 5, 6] };
+export function weekPlan(templates, endurance) {
+  const week = WEEKDAYS.map(day => ({ day, session: null, legs: false, endurance: null }));
+  (SPREAD[Math.min(templates.length, 7)] || []).forEach((d, i) => Object.assign(week[d], { session: templates[i].name, legs: hasLegs(templates[i]) }));
+  if (!ENDURANCE[endurance]) return week;
+  const legDays = week.flatMap((x, d) => (x.legs ? [d] : []));
+  const dist = d => (legDays.length ? Math.min(...legDays.map(l => Math.min(Math.abs(d - l), 7 - Math.abs(d - l)))) : 3);
+  const score = d => dist(d) * 10 + (week[d].session ? 0 : 4) + (d >= 5 ? 2 : 0);
+  const long = week.reduce((best, _, d) => (score(d) > score(best) ? d : best), 0);
+  week.forEach((x, d) => { x.endurance = d === long ? "long" : d === (long + 1) % 7 ? "recup" : "facile"; });
+  return week;
+}
+
+// Le nombre de séances reste celui de la semaine donnée : un programme plus court laisse des jours libres.
 export function applyProgram(key, templates) {
   state.templates = templates;
   state.profile.split = key;
-  if (SPLITS[key].days) state.profile.days = SPLITS[key].days;
   save();
 }
 

@@ -1,5 +1,5 @@
-import { state, save, replaceState, toggleFav, cyclePosition, startCycle, deloadNow, setMatrix, setTarget, plannedSets, history, sessionRecords, setPref, MUSCLES, STATUS, CYCLES, PREFS } from "../store.js";
-import { h, icon, pageHead, navbar, btn, go, int, stepper, segmented, sheet, confirmSheet, toast, dateShort } from "../ui.js";
+import { state, save, replaceState, ENDURANCE, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, MUSCLES, STATUS, CYCLES, PREFS } from "../store.js";
+import { h, icon, pageHead, navbar, btn, go, int, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
 
@@ -14,7 +14,6 @@ function cycleSheet() {
   const records = done.reduce((a, s) => a + sessionRecords(s).length, 0);
   let type = c.type === "volume" ? "intensite" : c.type === "intensite" ? "specialisation" : "volume";
   let weeks = 6;
-  const desc = h("p", { class: "body-sm discret", style: { margin: 0 } }, CYCLES[type].desc);
   sheet({
     title: "Nouveau bloc", okLabel: "Lancer le bloc",
     body: [
@@ -22,10 +21,7 @@ function cycleSheet() {
         h("span", { class: "overline" }, `Bloc ${CYCLES[c.type].label} qui se termine`),
         h("span", { class: "body-md fort num" }, `${done.length} séance${done.length > 1 ? "s" : ""} · ${records} record${records > 1 ? "s" : ""} battu${records > 1 ? "s" : ""}`),
         h("span", { class: "caption" }, `Démarré le ${dateShort(c.start).replace(/\.$/, "")}. Redistribue tes réglages Fluide : ce qui passe en progresser, ce qui redescend en maintenir.`)),
-      field("Type de bloc", segmented(Object.entries(CYCLES).map(([k, v]) => [k, v.label]), type, v => {
-        type = v; desc.textContent = CYCLES[v].desc;
-      })),
-      desc,
+      field("Type de bloc", radios(Object.entries(CYCLES).map(([k, v]) => [k, v.label, v.desc]), type, v => { type = v; }, "Type de bloc")),
       field("Durée avant deload", stepper({ value: weeks, min: 2, max: 10, compact: true, format: v => `${v} semaines`, label: "semaines", onChange: v => { weeks = v; } }))
     ],
     ok: () => { startCycle(type, weeks); toast(`Bloc ${CYCLES[type].label} lancé`); }
@@ -93,23 +89,49 @@ export function profileView() {
           h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, "Mes exercices"),
             h("span", { class: "caption" }, `${prefs.aime || 0} favoris · ${prefs.evite || 0} évités · ${prefs.douleur || 0} en douleur`)),
           icon("caretRight", "chev"))),
-      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif")),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif du moment")),
+      radios(["Prise de muscle", "Force", "Sèche"].map(v => [v, v]), p.goal, v => { p.goal = v; save(); }, "Objectif du moment"),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Niveau")),
+      radios(["Débutant", "Intermédiaire", "Avancé"].map(v => [v, v]), p.level, v => { p.level = v; save(); }, "Niveau"),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Routine")),
       h("div", { class: "card" },
-        field("Objectif du moment", segmented([["Prise de muscle", "Prise de muscle"], ["Force", "Force"], ["Sèche", "Sèche"]], p.goal, v => { p.goal = v; save(); }, "sm")),
-        field("Niveau", segmented([["Débutant", "Débutant"], ["Intermédiaire", "Intermédiaire"], ["Avancé", "Avancé"]], p.level, v => { p.level = v; save(); }, "sm")),
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Séances / semaine"),
           stepper({ value: p.days, min: 1, max: 7, compact: true, label: "séances par semaine", onChange: set("days") })),
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Cible de pas / jour"),
           stepper({ value: p.stepsTarget, step: 500, min: 2000, max: 30000, compact: true, format: int, label: "pas par jour", onChange: set("stepsTarget") })),
+<<<<<<< HEAD
         h("p", { class: "caption", style: { margin: 0 } }, "Pour reprendre tes pas de l'app Santé sans les taper : ",
           h("a", { class: "lien", href: RACCOURCI_PAS, target: "_blank", rel: "noopener" }, "installer le Raccourci « Pas du jour »"), "."),
         field("Échauffement", h("input", { class: "input", value: p.warmup, "aria-label": "Échauffement", onChange: e => { p.warmup = e.target.value; save(true); } }))),
+=======
+        field("Échauffement", h("input", { class: "input", value: p.warmup, "aria-label": "Échauffement", onChange: e => { p.warmup = e.target.value; save(true); } })),
+        ENDURANCE[p.endurance] && h("p", { class: "caption", style: { margin: 0 } }, `Avec ton plan ${ENDURANCE[p.endurance].short.toLowerCase()}, l'échauffement devient la séance corde du jour (facile ou récup, semaine en cours). Celui-ci sert les jours où le plan prévoit le jour long, à faire à part.`)),
+>>>>>>> origin/main
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Données")),
       h("p", { class: "caption", style: { margin: 0 } }, "Tout reste sur ce téléphone. Exporte de temps en temps pour garder une sauvegarde."),
       h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
         btn("Exporter", { variant: "secondary", icon: "download", onClick: download }),
         btn("Importer", { variant: "secondary", icon: "upload", onClick: upload }))));
   return { el, tab: "profil" };
+}
+
+// Un muscle par ligne : statut, cible et séries prévues ; le réglage s'ouvre dans une feuille (choix rapide).
+function muscleSheet(m, planned) {
+  let { status, target } = state.matrix[m];
+  const slot = h("div");
+  const drawTarget = () => slot.replaceChildren(h("div", { class: "field-row" },
+    h("span", { class: "body-sm" }, "Cible ", h("span", { class: "discret" }, `(repère ${STATUS[status].range.join("-")})`)),
+    stepper({ value: target, min: 0, max: 30, compact: true, format: v => `${v} série${v > 1 ? "s" : ""}`, label: `séries ${m}`, onChange: v => { target = v; } })));
+  drawTarget();
+  sheet({
+    title: m, okLabel: "Enregistrer",
+    body: [
+      radios(Object.entries(STATUS).map(([k, v]) => [k, v.label, `${v.range.join("-")} séries par semaine`]), status, v => { status = v; target = STATUS[v].def; drawTarget(); }, `Statut ${m}`),
+      slot,
+      h("p", { class: "caption", style: { margin: 0 } }, `${planned} série${planned > 1 ? "s" : ""} prévue${planned > 1 ? "s" : ""} dans tes séances types.`)
+    ],
+    ok: () => { setTimeout(() => setMuscle(m, status, target)); }
+  });
 }
 
 export function matrixView() {
@@ -120,19 +142,16 @@ export function matrixView() {
     h("div", { class: "scroll" },
       h("p", { class: "body-sm discret", style: { margin: 0 } },
         "Pour chaque muscle, dis si tu veux le maintenir, le faire progresser ou en faire ton point faible. Repères par semaine : maintenir 4-8 séries, progresser 10-16, point faible 16-22. On ne pousse pas tout en même temps."),
-      MUSCLES.map(m => {
+      h("div", { class: "list" }, MUSCLES.map(m => {
         const { status, target } = state.matrix[m];
         const plan = planned[m] || 0;
-        const [lo, hi] = STATUS[status].range;
-        return h("div", { class: "card" },
-          h("div", { class: "card-head" },
-            h("span", { class: "heading-md" }, m),
-            h("span", { class: "caption num", style: { color: Math.abs(plan - target) > 2 ? "var(--etat-attention)" : null } }, `${plan} prévues dans tes séances`)),
-          segmented(Object.entries(STATUS).map(([k, v]) => [k, v.label]), status, v => setMatrix(m, v), "sm"),
-          h("div", { class: "field-row" },
-            h("span", { class: "body-sm" }, "Cible ", h("span", { class: "discret" }, `(repère ${lo}-${hi})`)),
-            stepper({ value: target, min: 0, max: 30, compact: true, format: v => `${v} série${v > 1 ? "s" : ""}`, label: `séries ${m}`, onChange: v => setTarget(m, v) })));
-      })));
+        return h("button", { class: "row", onClick: () => muscleSheet(m, plan) },
+          h("div", { class: "row-main" },
+            h("span", { class: "body-md fort medium" }, m),
+            h("span", { class: "caption num" }, `${STATUS[status].label} · cible ${target} · `,
+              h("span", { style: { color: Math.abs(plan - target) > 2 ? "var(--etat-attention)" : null } }, `${plan} prévue${plan > 1 ? "s" : ""}`))),
+          icon("caretRight", "chev"));
+      }))));
   return { el, tab: "profil" };
 }
 
@@ -146,7 +165,7 @@ export function prefsView() {
     sheet({
       title: e.name, okLabel: "Enregistrer",
       body: [
-        segmented(Object.entries(PREFS), pref, v => { pref = v; }, "sm"),
+        radios(Object.entries(PREFS), pref, v => { pref = v; }, "Ton avis sur l'exercice"),
         h("p", { class: "caption", style: { margin: 0 } }, "Les favoris passent en tête du catalogue et des alternatives. En cas de douleur, note le mouvement ou l'amplitude à éviter."),
         field("Note", note)
       ],
