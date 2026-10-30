@@ -5,6 +5,7 @@ import { templatesView, templateView, itemView, pickerView, programView } from "
 import { workoutView, finishView, editWorkoutView, summaryView } from "./views/workout.js";
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
 import { profileView, matrixView, prefsView } from "./views/profile.js";
+import { cordeView } from "./views/corde.js";
 
 // Routes : #/chemin/:param. Chaque vue renvoie { el, tab?, tick? }.
 const ROUTES = [
@@ -14,10 +15,12 @@ const ROUTES = [
   ["seances/:id", templateView],
   ["seances/:id/ajouter", pickerView],
   ["seances/:id/:item", itemView],
+  ["seances/:id/:item/remplacer", pickerView],
   ["seance", workoutView],
   ["seance/terminer", finishView],
   ["seance/modifier", editWorkoutView],
   ["bilan/:id", summaryView],
+  ["corde", cordeView],
   ["progres", progressView],
   ["progres/historique", historyView],
   ["progres/historique/:id", sessionView],

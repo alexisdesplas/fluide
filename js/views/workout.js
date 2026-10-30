@@ -1,6 +1,8 @@
 import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, swapExercise, setEntryEquip, equipOf, weightScale, lbs, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, segmented, sheet, confirmSheet, toast, beep, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle, groupTag, linkRow } from "./templates.js";
+import { corde } from "../corde.js";
+import { cordePanel } from "./corde.js";
 
 // Anneau de Tabatime : 312 px, trait de 34 px.
 const R = 139, C = 2 * Math.PI * R;
@@ -217,6 +219,35 @@ export function workoutView() {
 
   // ——— Échauffement d'abord : cardio au chrono (comme Tabatime), puis mobilité et séries d'approche.
   // Le chrono se calcule depuis l'heure de départ (survit à la mise en veille) ; la pause décale ce départ.
+  // Programme corde activé : l'échauffement est la corde du jour (facile, jour long ou récup), puis mobilité.
+  if (!a.warmupDone && corde().on) {
+    const lower = ["Quadris", "Ischios", "Fessiers", "Mollets"].includes(ex.muscle);
+    const legDay = a.entries.some(x => ["Quadris", "Ischios", "Fessiers", "Mollets"].includes(exercise(x.exerciseId)?.muscle));
+    const mobility = `mobilité ${lower ? "des hanches et des chevilles" : "des épaules et des coudes"}`;
+    const begin = () => { a.warmupDone = true; save(); };
+    const foot = h("p", { class: "caption wo-foot num", style: { gridColumn: "1 / -1", margin: 0 } }, "Durée ", h("span", { "data-tick": "elapsed" }));
+    const panel = cordePanel({
+      get: () => a.warm, set: r => { a.warm = r; save(); }, legDay, foot,
+      after: h("p", { class: "body-md discret", style: { margin: 0 } }, "Ensuite : ", h("b", { class: "fort medium" }, mobility)),
+      before: btn("Passer", { variant: "secondary", size: "lg", onClick: begin }),
+      stop: { label: "Passer", onClick: begin },
+      finish: { label: "Commencer la séance", onClick: begin }
+    });
+    const el = h("div", { class: "screen workout" },
+      h("div", { class: "wo-head" },
+        h("div", { class: "wo-top" },
+          h("span", { class: "overline" }, a.name, a.deload ? " · deload" : "", " · avant la première série"),
+          h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
+        h("div", null,
+          h("h1", { class: "heading-xl" }, "Échauffement"),
+          h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, "Corde à sauter, puis mobilité"))),
+      h("div", { class: "scroll wo-center" }, panel.hero,
+        a.warm?.done && h("div", { class: "hint" }, icon("barbell"),
+          h("span", { class: "body-sm" }, "Séries d'approche sur ", h("b", { class: "fort medium" }, ex.name), ` : 2 ou 3 séries légères avant ${kg(e.draft.weight)}.`))),
+      panel.commands);
+    return { el, tick: panel.tick };
+  }
+
   if (!a.warmupDone) {
     const lower = ["Quadris", "Ischios", "Fessiers", "Mollets"].includes(ex.muscle);
     const mobility = `mobilité ${lower ? "des hanches et des chevilles" : "des épaules et des coudes"}`;
