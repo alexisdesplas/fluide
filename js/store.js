@@ -304,6 +304,11 @@ export function setMatrix(muscle, status) {
   save();
 }
 
+export function setMuscle(muscle, status, target) {
+  state.matrix[muscle] = { status, target: Math.max(0, target) };
+  save();
+}
+
 export function setTarget(muscle, target) {
   state.matrix[muscle].target = Math.max(0, target);
   save(true);

@@ -121,6 +121,21 @@ export function segmented(options, value, onChange, cls = "") {
   return h("div", { class: `segmented ${cls}`, role: "group" }, buttons);
 }
 
+// Boutons radio (Wireframe – Mobile) : un seul choix parmi 2 à 5 options visibles ensemble, ligne entière cliquable.
+// options : [valeur, libellé, explication facultative]. Le groupe tient sa propre sélection, comme le segmenté.
+export function radios(options, value, onChange, label) {
+  let cur = value;
+  const rows = options.map(([v, text, desc]) => h("button", { type: "button", class: "row radio-row", role: "radio", "aria-checked": String(v === cur), onClick: () => {
+    if (v === cur) return;
+    cur = v;
+    rows.forEach((r, i) => r.setAttribute("aria-checked", String(options[i][0] === cur)));
+    onChange(v);
+  } },
+    h("span", { class: "radio-dot", "aria-hidden": "true" }),
+    h("span", { class: "row-main" }, h("span", { class: "body-md fort medium" }, text), desc && h("span", { class: "caption" }, desc))));
+  return h("div", { class: "list", role: "radiogroup", "aria-label": label }, rows);
+}
+
 // Puces : un second tap désélectionne.
 export function chips(options, value, onChange) {
   let cur = value;
