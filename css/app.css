@@ -25,6 +25,7 @@
   --font: Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --ease: cubic-bezier(.25, .1, .25, 1);
   --sheet: cubic-bezier(.32, .72, 0, 1);
+  --ease-out: cubic-bezier(.23, 1, .32, 1);
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -370,11 +371,22 @@ dialog.sheet::backdrop { background: rgba(0, 0, 0, .6); }
 }
 .radio-card[aria-checked="true"] { background: var(--accent-soft); border: 2px solid var(--accent-texte); padding: 11px 15px; }
 .radio-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--bord-base); flex: none; margin-top: 2px; position: relative; }
+/* Radio (Wireframe – Mobile) : sélection en monochrome inversé comme le segmenté et les puces. Le point devient
+   un disque blanc à cœur sombre qui apparaît en grandissant un peu, le libellé passe du gris au blanc semi-gras. */
 .radio-row { min-height: 48px; }
-.radio-row .radio-dot { margin-top: 0; }
+.radio-row .radio-dot { margin-top: 0; transition: border-color 160ms var(--ease-out), background-color 160ms var(--ease-out); }
 .radio-row:has(.caption) .radio-dot { align-self: flex-start; margin-top: 2px; }
-.radio-card[aria-checked="true"] .radio-dot, .radio-row[aria-checked="true"] .radio-dot { border-color: var(--accent-texte); }
-.radio-card[aria-checked="true"] .radio-dot::after, .radio-row[aria-checked="true"] .radio-dot::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent-texte); }
+.radio-row .row-main > :first-child { color: var(--texte-base); }
+.radio-row[aria-checked="true"] .row-main > :first-child { color: var(--texte-fort); font-weight: 600; }
+.radio-row .radio-dot::after {
+  content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--texte-inverse);
+  opacity: 0; transform: scale(.6); transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+.radio-row[aria-checked="true"] .radio-dot { border-color: var(--texte-fort); background: var(--texte-fort); }
+.radio-row[aria-checked="true"] .radio-dot::after { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .radio-row .radio-dot::after { transform: none; } }
+.radio-card[aria-checked="true"] .radio-dot { border-color: var(--accent-texte); }
+.radio-card[aria-checked="true"] .radio-dot::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent-texte); }
 .radio-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 textarea.input.journal { height: 140px; }
 
