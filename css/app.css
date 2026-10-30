@@ -414,8 +414,22 @@ textarea.input.journal { height: 140px; }
 input.input[type="search"] { -webkit-appearance: none; appearance: none; line-height: 24px; }
 .input, .segmented, .list, .card, .hint, .stepper { flex-shrink: 0; }
 [hidden] { display: none !important; }
-/* Code reçu par e-mail : grands chiffres espacés, centrés. */
-.code-input { font-size: 28px; line-height: 36px; height: 56px; letter-spacing: 0.4em; text-align: center; }
+/* ——— Compte (Figma F · Compte) : tuile, en-tête, erreur sous le champ, lien de bascule en bas */
+.tile { width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent-texte); display: flex; align-items: center; justify-content: center; flex: none; }
+.tile svg { width: 20px; height: 20px; }
+.tile.lg { width: 56px; height: 56px; }
+.tile.lg svg { width: 28px; height: 28px; }
+.acct-head { display: flex; flex-direction: column; gap: var(--spacing-12); align-items: flex-start; }
+.acct-head h2 { margin: 0; }
+.acct-row { display: flex; align-items: center; gap: var(--spacing-12); }
+.acct-row .row-main { gap: 2px; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.input.error { border-color: var(--etat-danger); }
+.field-error { display: flex; gap: var(--spacing-4); align-items: flex-start; color: var(--etat-danger); font: 400 12px/16px var(--font); }
+.field-error svg { width: 14px; height: 14px; flex: none; margin-top: 1px; }
+.bascule { margin-top: auto; border-top: 1px solid var(--bord-discret); padding-top: var(--spacing-8); }
+.bascule button { width: 100%; min-height: 44px; background: none; border: 0; color: var(--texte-discret); font: 400 16px/24px var(--font); }
+.bascule b { color: var(--accent-texte); font-weight: 500; }
 /* Dans une feuille, l'intitulé d'un champ est un surtitre de section. */
 .sheet-body .field > .caption.medium { font: 500 11px/16px var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--texte-discret); }
 .chev { width: 16px; height: 16px; flex: none; color: var(--texte-discret); }
