@@ -1,11 +1,10 @@
 import { state, subscribe } from "./store.js";
 import { h, icon, go, clock, unlockAudio } from "./ui.js";
 import { todayView } from "./views/today.js";
-import { templatesView, templateView, itemView, pickerView, programView } from "./views/templates.js";
+import { templatesView, templateView, itemView, pickerView, programView, weekView } from "./views/templates.js";
 import { workoutView, finishView, editWorkoutView, summaryView } from "./views/workout.js";
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
 import { profileView, matrixView, prefsView } from "./views/profile.js";
-import { cordeView } from "./views/corde.js";
 import { signInView, signUpView, confirmView, resetView } from "./views/compte.js";
 import { onAccount } from "./compte.js";
 
@@ -14,6 +13,7 @@ const ROUTES = [
   ["", todayView],
   ["seances", templatesView],
   ["seances/programme", programView],
+  ["seances/programme/semaine", weekView],
   ["seances/:id", templateView],
   ["seances/:id/ajouter", pickerView],
   ["seances/:id/:item", itemView],
@@ -22,7 +22,6 @@ const ROUTES = [
   ["seance/terminer", finishView],
   ["seance/modifier", editWorkoutView],
   ["bilan/:id", summaryView],
-  ["corde", cordeView],
   ["compte", signInView],
   ["compte/creer", signUpView],
   ["compte/valider", confirmView],
