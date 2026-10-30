@@ -42,6 +42,42 @@ const roundsToSets = (format, rounds) => (format === "tabata" ? Math.ceil(rounds
 export const entrySets = e => (isInterval(e) ? roundsToSets(e.format, e.sets.length) : e.sets.length);
 export const itemSets = it => (isInterval(it) ? roundsToSets(it.format, it.rounds) : it.sets);
 
+// Superset / triset : exercices en séries qui se suivent avec le même groupe. On enchaîne sans repos,
+// le repos du dernier exercice tombe après le tour complet. Marche pour les séances types comme pour la séance en cours.
+export const GROUP_MAX = 3;
+export function groupOf(list, i) {
+  const g = list[i]?.group;
+  if (!g) return null;
+  let from = i, to = i;
+  while (from > 0 && list[from - 1].group === g) from--;
+  while (to < list.length - 1 && list[to + 1].group === g) to++;
+  if (to === from) return null;
+  const members = Array.from({ length: to - from + 1 }, (_, k) => from + k);
+  return { members, pos: i - from, label: members.length === 2 ? "Superset" : "Triset", last: i === to };
+}
+export const canLink = (list, i) => {
+  const a = list[i], b = list[i + 1];
+  if (!a || !b || isInterval(a) || isInterval(b)) return false;
+  if (a.group && a.group === b.group) return true; // déjà liés : on peut délier
+  return (groupOf(list, i)?.members.length || 1) + (groupOf(list, i + 1)?.members.length || 1) <= GROUP_MAX;
+};
+// Lie (ou délie) l'élément i et le suivant. Délier coupe le groupe en deux ; un exercice seul perd son groupe.
+export function toggleLink(list, i) {
+  const a = list[i], b = list[i + 1];
+  if (a.group && a.group === b.group) {
+    const g = uid();
+    for (let k = i + 1; k < list.length && list[k].group === a.group; k++) list[k].group = g;
+  } else {
+    const g = a.group || uid(), old = b.group;
+    for (let k = i + 1; k < list.length && (k === i + 1 || (old && list[k].group === old)); k++) list[k].group = g;
+    a.group = g;
+  }
+  list.forEach((x, k) => { if (x.group && !groupOf(list, k)) delete x.group; });
+  save();
+}
+// Repos réel d'un élément : rien entre deux exercices d'un groupe, le repos prévu après le dernier.
+export const restAfter = (list, i) => { const g = groupOf(list, i); return g && !g.last ? 0 : list[i].rest ?? list[i].target?.rest ?? 0; };
+
 // Matériel d'un exercice : il fixe les pas de charge (barre, haltères à l'unité, pile de la machine en lbs).
 export const EQUIPS = { barre: "Barre", halteres: "Haltères", poulie: "Poulie", machine: "Machine", smith: "Smith", kettlebell: "Kettlebell", elastique: "Élastique", pdc: "Poids du corps" };
 
@@ -427,6 +463,7 @@ export function moveItem(templateId, itemId, dir) {
   const j = i + dir;
   if (j < 0 || j >= items.length) return;
   [items[i], items[j]] = [items[j], items[i]];
+  items.forEach((x, k) => { if (x.group && !groupOf(items, k)) delete x.group; });
   save();
 }
 
@@ -434,13 +471,14 @@ export function moveItem(templateId, itemId, dir) {
 export function setItemFormat(item, format) {
   item.format = format;
   if (format === "series") { item.sets = item.sets || 3; item.repsMin = 8; item.repsMax = 12; item.rest = item.rest || 90; }
-  else Object.assign(item, FORMAT_DEFAULTS[format]);
+  else { Object.assign(item, FORMAT_DEFAULTS[format]); delete item.group; }
   save(true);
 }
 
 export function removeItem(templateId, itemId) {
   const p = template(templateId);
   p.items = p.items.filter(x => x.id !== itemId);
+  p.items.forEach((x, k) => { if (x.group && !groupOf(p.items, k)) delete x.group; });
   save();
 }
 
@@ -467,12 +505,12 @@ export function startWorkout(templateId) {
     cycle: state.cycle.type, week: pos.week, deload: pos.deload,
     warmupDone: false, warm: null, cursor: 0, restEndsAt: null, restTotal: 0,
     entries: t.items.map(item => {
-      if (isInterval(item)) return intervalEntry(item.exerciseId, item, pos.deload);
+      if (isInterval(item)) return { ...intervalEntry(item.exerciseId, item, pos.deload), itemId: item.id };
       const s = suggestion(item, now);
       // Deload : on garde le mouvement, on divise le volume par deux.
       const sets = pos.deload ? Math.max(1, Math.ceil(item.sets / 2)) : item.sets;
       return {
-        exerciseId: item.exerciseId, format: "series",
+        exerciseId: item.exerciseId, format: "series", itemId: item.id, startSets: sets, group: item.group,
         target: { sets, repsMin: item.repsMin, repsMax: item.repsMax, rest: item.rest },
         draft: { weight: s.weight, reps: s.reps, rpe: null }, hint: pos.deload ? null : s.hint,
         sets: []
@@ -526,6 +564,22 @@ export function logSet() {
   }
   e.sets.push({ weight: e.draft.weight, reps: e.draft.reps, rpe: e.draft.rpe, doneAt: Date.now() });
   e.draft.rpe = null;
+  // Superset / triset : on passe à l'exercice suivant du groupe sans repos ; le tour fini, repos puis retour au premier.
+  const g = groupOf(a.entries, a.cursor);
+  if (g) {
+    const open = g.members.filter(i => a.entries[i].sets.length < a.entries[i].target.sets);
+    const next = open.find(i => i > a.cursor && a.entries[i].sets.length < e.sets.length);
+    if (next !== undefined) { a.cursor = next; a.restEndsAt = null; save(); return; }
+    const isLastGroup = g.members.at(-1) === a.entries.length - 1;
+    if (open.length || !isLastGroup) {
+      const rest = a.entries[g.members.at(-1)].target.rest;
+      a.restTotal = rest;
+      a.restEndsAt = Date.now() + rest * 1000;
+    }
+    a.cursor = open.length ? open[0] : g.members.at(-1);
+    save();
+    return;
+  }
   // Dernière série d'un exercice : on reste dessus (repos puis « Exercice terminé »), « Suivant » passe au suivant.
   const finished = e.sets.length >= e.target.sets;
   const isLast = a.cursor === a.entries.length - 1;
@@ -545,7 +599,7 @@ export function swapExercise(index, exerciseId) {
   if (e.sets.length && !isInterval(e)) {
     const left = Math.max(1, e.target.sets - e.sets.length);
     e.target = { ...e.target, sets: e.sets.length };
-    e = { exerciseId: e.exerciseId, format: "series", target: { ...e.target, sets: left }, draft: { ...e.draft }, sets: [] };
+    e = { exerciseId: e.exerciseId, format: "series", itemId: e.itemId, group: e.group, target: { ...e.target, sets: left }, draft: { ...e.draft }, sets: [] };
     a.entries.splice(index + 1, 0, e);
     a.cursor = index + 1;
   }
@@ -573,7 +627,10 @@ export function setEntryEquip(index, equip) {
 export function addExtra(exerciseId, format = "series") {
   const a = state.active;
   const last = lastPerformance(exerciseId);
-  const at = a.cursor + (a.entries[a.cursor].sets.length ? 1 : 0);
+  // Pas au milieu d'un superset : l'exercice ajouté passe après le groupe.
+  const g = groupOf(a.entries, a.cursor);
+  const at = g ? (a.entries[g.members[0]].sets.length ? g.members.at(-1) + 1 : g.members[0]) : a.cursor + (a.entries[a.cursor].sets.length ? 1 : 0);
+  a.edited = true;
   const weight = last ? Math.max(...last.sets.map(s => s.weight)) : 0;
   a.entries.splice(at, 0, format === "series" ? {
     exerciseId, extra: true, format,
@@ -585,7 +642,68 @@ export function addExtra(exerciseId, format = "series") {
   save();
 }
 
-export function finishWorkout(feeling, note) {
+// ——— Séance en cours personnalisée : séries, ordre, retrait. Le programme ne bouge pas, sauf si on le demande en fin de séance.
+
+export function setEntrySets(index, sets) {
+  const e = state.active.entries[index];
+  e.target.sets = Math.max(1, e.sets.length, sets);
+  if (isInterval(e)) e.target.rounds = e.target.sets;
+  state.active.edited = true;
+  save(true);
+}
+
+export function moveEntry(index, dir) {
+  const a = state.active, j = index + dir;
+  if (j < 0 || j >= a.entries.length) return;
+  [a.entries[index], a.entries[j]] = [a.entries[j], a.entries[index]];
+  if (a.cursor === index) a.cursor = j; else if (a.cursor === j) a.cursor = index;
+  a.entries.forEach((x, k) => { if (x.group && !groupOf(a.entries, k)) delete x.group; });
+  a.edited = true;
+  save();
+}
+
+export function removeEntry(index) {
+  const a = state.active;
+  a.entries.splice(index, 1);
+  if (a.cursor > index || a.cursor >= a.entries.length) a.cursor = Math.max(0, a.cursor - 1);
+  a.entries.forEach((x, k) => { if (x.group && !groupOf(a.entries, k)) delete x.group; });
+  a.edited = true;
+  save();
+}
+
+export function linkEntries(index) {
+  toggleLink(state.active.entries, index);
+  state.active.edited = true;
+  save();
+}
+
+// Reporte la séance en cours dans sa séance type : ordre, exercices ajoutés ou retirés, séries en plus ou en moins, groupes.
+// Une machine prise reste une exception : la séance type garde l'exercice d'origine.
+function keepInTemplate(a) {
+  const t = template(a.templateId);
+  if (!t) return;
+  const seen = new Set(), items = [];
+  for (const e of a.entries) {
+    const base = e.itemId && t.items.find(i => i.id === e.itemId);
+    if (base) {
+      if (seen.has(base.id)) continue;
+      seen.add(base.id);
+      const same = a.entries.filter(x => x.itemId === base.id);
+      const item = { ...base, group: e.group };
+      if (!isInterval(base)) item.sets = Math.max(1, base.sets + same.reduce((n, x) => n + x.target.sets, 0) - (e.startSets ?? base.sets));
+      if (!item.group) delete item.group;
+      items.push(item);
+    } else if (isInterval(e)) {
+      items.push({ id: uid(), exerciseId: e.exerciseId, format: e.format, rounds: e.target.rounds, every: e.target.every, work: e.target.work, off: e.target.off, repsMin: e.target.repsMin, repsMax: e.target.repsMax, weight: e.draft.weight });
+    } else {
+      const top = e.sets.length ? Math.max(...e.sets.map(x => x.weight)) : e.draft.weight;
+      items.push({ id: uid(), exerciseId: e.exerciseId, format: "series", sets: e.target.sets, repsMin: e.target.repsMin, repsMax: e.target.repsMax, weight: top, rest: e.target.rest, ...(e.group ? { group: e.group } : {}) });
+    }
+  }
+  t.items = items;
+}
+
+export function finishWorkout(feeling, note, keep) {
   const a = state.active;
   const s = {
     id: a.id, templateId: a.templateId, name: a.name,
@@ -596,12 +714,19 @@ export function finishWorkout(feeling, note) {
       sets: e.sets.map(({ weight, reps, rpe }) => ({ weight, reps, rpe }))
     }))
   };
+  if (keep && a.edited) keepInTemplate(a);
   state.active = null;
   if (!s.entries.length) { save(); return null; }
   state.sessions.push(s);
   state.habits[dayKey(s.startedAt)] = { ...state.habits[dayKey(s.startedAt)], session: true };
   save();
   return s;
+}
+
+// Séance lancée par erreur : on la jette, séries validées comprises, rien n'est enregistré.
+export function discardWorkout() {
+  state.active = null;
+  save();
 }
 
 export function deleteSession(id) {

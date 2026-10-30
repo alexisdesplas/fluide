@@ -1,14 +1,34 @@
-import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, generateProgram, applyProgram, plannedSetsOf, SPLITS, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS } from "../store.js";
+import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, generateProgram, applyProgram, plannedSetsOf, SPLITS, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
 export const prefPill = pref =>
   pref === "aime" ? pill("Favori", "accent") : pref === "evite" ? pill("Je n'aime pas") : pref === "douleur" ? pill("Douleur", "danger") : null;
 
-export const itemLine = it =>
+// chained : exercice d'un superset suivi d'un autre, enchaîné sans repos.
+export const itemLine = (it, chained) =>
   it.format === "emom" ? `EMOM ${it.rounds} × ${clock(it.every)} · ${it.repsMin} reps · ${kg(it.weight)}`
   : it.format === "tabata" ? `Tabata ${it.rounds} × ${it.work} s / ${it.off} s · ${kg(it.weight)}`
-  : `${it.sets} × ${reps(it.repsMin, it.repsMax)} · ${kg(it.weight)} · repos ${clock(it.rest)}`;
+  : `${it.sets} × ${reps(it.repsMin, it.repsMax)} · ${kg(it.weight)} · ${chained ? "sans repos" : `repos ${clock(it.rest)}`}`;
+
+// Repère d'un exercice groupé : « A1 », « A2 »… une lettre par superset ou triset, dans l'ordre de la séance.
+export function groupTag(list, i) {
+  const g = groupOf(list, i);
+  if (!g) return null;
+  let letter = 0;
+  for (let k = 0; k < g.members[0]; k++) if (groupOf(list, k)?.members[0] === k) letter++;
+  return { ...g, tag: `${String.fromCharCode(65 + letter)}${g.pos + 1}` };
+}
+
+// Bouton entre deux lignes du mode Modifier : lier en superset / triset, ou délier.
+export const linkRow = (list, i, onToggle) => {
+  if (!canLink(list, i)) return null;
+  const linked = list[i].group && list[i].group === list[i + 1].group;
+  const size = (groupOf(list, i)?.members.length || 1) + (groupOf(list, i + 1)?.members.length || 1);
+  return h("div", { class: `link-row${linked ? " on" : ""}` },
+    h("button", { type: "button", class: "btn ghost xs", "aria-pressed": String(!!linked), onClick: onToggle }, icon("link"),
+      linked ? "Délier" : size >= 3 ? "Lier en triset" : "Lier en superset"));
+};
 
 // Catalogue partagé (ajout à une séance, hors programme, machine prise) : plus de 1000 exercices,
 // filtrés par muscle et par matériel. Sans recherche ni filtre, chaque muscle montre ses 5 plus utiles.
@@ -103,15 +123,19 @@ export function templateView({ id }) {
   const leave = () => { editing = null; go("#/seances"); };
   const toggle = () => { editing = edit ? null : t.id; save(); };
 
-  const rows = t.items.map((it, i) => {
+  const rows = t.items.flatMap((it, i) => {
     const ex = exercise(it.exerciseId);
-    const main = [h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, ex.name), h("span", { class: "caption num" }, itemLine(it))), prefPill(ex.pref)];
+    const g = groupTag(t.items, i);
+    const main = [h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, ex.name),
+      h("span", { class: "caption num" }, g ? `${g.label} ${g.tag} · ` : "", itemLine(it, g && !g.last))), prefPill(ex.pref)];
+    const cls = `row${g ? " grouped" : ""}`;
     return edit
-      ? h("div", { class: "row" }, ...main,
+      ? [h("div", { class: cls }, ...main,
           h("div", { class: "reorder" },
             h("button", { class: "btn secondary square", "aria-label": `Monter ${ex.name}`, disabled: i === 0, onClick: () => moveItem(t.id, it.id, -1) }, icon("up")),
-            h("button", { class: "btn secondary square", "aria-label": `Descendre ${ex.name}`, disabled: i === t.items.length - 1, onClick: () => moveItem(t.id, it.id, 1) }, icon("down"))))
-      : h("button", { class: "row", onClick: () => go(`#/seances/${t.id}/${it.id}`) }, ...main, icon("caretRight", "chev"));
+            h("button", { class: "btn secondary square", "aria-label": `Descendre ${ex.name}`, disabled: i === t.items.length - 1, onClick: () => moveItem(t.id, it.id, 1) }, icon("down")))),
+        linkRow(t.items, i, () => toggleLink(t.items, i))]
+      : h("button", { class: cls, onClick: () => go(`#/seances/${t.id}/${it.id}`) }, ...main, icon("caretRight", "chev"));
   });
   const list = t.items.length ? h("div", { class: "list" }, rows)
     : h("div", { class: "card empty" }, h("p", { class: "body-md fort medium", style: { margin: 0 } }, "Aucun exercice"),
@@ -124,7 +148,7 @@ export function templateView({ id }) {
       ? [
           h("label", { class: "field" }, h("span", { class: "caption medium" }, "Nom de la séance"),
             h("input", { class: "input", value: t.name, maxLength: 40, onChange: e => { const v = e.target.value.trim(); if (v) { t.name = v; save(); } else e.target.value = t.name; } })),
-          h("p", { class: "caption", style: { margin: 0 } }, "Les flèches changent l'ordre dans la séance : les polyarticulaires lourds d'abord."),
+          h("p", { class: "caption", style: { margin: 0 } }, "Les flèches changent l'ordre dans la séance : les polyarticulaires lourds d'abord. « Lier » enchaîne deux ou trois exercices en superset ou triset : sans repos entre eux, le repos du dernier après le tour."),
           list,
           btn("Supprimer la séance type", { variant: "danger", full: true, onClick: () => confirmSheet({
             title: "Supprimer la séance type ?",
@@ -151,6 +175,7 @@ export function itemView({ id, item }) {
   const ex = exercise(it.exerciseId);
   const last = lastPerformance(it.exerciseId);
   const sug = suggestion(it);
+  const group = groupOf(t.items, t.items.indexOf(it)), chained = group && !group.last;
   const done = () => { save(); go(`#/seances/${t.id}`); };
   const set = k => v => { it[k] = v; if (k === "repsMin" && it.repsMax < v) it.repsMax = v; if (k === "repsMax" && it.repsMin > v) it.repsMin = v; save(true); };
   const field = (label, s) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), s);
@@ -186,7 +211,9 @@ export function itemView({ id, item }) {
             field("Reps min", stepper({ value: it.repsMin, min: 1, max: 50, compact: true, label: "reps min", onChange: set("repsMin") })),
             field("Reps max", stepper({ value: it.repsMax, min: 1, max: 50, compact: true, label: "reps max", onChange: set("repsMax") }))),
           weight("Charge de départ"),
-          field("Repos", stepper({ value: it.rest, step: 15, min: 15, max: 600, format: clock, compact: true, label: "repos", onChange: set("rest") }))),
+          chained
+            ? h("p", { class: "caption", style: { margin: 0 } }, `${group.label} : enchaîné sans repos avec ${exercise(t.items[t.items.indexOf(it) + 1].exerciseId).name}. Le repos se règle sur le dernier exercice du groupe.`)
+            : field(group ? `Repos après le ${group.label.toLowerCase()}` : "Repos", stepper({ value: it.rest, step: 15, min: 15, max: 600, format: clock, compact: true, label: "repos", onChange: set("rest") }))),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Matériel")),
       h("div", { class: "chips" }, Object.entries(EQUIPS).map(([k, l]) => h("button", { type: "button", class: "chip", "aria-pressed": String(k === ex.equip),
         onClick: () => { setEquip(ex.id, k); dispatchEvent(new HashChangeEvent("hashchange")); } }, l))),

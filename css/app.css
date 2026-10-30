@@ -359,6 +359,14 @@ dialog.sheet::backdrop { background: rgba(0, 0, 0, .6); }
 .btn.square { width: 44px; height: 44px; padding: 0; }
 .btn.square svg { width: 18px; height: 18px; }
 .reorder { display: flex; gap: var(--spacing-8); flex: none; }
+/* Superset / triset : trait d'accent à gauche des exercices liés, bouton « Lier » entre deux lignes. */
+.row.grouped { box-shadow: inset 4px 0 0 var(--accent-texte); }
+.link-row { display: flex; justify-content: center; padding: var(--spacing-4) 0; border-top: 1px solid var(--bord-discret); }
+.link-row.on { box-shadow: inset 4px 0 0 var(--accent-texte); }
+.link-row .btn svg { width: 16px; height: 16px; }
+.row.edit-entry { flex-direction: column; align-items: stretch; gap: var(--spacing-8); padding-top: var(--spacing-12); padding-bottom: var(--spacing-12); }
+.edit-entry-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-8); }
+.link-row + .row { border-top: 1px solid var(--bord-discret); }
 
 /* Carte de choix (Radio Card Hardwood) : ressenti de fin de séance. */
 .radio-cards { display: flex; flex-direction: column; gap: var(--spacing-8); }
