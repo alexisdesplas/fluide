@@ -1,5 +1,5 @@
 import { state, save, template, exercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek } from "../store.js";
-import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
+import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
 export const prefPill = pref =>
@@ -161,11 +161,11 @@ export function itemView({ id, item }) {
   const el = h("div", { class: "screen no-tabs" },
     navbar({ back: { label: t.name, onClick: done }, title: ex.name, subtitle: ex.muscle, action: { label: "OK", onClick: done } }),
     h("div", { class: "scroll" },
-      segmented(Object.entries(FORMATS), it.format || "series", v => { setItemFormat(it, v); dispatchEvent(new HashChangeEvent("hashchange")); }),
-      h("p", { class: "caption", style: { margin: 0 } },
-        it.format === "emom" ? "Un round au début de chaque intervalle, le reste de l'intervalle sert de repos. Compte 1 série par tranche de 3 rounds dans l'objectif Fluide."
-        : it.format === "tabata" ? "Effort puis repos, round après round, au chrono. 8 rounds comptent 2 séries dans l'objectif Fluide."
-        : "Séries classiques : la charge monte quand le haut de la fourchette est atteint partout."),
+      radios([
+        ["series", FORMATS.series, "La charge monte quand le haut de la fourchette est atteint partout."],
+        ["emom", FORMATS.emom, "Un round au début de chaque intervalle, le reste sert de repos. 3 rounds comptent 1 série."],
+        ["tabata", FORMATS.tabata, "Effort puis repos au chrono. 8 rounds comptent 2 séries."]
+      ], it.format || "series", v => { setItemFormat(it, v); dispatchEvent(new HashChangeEvent("hashchange")); }, "Format"),
       it.format !== "emom" && it.format !== "tabata" && last && h("div", { class: "hint" }, icon("trend"),
         h("span", { class: "body-sm" }, "La dernière fois ", h("b", { class: "fort medium num" }, last.sets.map(s => `${s.reps}×${num(s.weight)}`).join(" · ")), ` (${ago(last.date)}). `,
           sug.hint === "charge" ? `Haut de fourchette atteint : vise ${kg(sug.weight)}.` : `Vise ${sug.reps} reps à ${kg(sug.weight)}.`)),
@@ -193,7 +193,7 @@ export function itemView({ id, item }) {
         onClick: () => { setEquip(ex.id, k); dispatchEvent(new HashChangeEvent("hashchange")); } }, l))),
       hasMovement(ex) && btn("Voir le mouvement", { variant: "secondary", full: true, icon: "play", onClick: () => movementSheet(ex) }),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Ton avis sur l'exercice")),
-      segmented(Object.entries(PREFS), ex.pref, v => { setPref(ex.id, v); }, "sm"),
+      radios(Object.entries(PREFS), ex.pref, v => { setPref(ex.id, v); }, "Ton avis sur l'exercice"),
       ex.pref === "douleur" && h("div", { class: "hint attention" }, icon("warning"),
         h("span", { class: "body-sm" }, "Ne pousse pas dans la douleur articulaire : remplace-le par un exercice du même muscle (autre angle, machine guidée, amplitude réduite). Si ça persiste, demande un avis pro.")),
       btn("Retirer de la séance", { variant: "danger", full: true, onClick: () => { removeItem(t.id, it.id); go(`#/seances/${t.id}`); } })));
@@ -371,7 +371,7 @@ export function weekView() {
     h("div", { class: "scroll" },
       h("div", { class: "card" },
         field("Séances de muscu par semaine", stepper({ value: p.days, min: 2, max: 6, unit: "séances", label: "séances par semaine", onChange: set("days") })),
-        field("Temps par séance, en minutes", segmented(SESSION_MINUTES.map(m => [m, String(m)]), p.minutes, set("minutes"), "sm"),
+        field("Temps par séance", stepper({ value: p.minutes, values: SESSION_MINUTES, min: SESSION_MINUTES[0], max: SESSION_MINUTES.at(-1), format: v => `${v} min`, label: "minutes par séance", onChange: set("minutes") }),
           "Échauffement compris. Une séance trop longue perd d'abord du repos, puis des séries sur les muscles à maintenir.")),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif longue durée")),
       h("p", { class: "caption", style: { margin: 0 } }, "Un sport que tu prépares à côté de la muscu. Il compte dans la récupération des jambes."),
