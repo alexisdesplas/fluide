@@ -3,6 +3,7 @@ import { h, icon, pageHead, navbar, btn, go, int, stepper, segmented, sheet, con
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
 import { cordeSettings } from "./corde.js";
+import { accountCard } from "./compte.js";
 
 const field = (label, control) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), control);
 
@@ -102,8 +103,10 @@ export function profileView() {
         field("Échauffement sans programme corde", h("input", { class: "input", value: p.warmup, "aria-label": "Échauffement", onChange: e => { p.warmup = e.target.value; save(true); } }))),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Corde à sauter")),
       cordeSettings(),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Compte")),
+      accountCard(),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Données")),
-      h("p", { class: "caption", style: { margin: 0 } }, "Tout reste sur ce téléphone. Exporte de temps en temps pour garder une sauvegarde."),
+      h("p", { class: "caption", style: { margin: 0 } }, "Une copie de tes données dans un fichier, en plus du compte."),
       h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
         btn("Exporter", { variant: "secondary", icon: "download", onClick: download }),
         btn("Importer", { variant: "secondary", icon: "upload", onClick: upload }))));
