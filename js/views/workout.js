@@ -1,20 +1,22 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, swapExercise, setEntryEquip, equipOf, weightScale, lbs, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, enduranceToday, blocksLabel, blocksTotal } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, beep, dateLong, pageHead, navbar } from "../ui.js";
-import { prefPill, catalogue, exerciseTitle, groupTag, linkRow } from "./templates.js";
+import { prefPill, catalogue, exerciseTitle, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
 
 // Anneau de Tabatime : 312 px, trait de 34 px.
 const R = 139, C = 2 * Math.PI * R;
 
 const lastLine = id => {
   const last = lastPerformance(id);
-  return last ? `${last.sets.map(s => `${s.reps}×${s.weight ? num(s.weight) : "PDC"}`).join(" · ")} · ${ago(last.date)}` : "Jamais fait";
+  return last ? `${setsLine(exercise(id).equip, last.sets)} · ${ago(last.date)}` : "Jamais fait";
 };
 
-// Machine prise : même exercice avec un autre matériel, ou un autre exercice du même muscle (recherche dans tout le catalogue), favoris d'abord.
+// Machine prise : le même mouvement avec un autre matériel (un vrai exercice du catalogue, son nom et sa vidéo),
+// ou un autre exercice du même muscle (recherche dans tout le catalogue), favoris d'abord.
 function swapSheet(index) {
   const e = state.active.entries[index];
-  const ex = exercise(e.exerciseId), cur = equipOf(e);
+  const ex = exercise(e.exerciseId);
   const alts = alternatives(e.exerciseId);
+  const vars = Object.entries(variants(e.exerciseId));
   let query = "", closeSheet;
   const list = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } });
   const draw = muscle => catalogue(list, query, { muscle, pickIcon: "caretRight", note: x => lastLine(x.id),
@@ -24,13 +26,25 @@ function swapSheet(index) {
     title: "Machine prise ?",
     body: close => { closeSheet = close; return [
       h("p", { class: "body-sm discret", style: { margin: 0 } }, `Le programme ne change pas : seule cette séance prend l'alternative.`),
-      h("span", { class: "overline" }, `${ex.name} avec`),
-      h("div", { class: "chips" }, Object.entries(EQUIPS).filter(([k]) => ["barre", "halteres", "poulie", "machine", "smith"].includes(k) || k === cur).map(([k, label]) =>
-        h("button", { type: "button", class: "chip", "aria-pressed": String(k === cur), onClick: () => {
+      vars.length > 1 && h("span", { class: "overline" }, "Même mouvement avec"),
+      vars.length > 1 && h("div", { class: "chips" }, Object.keys(EQUIPS).filter(k => vars.some(([q]) => q === k)).map(k => {
+        const x = vars.find(([q]) => q === k)[1];
+        return h("button", { type: "button", class: "chip", "aria-pressed": String(x.id === ex.id), "aria-label": x.name, onClick: () => {
           close();
-          if (k !== cur) { setEntryEquip(index, k); toast(`${ex.name} · ${label.toLowerCase()}`); }
-        } }, label))),
+          if (x.id !== ex.id) { swapExercise(index, x.id); toast(`${x.name} à la place`); }
+        } }, EQUIPS[k]);
+      })),
       h("span", { class: "overline" }, "Autre exercice"),
+      !ex.mix && h("div", { class: "list" }, h("div", { class: "row pick" },
+        h("button", { class: "row-btn", onClick: () => {
+          close();
+          swapExercise(index, meltingPot(ex.muscle).id);
+          setEntryFormat(state.active.cursor, "tabata");
+          toast(`Melting pot ${ex.muscle.toLowerCase()} en Tabata`);
+        } },
+          h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, "Melting pot"),
+            h("span", { class: "caption" }, `Tabata ou EMOM de ${ex.muscle.toLowerCase()}, tes exercices sans les saisir`)),
+          icon("caretRight", "chev")))),
       h("input", { class: "input", type: "search", placeholder: "Chercher un exercice", "aria-label": "Chercher un exercice", onInput: ev => { query = ev.target.value; draw(); } }),
       !alts.length && h("p", { class: "body-sm discret", style: { margin: 0 } }, `Aucun autre exercice pour les ${ex.muscle} hors douleur : cherche dans tout le catalogue, ou attends la machine.`),
       list,
@@ -38,12 +52,34 @@ function swapSheet(index) {
   });
 }
 
-// Stepper de charge réglé sur le matériel : pile en lbs pour les machines, haltères à l'unité.
-const weightStepper = (e, unit) => {
-  const equip = equipOf(e);
-  return stepper({ value: e.draft.weight, values: weightScale(equip), max: 500, format: num, editable: true, label: "charge",
-    unit: v => [equip === "halteres" ? "kg par haltère" : "kg", lbs(equip, v), unit].filter(Boolean).join(" · "),
-    onChange: v => { e.draft.weight = v; save(true); } });
+const weightStepper = (e, note) => chargeStepper({ equip: equipOf(e), value: e.draft.weight, note, onChange: v => { e.draft.weight = v; save(true); } });
+
+// Format de l'exercice en cours, choisi avant la première série : séries, EMOM ou Tabata.
+function formatSheet(index) {
+  const e = state.active.entries[index], ex = exercise(e.exerciseId);
+  const grouped = groupOf(state.active.entries, index);
+  sheet({
+    title: "Format",
+    body: close => [
+      h("p", { class: "body-sm discret", style: { margin: 0 } }, `Pour ${ex.name}, cette séance seulement.${grouped ? " En EMOM ou en Tabata, il sort de son superset." : ""}`),
+      radios([
+        ["series", FORMATS.series, "Séries avec repos, la charge monte quand le haut de la fourchette est atteint."],
+        ["emom", FORMATS.emom, `${FORMAT_DEFAULTS.emom.rounds} rounds de ${FORMAT_DEFAULTS.emom.repsMin} reps, un au début de chaque minute.`],
+        ["tabata", FORMATS.tabata, `${FORMAT_DEFAULTS.tabata.rounds} rounds de ${FORMAT_DEFAULTS.tabata.work} s d'effort, ${FORMAT_DEFAULTS.tabata.off} s de repos.`]
+      ], e.format || "series", v => { close(); setEntryFormat(index, v); toast(`${ex.name} en ${FORMATS[v].toLowerCase()}`); }, "Format")]
+  });
+}
+
+// Favori : les programmes générés le proposent en premier. Sur un exercice pris à la place, il le garde aussi
+// dans la séance type, pour que la prochaine séance le propose d'emblée.
+const favBtn = (e, ex) => {
+  const on = ex.pref === "aime";
+  return h("button", { type: "button", class: "btn secondary sm fav", "aria-pressed": String(on), onClick: () => {
+    toggleFav(ex.id);
+    const t = !on && keepSwap(state.active.cursor);
+    toast(on ? `${ex.name} retiré des favoris` : t ? `${ex.name} en favori, gardé dans ${t.name}` : `${ex.name} en favori`);
+    save();
+  }, "aria-label": on ? `Retirer ${ex.name} des favoris` : `Mettre ${ex.name} en favori` }, icon("star"), "Favori");
 };
 
 // Sans série validée, rien n'est enregistré : on le dit avant de sortir.
@@ -236,7 +272,7 @@ export function workoutView() {
     const w = a.warm;
     const left = () => Math.max(0, w.total - ((w.paused || Date.now()) - w.start) / 1000);
     const approach = h("div", { class: "hint" }, icon("barbell"),
-      h("span", { class: "body-sm" }, "Séries d'approche sur ", h("b", { class: "fort medium" }, ex.name), ` : 2 ou 3 séries légères avant ${kg(e.draft.weight)}.`));
+      h("span", { class: "body-sm" }, "Séries d'approche sur ", h("b", { class: "fort medium" }, ex.name), ` : 2 ou 3 séries légères avant ${charge(equipOf(e), e.draft.weight)}.`));
     const head = h("div", { class: "wo-head" },
       h("div", { class: "wo-top" },
         h("span", { class: "overline" }, a.name, a.deload ? " · deload" : "", " · avant la première série"),
@@ -403,7 +439,7 @@ export function workoutView() {
       h("div", { class: "wo-hero", style: { paddingBottom: 0 } },
         h("div", { class: "overline" }, `Série ${e.sets.length + 1} / ${e.target.sets}`),
         h("span", { class: "body-sm discret num" }, `Objectif ${reps(e.target.repsMin, e.target.repsMax)} reps · RPE ${String(rpeTarget).replace(".", ",")}`)),
-      e.hint === "charge" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Haut de fourchette atteint la dernière fois : ", h("b", { class: "fort medium" }, kg(e.draft.weight)), ".")),
+      e.hint === "charge" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Haut de fourchette atteint la dernière fois : ", h("b", { class: "fort medium" }, charge(equipOf(e), e.draft.weight)), ".")),
       e.hint === "reps" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Même charge, vise ", h("b", { class: "fort medium" }, `${e.draft.reps} reps`), " (une de plus que la dernière fois).")),
       weightStepper(e),
       h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Reps"),
@@ -418,7 +454,7 @@ export function workoutView() {
       const cur = !s && i === e.sets.length && !resting;
       return h("div", { class: `set-row${s ? " done" : ""}${cur ? " cur" : ""}` },
         h("span", { class: "set-idx" }, s ? icon("check") : i + 1),
-        h("span", { class: `body-md num ${s ? "fort" : "discret"}` }, s ? `${interval ? `Round ${i + 1} · ` : ""}${kg(s.weight)} × ${s.reps}` : cur ? "En cours" : interval ? `Round ${i + 1}` : `${reps(e.target.repsMin, e.target.repsMax)} reps`),
+        h("span", { class: `body-md num ${s ? "fort" : "discret"}` }, s ? `${interval ? `Round ${i + 1} · ` : ""}${charge(equipOf(e), s.weight)} × ${s.reps}` : cur ? "En cours" : interval ? `Round ${i + 1}` : `${reps(e.target.repsMin, e.target.repsMax)} reps`),
         s?.rpe ? h("span", { class: "caption num" }, `RPE ${s.rpe}`) : s && i === e.sets.length - 1
           ? h("button", { class: "btn ghost xs", onClick: () => { e.sets.pop(); a.restEndsAt = null; save(); } }, "Annuler")
           : h("span"));
@@ -445,12 +481,12 @@ export function workoutView() {
         h("h1", { class: "heading-xl wo-title" }, exerciseTitle(ex)),
         h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, interval ? `${ex.muscle} · ${formatLine}`
           : nextInGroup ? `${ex.muscle} · puis ${nextInGroup.name}, sans repos` : grp ? `${ex.muscle} · repos ${clock(e.target.rest)} après le tour` : `${ex.muscle} · repos ${clock(e.target.rest)}`,
-          e.equip ? ` · ${EQUIPS[e.equip].toLowerCase()}` : "", e.swappedFrom ? ` · à la place de ${exercise(e.swappedFrom).name}` : "", e.extra ? " · hors programme" : "")),
+          e.equip ? ` · ${EQUIPS[e.equip].toLowerCase()}` : "", e.extra ? " · hors programme" : "")),
       h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
         a.deload && pill("Deload", "attention"),
         !exDone && btn("Machine prise", { variant: "secondary", size: "sm", icon: "swap", onClick: () => swapSheet(a.cursor) }),
-        btn("Hors programme", { variant: "secondary", size: "sm", icon: "plus", onClick: extraSheet }),
-        btn("Modifier", { variant: "secondary", size: "sm", icon: "pencil", onClick: () => go("#/seance/modifier") })),
+        !e.sets.length && !e.clock && btn(FORMATS[e.format || "series"], { variant: "secondary", size: "sm", icon: "timer", onClick: () => formatSheet(a.cursor) }),
+        favBtn(e, ex)),
       h("div", { class: "segments", "aria-label": `${a.entries.filter(x => x.sets.length >= x.target.sets).length} exercices terminés sur ${a.entries.length}` }, segs)),
     h("div", { class: "scroll" },
       ex.pref === "douleur" && h("div", { class: "hint attention" }, icon("warning"), h("span", { class: "body-sm" }, "Tu as signalé une douleur sur cet exercice : charge allégée, amplitude confortable, ou remplace-le.")),

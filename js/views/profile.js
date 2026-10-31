@@ -2,7 +2,7 @@ import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosi
 import { h, icon, pageHead, navbar, btn, go, int, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
-import { accountCard, RACCOURCI_PAS } from "./compte.js";
+import { accountCard } from "./compte.js";
 
 const field = (label, control) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), control);
 
@@ -102,8 +102,6 @@ export function profileView() {
           stepper({ value: p.days, min: 1, max: 7, compact: true, label: "séances par semaine", onChange: set("days") })),
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Cible de pas / jour"),
           stepper({ value: p.stepsTarget, step: 500, min: 2000, max: 30000, compact: true, format: int, label: "pas par jour", onChange: set("stepsTarget") })),
-        h("p", { class: "caption", style: { margin: 0 } }, "Pour reprendre tes pas de l'app Santé sans les taper : ",
-          h("a", { class: "lien", href: RACCOURCI_PAS, target: "_blank", rel: "noopener" }, "installer le Raccourci « Pas du jour »"), "."),
         field("Échauffement", h("input", { class: "input", value: p.warmup, "aria-label": "Échauffement", onChange: e => { p.warmup = e.target.value; save(true); } })),
         ENDURANCE[p.endurance] && h("p", { class: "caption", style: { margin: 0 } }, `Avec ton plan ${ENDURANCE[p.endurance].short.toLowerCase()}, l'échauffement devient la séance corde du jour (facile ou récup, semaine en cours). Celui-ci sert les jours où le plan prévoit le jour long, à faire à part.`)),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Compte")),

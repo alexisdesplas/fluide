@@ -1,15 +1,31 @@
-import { state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, lbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek } from "../store.js";
+import { state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek } from "../store.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
 export const prefPill = pref =>
   pref === "aime" ? pill("Favori", "accent") : pref === "evite" ? pill("Je n'aime pas") : pref === "douleur" ? pill("Douleur", "danger") : null;
 
+// Charge dans l'unité du matériel : lbs sur la pile d'une machine ou d'une poulie, kg sinon.
+export const charge = (equip, w) => (!w ? "PDC" : inLbs(equip) ? `${toLbs(w)} lbs` : kg(w));
+// Version courte pour les lignes « 8×60 · 8×60 ».
+export const chargeNum = (equip, w) => (!w ? "PDC" : inLbs(equip) ? toLbs(w) : num(w));
+export const setsLine = (equip, sets) => sets.map(s => `${s.reps}×${chargeNum(equip, s.weight)}`).join(" · ");
+
+// Stepper de charge réglé sur le matériel : pile en lbs pour les machines (kg en rappel), haltères à l'unité.
+export function chargeStepper({ equip, value, note, onChange }) {
+  const lb = inLbs(equip);
+  return stepper({ value, values: weightScale(equip), max: 500, editable: true, label: "charge",
+    format: lb ? v => String(toLbs(v)) : num, parse: lb ? fromLbs : undefined,
+    unit: v => [lb ? "lbs" : equip === "halteres" ? "kg par haltère" : "kg", lb && v ? kg(v) : null, note].filter(Boolean).join(" · "), onChange });
+}
+
 // chained : exercice d'un superset suivi d'un autre, enchaîné sans repos.
-export const itemLine = (it, chained) =>
-  it.format === "emom" ? `EMOM ${it.rounds} × ${clock(it.every)} · ${it.repsMin} reps · ${kg(it.weight)}`
-  : it.format === "tabata" ? `Tabata ${it.rounds} × ${it.work} s / ${it.off} s · ${kg(it.weight)}`
-  : `${it.sets} × ${reps(it.repsMin, it.repsMax)} · ${kg(it.weight)} · ${chained ? "sans repos" : `repos ${clock(it.rest)}`}`;
+export const itemLine = (it, chained) => {
+  const w = charge(exercise(it.exerciseId)?.equip, it.weight);
+  return it.format === "emom" ? `EMOM ${it.rounds} × ${clock(it.every)} · ${it.repsMin} reps · ${w}`
+    : it.format === "tabata" ? `Tabata ${it.rounds} × ${it.work} s / ${it.off} s · ${w}`
+    : `${it.sets} × ${reps(it.repsMin, it.repsMax)} · ${w} · ${chained ? "sans repos" : `repos ${clock(it.rest)}`}`;
+};
 
 // Repère d'un exercice groupé : « A1 », « A2 »… une lettre par superset ou triset, dans l'ordre de la séance.
 export function groupTag(list, i) {
@@ -37,7 +53,7 @@ const filter = { muscle: null, equip: null };
 export function catalogue(list, query, { onPick, note, pickIcon = "plus", muscle }) {
   if (muscle !== undefined) Object.assign(filter, { muscle, equip: null }); // ouverture : muscle imposé (ou aucun), matériel libre
   const q = query.trim().toLowerCase();
-  const match = e => (!q || e.name.toLowerCase().includes(q)) && (!filter.muscle || e.muscle === filter.muscle) && (!filter.equip || e.equip === filter.equip);
+  const match = e => !e.mix && (!q || e.name.toLowerCase().includes(q)) && (!filter.muscle || e.muscle === filter.muscle) && (!filter.equip || e.equip === filter.equip);
   const short = !q && !filter.muscle;
   const favs = state.exercises.filter(e => e.pref === "aime" && match(e)).sort((a, b) => a.name.localeCompare(b.name));
   const groups = GROUPS.map(m => [m, state.exercises.filter(e => e.muscle === m && e.pref !== "aime" && match(e)).sort(byUsefulness)])
@@ -185,8 +201,7 @@ export function itemView({ id, item }) {
   const done = () => { save(); go(`#/seances/${t.id}`); };
   const set = k => v => { it[k] = v; if (k === "repsMin" && it.repsMax < v) it.repsMax = v; if (k === "repsMax" && it.repsMin > v) it.repsMin = v; save(true); };
   const field = (label, s) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), s);
-  const weight = label => field(label, stepper({ value: it.weight, values: weightScale(ex.equip), max: 500, format: num, editable: true, label: "charge",
-    unit: v => [ex.equip === "halteres" ? "kg par haltère" : "kg", lbs(ex.equip, v), "0 = poids du corps"].filter(Boolean).join(" · "), onChange: set("weight") }));
+  const weight = label => field(label, chargeStepper({ equip: ex.equip, value: it.weight, note: "0 = poids du corps", onChange: set("weight") }));
 
   const el = h("div", { class: "screen no-tabs" },
     navbar({ back: { label: t.name, onClick: done }, title: ex.name, subtitle: ex.muscle, action: { label: "OK", onClick: done } }),
@@ -197,8 +212,8 @@ export function itemView({ id, item }) {
         ["tabata", FORMATS.tabata, "Effort puis repos au chrono. 8 rounds comptent 2 séries."]
       ], it.format || "series", v => { setItemFormat(it, v); dispatchEvent(new HashChangeEvent("hashchange")); }, "Format"),
       it.format !== "emom" && it.format !== "tabata" && last && h("div", { class: "hint" }, icon("trend"),
-        h("span", { class: "body-sm" }, "La dernière fois ", h("b", { class: "fort medium num" }, last.sets.map(s => `${s.reps}×${num(s.weight)}`).join(" · ")), ` (${ago(last.date)}). `,
-          sug.hint === "charge" ? `Haut de fourchette atteint : vise ${kg(sug.weight)}.` : `Vise ${sug.reps} reps à ${kg(sug.weight)}.`)),
+        h("span", { class: "body-sm" }, "La dernière fois ", h("b", { class: "fort medium num" }, setsLine(ex.equip, last.sets)), ` (${ago(last.date)}). `,
+          sug.hint === "charge" ? `Haut de fourchette atteint : vise ${charge(ex.equip, sug.weight)}.` : `Vise ${sug.reps} reps à ${charge(ex.equip, sug.weight)}.`)),
       it.format === "emom" ? h("div", { class: "card" },
           field("Rounds", stepper({ value: it.rounds, min: 2, max: 60, unit: "rounds", label: "rounds", onChange: set("rounds") })),
           h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
