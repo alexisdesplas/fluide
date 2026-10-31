@@ -72,7 +72,7 @@ export function goalCard() {
     h("span", { class: "caption num" }, `${g.sets} série${g.sets > 1 ? "s" : ""} faite${g.sets > 1 ? "s" : ""} sur ${g.total} prévues par tes réglages Fluide`));
 }
 
-// Pas copiés par le Raccourci iOS « Pas du jour » (livrables/fluide/raccourci-pas.md) : un nombre entier,
+// Pas reçus par le lien du Raccourci iOS « Pas du jour » (livrables/fluide/raccourci-pas.md) : un nombre entier,
 // espaces de milliers tolérés (« 8 432 »). null si ce n'est pas un nombre de pas plausible.
 const STEPS_MAX = 60000;
 export function parseSteps(text) {
@@ -80,18 +80,6 @@ export function parseSteps(text) {
   if (!/^\d+$/.test(s)) return null;
   const n = Number(s);
   return n <= STEPS_MAX ? n : null;
-}
-
-// Lecture du presse-papiers sur un tap : Safari affiche sa bulle « Coller » avant de donner le texte.
-async function pasteSteps(day) {
-  if (!navigator.clipboard?.readText) return toast("Ce navigateur ne laisse pas lire le presse-papiers.");
-  let text;
-  try { text = await navigator.clipboard.readText(); }
-  catch { return toast("Collage refusé. Touche « Coller » dans la bulle qui s'affiche."); }
-  const n = parseSteps(text);
-  if (n == null) return toast("Le presse-papiers ne contient pas un nombre de pas. Lance d'abord le Raccourci « Pas du jour ».");
-  setHabit(day, "steps", n);
-  toast(`${int(n)} pas repris de Santé`);
 }
 
 // Lien ouvert par le Raccourci (#/pas/8432) : enregistre les pas du jour puis revient sur Aujourd'hui.
@@ -159,7 +147,6 @@ export function todayView() {
           steps >= target ? pill("Cible atteinte", "succes") : pill(`${int(Math.max(0, target - steps))} restants`)),
         stepper({ value: steps, step: 500, max: STEPS_MAX, format: int, unit: "pas", editable: true, label: "pas du jour",
           onChange: v => { setHabit(today, "steps", v, true); } }),
-        received && h("span", { class: "caption num" }, `Reçus de Santé à ${new Date(received.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} par le Raccourci.`),
-        btn("Coller depuis Santé", { variant: "secondary", full: true, icon: "clipboard", onClick: () => pasteSteps(today) }))));
+        received && h("span", { class: "caption num" }, `Reçus de Santé à ${new Date(received.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} par le Raccourci.`))));
   return { el, tab: "" };
 }

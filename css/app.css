@@ -410,7 +410,7 @@ textarea.input.journal { height: 140px; }
 .star { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border: 0; background: none; color: var(--texte-discret); }
 .star svg { width: 20px; height: 20px; }
 .star[aria-pressed="true"] { color: var(--accent-texte); }
-.star[aria-pressed="true"] svg path { fill: currentColor; }
+.star[aria-pressed="true"] svg path, .btn.fav[aria-pressed="true"] svg path { fill: currentColor; }
 
 /* Chrono EMOM / Tabata (repris de Tabatime) : effort en rose, repos en vert, EMOM en accent. */
 .ring.effort .track { stroke: var(--etat-danger-soft); }

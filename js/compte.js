@@ -236,5 +236,7 @@ export async function pullSteps() {
 if (configured) {
   syncNow();
   document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && syncNow());
+  // Le Raccourci envoie les pas toutes les 5 minutes : l'app ouverte les reprend au même rythme.
+  setInterval(() => document.visibilityState === "visible" && pullSteps(), 5 * 60 * 1000);
   addEventListener("online", syncNow);
 }

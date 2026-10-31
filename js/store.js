@@ -106,7 +106,7 @@ export const exercisePhotos = e => (e?.photo && !e.photo.startsWith("edb:") ? [0
 export const exerciseGif = e => (e?.photo?.startsWith("edb:") ? `https://static.exercisedb.dev/media/${e.photo.slice(4)}.gif` : null);
 export const hasMovement = e => Boolean(exercisePhotos(e) || exerciseGif(e));
 
-// Charges possibles selon le matériel. Machine et poulie : pile par 5 lbs, affichée en kg comme sur la plaque (2,3 · 4,5 · 6,8…).
+// Charges possibles selon le matériel, toujours stockées en kg. Machine et poulie : pile par 5 lbs.
 const range = (from, to, step) => Array.from({ length: Math.round((to - from) / step) + 1 }, (_, i) => Math.round((from + i * step) * 100) / 100);
 const LB = 0.45359237;
 const SCALES = {
@@ -122,7 +122,10 @@ const SCALES = {
 export const weightScale = equip => SCALES[equip] || SCALES.barre;
 export const nearestWeight = (equip, w) => weightScale(equip).reduce((a, b) => (Math.abs(b - w) < Math.abs(a - w) ? b : a));
 export const nextWeight = (equip, w) => weightScale(equip).find(x => x > w + 0.01) ?? w;
-export const lbs = (equip, w) => ((equip === "machine" || equip === "poulie") && w ? `${Math.round(w / LB / 5) * 5} lbs` : null);
+// Machine et poulie se lisent en lbs, comme sur la pile ; barre, haltères et le reste en kg.
+export const inLbs = equip => equip === "machine" || equip === "poulie";
+export const toLbs = w => Math.round(w / LB);
+export const fromLbs = n => Math.round(n * LB * 10) / 10;
 // Les haltères se comptent à l'unité : la moitié de la barre, et inversement.
 const convertWeight = (from, to, w) => nearestWeight(to, to === "halteres" && from !== "halteres" ? w / 2 : from === "halteres" && to !== "halteres" ? w * 2 : w);
 // Matériel d'une ligne de séance : celui choisi pour la séance, sinon celui de l'exercice.
@@ -276,7 +279,26 @@ export const byUsefulness = (a, b) => PREF_RANK[a.pref] - PREF_RANK[b.pref] || (
 // Alternatives quand la machine est prise : même muscle, jamais un exercice en douleur.
 export function alternatives(exerciseId) {
   const ex = exercise(exerciseId);
-  return state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur").sort(byUsefulness);
+  return state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur" && !e.mix).sort(byUsefulness);
+}
+
+// Melting pot : un Tabata ou un EMOM d'exercices choisis sur le moment, sans les saisir. Un par muscle,
+// ses rounds comptent pour ce muscle. Jamais proposé dans un programme généré, ni comme alternative.
+export function meltingPot(muscle) {
+  let e = state.exercises.find(x => x.mix && x.muscle === muscle);
+  if (!e) state.exercises.push(e = { id: uid(), name: "Melting pot", muscle, equip: "pdc", pref: "neutre", note: "", mix: true });
+  return e;
+}
+
+// Même mouvement, autre matériel : « Développé couché avec barre » → « … avec haltères », « … à la machine », « … à la Smith Machine ».
+// Le nom sans son matériel sert de clé ; par matériel, l'exercice le plus utile (jamais un exercice en douleur, sauf celui en cours).
+const EQUIP_WORDS = /\s+(?:avec|à|au|aux|sur)\s+(?:la\s+|le\s+|une?\s+)?(?:barre(?:\s+ez)?|haltères?|machine(?:\s+smith)?|smith(?:\s+machine)?|poulie(?:\s+(?:basse|haute))?|câbles?|kettlebells?|élastiques?)(?=\s|$)/g;
+const movement = name => name.toLowerCase().replace(EQUIP_WORDS, "").replace(/\s+/g, " ").trim();
+export function variants(exerciseId) {
+  const ex = exercise(exerciseId), key = movement(ex.name), out = { [ex.equip]: ex };
+  for (const e of state.exercises.filter(e => e.muscle === ex.muscle && e.id !== ex.id && e.pref !== "douleur" && movement(e.name) === key).sort(byUsefulness))
+    out[e.equip] ||= e;
+  return out;
 }
 
 // Durée estimée : 45 s d'effort par série + le repos prévu, plus l'échauffement.
@@ -477,7 +499,7 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
   const plan = split.sessions.map(([name, ms]) => (ms.some(m => LEGS_MAIN.includes(m)) && ++legs > maxLegs
     ? [name.replace("Full body", "Haut"), ms.filter(m => !LEGS.includes(m) || m === "Abdos")] : [name, ms]));
   const freq = {}; for (const [, ms] of plan) for (const m of ms) freq[m] = (freq[m] || 0) + 1;
-  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && e.equip !== "elastique" && e.equip !== "kettlebell").sort(byUsefulness));
+  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && !e.mix && e.equip !== "elastique" && e.equip !== "kettlebell").sort(byUsefulness));
   // Un exercice différent à chaque passage ; prefer choisit d'abord parmi ceux qui conviennent (barre pour le premier d'un gros muscle).
   const taken = new Set();
   const pick = (m, prefer = () => true) => {
@@ -795,22 +817,45 @@ export function swapExercise(index, exerciseId) {
   }
   const from = equipOf(e);
   e.swappedFrom = e.swappedFrom || e.exerciseId;
+  if (e.swappedFrom === exerciseId) delete e.swappedFrom; // retour à l'exercice du programme
   e.exerciseId = exerciseId;
   delete e.equip;
   const equip = exercise(exerciseId).equip;
-  e.draft = { weight: last ? nearestWeight(equip, Math.max(...last.sets.map(s => s.weight))) : convertWeight(from, equip, e.draft.weight), reps: e.target.repsMin, rpe: null };
+  // Jamais fait : la charge suit le matériel, sauf au poids du corps (traction, melting pot) où on part sans lest.
+  e.draft = { weight: last ? nearestWeight(equip, Math.max(...last.sets.map(s => s.weight))) : equip === "pdc" ? 0 : convertWeight(from, equip, e.draft.weight), reps: e.target.repsMin, rpe: null };
   e.hint = null;
   save();
 }
 
-// Même exercice, autre matériel (haltères au lieu de la barre, poulie…) : pour cette séance seulement.
-export function setEntryEquip(index, equip) {
-  const e = state.active.entries[index];
-  const from = equipOf(e);
-  e.equip = equip === exercise(e.exerciseId).equip ? undefined : equip;
-  e.draft.weight = convertWeight(from, equip, e.draft.weight);
-  e.hint = null;
+// Séries, EMOM ou Tabata sur l'exercice en cours, avant la première série : pour cette séance seulement.
+// En EMOM ou en Tabata, l'exercice sort de son superset. startSets à 0 : la séance type garde ses séries.
+export function setEntryFormat(index, format) {
+  const a = state.active, e = a.entries[index];
+  if (e.sets.length || e.format === format) return;
+  const keep = { itemId: e.itemId, swappedFrom: e.swappedFrom, extra: e.extra };
+  let next;
+  if (format === "series") {
+    const sets = a.deload ? 2 : 3;
+    next = { exerciseId: e.exerciseId, format, startSets: 0, group: e.group, target: { sets, repsMin: 8, repsMax: 12, rest: 90 },
+      draft: { weight: e.draft.weight, reps: 8, rpe: null }, hint: null, sets: [] };
+  } else next = { ...intervalEntry(e.exerciseId, { format, weight: e.draft.weight, ...FORMAT_DEFAULTS[format] }, a.deload), startSets: 0 };
+  for (const [k, v] of Object.entries(keep)) if (v !== undefined) next[k] = v;
+  a.entries[index] = next;
+  a.entries.forEach((x, k) => { if (x.group && !groupOf(a.entries, k)) delete x.group; });
+  a.restEndsAt = null;
   save();
+}
+
+// Exercice pris à la place, gardé dans la séance type avec son format : les prochaines séances le proposent d'emblée.
+export function keepSwap(index) {
+  const a = state.active, e = a.entries[index];
+  const t = template(a.templateId), it = e.itemId && t?.items.find(i => i.id === e.itemId);
+  if (!it || !e.swappedFrom) return null;
+  replaceItemExercise(t.id, it.id, e.exerciseId);
+  if ((e.format || "series") !== (it.format || "series")) setItemFormat(it, e.format);
+  for (const x of a.entries) if (x.itemId === e.itemId && x.exerciseId === e.exerciseId) delete x.swappedFrom;
+  save();
+  return t;
 }
 
 // Exercice hors programme, ajouté juste après l'exercice en cours.
@@ -879,7 +924,7 @@ function keepInTemplate(a) {
     if (base) {
       if (seen.has(base.id)) continue;
       seen.add(base.id);
-      const same = a.entries.filter(x => x.itemId === base.id);
+      const same = a.entries.filter(x => x.itemId === base.id && isInterval(x) === isInterval(base));
       const item = { ...base, group: e.group };
       if (!isInterval(base)) item.sets = Math.max(1, base.sets + same.reduce((n, x) => n + x.target.sets, 0) - (e.startSets ?? base.sets));
       if (!item.group) delete item.group;
