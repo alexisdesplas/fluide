@@ -154,7 +154,8 @@ export function chips(options, value, onChange) {
 
 // Stepper : un tap = un pas, maintien appuyé = répétition. La valeur centrale se tape aussi au clavier.
 // values : liste des valeurs possibles (charges d'une pile de machine…), les boutons passent de l'une à la suivante.
-export function stepper({ value, step = 1, min = 0, max = 9999, values, format = String, unit, compact, editable, label, onChange }) {
+// parse : valeur saisie → valeur stockée (lbs tapées → kg).
+export function stepper({ value, step = 1, min = 0, max = 9999, values, format = String, parse = x => x, unit, compact, editable, label, onChange }) {
   let v = value;
   const move = dir => values
     ? (dir > 0 ? values.find(x => x > v + 0.001) : values.findLast(x => x < v - 0.001)) ?? v
@@ -165,7 +166,7 @@ export function stepper({ value, step = 1, min = 0, max = 9999, values, format =
     ? h("span", { class: "value num" }, format(v))
     : h("div", { class: "value" },
         h("input", { value: format(v), inputmode: "decimal", "aria-label": label, readOnly: !editable,
-          onChange: e => { const n = parseFloat(e.target.value.replace(",", ".")); set(isNaN(n) ? v : n); },
+          onChange: e => { const n = parseFloat(e.target.value.replace(",", ".")); set(isNaN(n) ? v : parse(n)); },
           onFocus: e => editable && e.target.select() }),
         unit && h("div", { class: "unit" }, unitText()));
   const set = x => {
