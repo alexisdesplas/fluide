@@ -103,8 +103,10 @@ export const GEAR = {
 };
 const DEFAULT_GEAR = ["machine", "barre", "halteres", "pdc"];
 export const gearOf = () => state.profile.gear || DEFAULT_GEAR;
-// Exercice faisable dans ta salle : son matériel est coché et il n'est pas marqué absent.
-export const available = e => !e.absent && gearOf().some(g => GEAR[g].equips.includes(e.equip));
+// Matériel de la séance en cours (choisi avant de commencer), sinon celui de la salle.
+export const sessionGear = () => state.active?.gear || gearOf();
+// Exercice faisable : son matériel est coché et il n'est pas marqué absent.
+export const available = (e, gear = sessionGear()) => !e.absent && gear.some(g => GEAR[g].equips.includes(e.equip));
 
 // Anciens noms de Fluide → noms de la base d'exercices : l'historique suit, l'id ne change pas.
 const RENAMED = {
@@ -316,7 +318,7 @@ export const byUsefulness = (a, b) => PREF_RANK[a.pref] - PREF_RANK[b.pref] || (
 export function alternatives(exerciseId) {
   const ex = exercise(exerciseId);
   const all = state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur" && !e.mix);
-  const here = all.filter(available);
+  const here = all.filter(e => available(e));
   return (here.length ? here : all).sort(byUsefulness);
 }
 
@@ -569,7 +571,7 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
   const plan = split.sessions.map(([name, ms]) => (ms.some(m => LEGS_MAIN.includes(m)) && ++legs > maxLegs
     ? [name.replace("Full body", "Haut"), ms.filter(m => !LEGS.includes(m) || m === "Abdos")] : [name, ms]));
   const freq = {}; for (const [, ms] of plan) for (const m of ms) freq[m] = (freq[m] || 0) + 1;
-  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && !e.mix && available(e)).sort(byUsefulness));
+  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && !e.mix && available(e, gearOf())).sort(byUsefulness));
   // Un exercice différent à chaque passage ; prefer choisit d'abord parmi ceux qui conviennent (barre pour le premier d'un gros muscle).
   const taken = new Set();
   const pick = (m, prefer = () => true) => {
@@ -805,7 +807,7 @@ export function startWorkout(templateId) {
       };
     })
   };
-  save();
+  setWorkoutGear(gearOf());
 }
 
 function intervalEntry(exerciseId, item, deload) {
@@ -875,6 +877,32 @@ export function logSet() {
     a.restTotal = e.target.rest;
     a.restEndsAt = Date.now() + e.target.rest * 1000;
   }
+  save();
+}
+
+// Matériel du jour, choisi avant la première série : chaque exercice impossible avec ce matériel passe
+// au même mouvement avec un autre matériel, sinon au meilleur exercice du même muscle. Un exercice ainsi
+// remplacé revient à celui du programme dès que son matériel est recoché. Les exercices déjà commencés ne bougent pas.
+export function setWorkoutGear(gear) {
+  const a = state.active;
+  a.gear = gear;
+  a.entries.forEach((e, i) => {
+    if (e.sets.length) return;
+    const base = exercise(e.gearSwap ? e.swappedFrom : e.exerciseId);
+    if (!base || base.mix) return;
+    if (available(base)) {
+      if (e.gearSwap) { swapExercise(i, base.id); delete a.entries[i].gearSwap; }
+      return;
+    }
+    if (available(exercise(e.exerciseId))) return; // déjà faisable (exercice du programme ou remplaçant)
+    // Jamais un exercice déjà prévu dans la séance (pas deux fois les élévations latérales).
+    const used = new Set(a.entries.filter((_, j) => j !== i).map(x => x.exerciseId));
+    const ok = x => x.id !== base.id && available(x) && !used.has(x.id);
+    const next = Object.values(variants(base.id)).find(ok) || alternatives(base.id).find(ok);
+    if (!next || next.id === e.exerciseId) return;
+    swapExercise(i, next.id);
+    a.entries[i].gearSwap = true;
+  });
   save();
 }
 
