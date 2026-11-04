@@ -1,4 +1,4 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, setAbsent, setStack, STACK_STEPS, inLbs, toLbs, editSet, deleteSet } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, setAbsent, setStack, setWorkoutGear, sessionGear, GEAR, available, STACK_STEPS, inLbs, toLbs, editSet, deleteSet } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, beep, restBeepPlanned, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
 
@@ -287,6 +287,43 @@ export function workoutView() {
   const setCursor = i => { a.cursor = i; save(); };
   const grp = groupTag(a.entries, a.cursor);
   const nextInGroup = grp && !grp.last ? exercise(a.entries[a.cursor + 1].exerciseId) : null;
+
+  // ——— Matériel du jour d'abord : la séance s'adapte avant l'échauffement (séance pas encore commencée).
+  if (!a.gearDone && !a.warmupDone && !a.entries.some(x => x.sets.length)) {
+    const gear = sessionGear();
+    const swapped = a.entries.filter(x => x.gearSwap);
+    const stuck = a.entries.filter(x => !x.gearSwap && !exercise(x.exerciseId).mix && !available(exercise(x.exerciseId)));
+    const el = h("div", { class: "screen workout" },
+      h("div", { class: "wo-head" },
+        h("div", { class: "wo-top" },
+          h("span", { class: "overline" }, a.name, a.deload ? " · deload" : "", " · avant de commencer"),
+          h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
+        h("div", null,
+          h("h1", { class: "heading-xl" }, "Matériel aujourd'hui"),
+          h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, "Décoche ce qui n'est pas dispo : la séance s'adapte."))),
+      h("div", { class: "scroll" },
+        h("div", { class: "chips" }, Object.entries(GEAR).map(([k, g]) => h("button", { type: "button", class: "chip", "aria-pressed": String(gear.includes(k)), onClick: () => {
+          const next = gear.includes(k) ? gear.filter(x => x !== k) : [...gear, k];
+          if (!next.length) { toast("Garde au moins un matériel"); return; }
+          setWorkoutGear(next);
+        } }, g.label))),
+        h("p", { class: "caption", style: { margin: 0 } }, "Par défaut, le matériel de ta salle (Réglages). Ce choix vaut pour cette séance seulement."),
+        h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, `${a.entries.length} exercice${a.entries.length > 1 ? "s" : ""}`)),
+        h("div", { class: "list" }, a.entries.map(x => {
+          const ex = exercise(x.exerciseId), from = x.gearSwap && exercise(x.swappedFrom);
+          const ko = stuck.includes(x);
+          return h("div", { class: "row" },
+            h("div", { class: "row-main" },
+              h("span", { class: "body-md fort medium" }, ex.name),
+              h("span", { class: "caption", style: ko ? { color: "var(--etat-attention)" } : null },
+                from ? `${EQUIPS[ex.equip]} · à la place de ${from.name}` : ko ? `${EQUIPS[ex.equip]} · rien d'équivalent avec ce matériel` : EQUIPS[ex.equip])),
+            from ? icon("swap", "chev") : ko ? icon("warning", "chev") : null);
+        })),
+        swapped.length > 0 && h("p", { class: "caption", style: { margin: 0 } }, `${swapped.length} exercice${swapped.length > 1 ? "s" : ""} adapté${swapped.length > 1 ? "s" : ""} pour aujourd'hui : le programme ne change pas.`)),
+      h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr" } },
+        btn("C'est bon, on s'échauffe", { variant: "primary", size: "lg", onClick: () => { a.gearDone = true; save(); } })));
+    return { el };
+  }
 
   // ——— Échauffement d'abord : cardio au chrono (comme Tabatime), puis mobilité et séries d'approche.
   // Le chrono se calcule depuis l'heure de départ (survit à la mise en veille) ; la pause décale ce départ.

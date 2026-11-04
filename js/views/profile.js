@@ -88,7 +88,7 @@ export function profileView() {
             h("span", { class: "caption" }, `${prefs.aime || 0} favoris · ${prefs.evite || 0} évités · ${prefs.douleur || 0} en douleur`)),
           icon("caretRight", "chev"))),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Matériel de ta salle")),
-      h("p", { class: "caption", style: { margin: 0 } }, "Le programme, les alternatives et « Machine prise » ne proposent que ce matériel. Un exercice absent (pas de machine à mollets…) se retire depuis « Machine prise »."),
+      h("p", { class: "caption", style: { margin: 0 } }, "Ton matériel habituel : le programme s'y tient, et chaque séance part de ce choix. Avant de commencer, tu peux décocher ce qui n'est pas dispo ce jour-là, la séance s'adapte. Un exercice absent (pas de machine à mollets…) se retire depuis « Machine prise »."),
       h("div", { class: "chips" }, Object.entries(GEAR).map(([k, g]) => h("button", { type: "button", class: "chip", "aria-pressed": String(gearOf().includes(k)), onClick: () => {
         const cur = gearOf(), next = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k];
         if (!next.length) { toast("Garde au moins un matériel"); return; }
