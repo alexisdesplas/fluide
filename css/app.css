@@ -455,3 +455,9 @@ input.input[type="search"] { -webkit-appearance: none; appearance: none; line-he
 /* Dans une feuille, l'intitulé d'un champ est un surtitre de section. */
 .sheet-body .field > .caption.medium { font: 500 11px/16px var(--font); letter-spacing: .08em; text-transform: uppercase; color: var(--texte-discret); }
 .chev { width: 16px; height: 16px; flex: none; color: var(--texte-discret); }
+
+/* Connexion Google : bouton avec le G, puis séparateur « ou avec ton e-mail ». */
+.google-btn { gap: var(--spacing-12); }
+.google-btn svg { flex: none; }
+.or-sep { display: flex; align-items: center; gap: var(--spacing-12); }
+.or-sep::before, .or-sep::after { content: ""; flex: 1; height: 1px; background: var(--bord-discret); }
