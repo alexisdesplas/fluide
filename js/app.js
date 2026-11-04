@@ -1,8 +1,8 @@
 import { state, subscribe } from "./store.js";
-import { h, icon, go, clock, unlockAudio } from "./ui.js";
+import { h, icon, go, clock, unlockAudio, syncRestBeep } from "./ui.js";
 import { todayView, stepsLinkView } from "./views/today.js";
 import { templatesView, templateView, itemView, pickerView, programView, weekView } from "./views/templates.js";
-import { workoutView, finishView, editWorkoutView, summaryView } from "./views/workout.js";
+import { workoutView, finishView, editWorkoutView, editSetView, summaryView } from "./views/workout.js";
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
 import { profileView, matrixView, prefsView } from "./views/profile.js";
 import { signInView, signUpView, confirmView, resetView, stepsAutoView } from "./views/compte.js";
@@ -22,6 +22,7 @@ const ROUTES = [
   ["seance", workoutView],
   ["seance/terminer", finishView],
   ["seance/modifier", editWorkoutView],
+  ["seance/serie/:i/:k", editSetView],
   ["bilan/:id", summaryView],
   ["compte", signInView],
   ["compte/creer", signUpView],
@@ -84,6 +85,7 @@ function render() {
 
 function tick() {
   const a = state.active;
+  syncRestBeep(a?.restEndsAt || null);
   if (a) root.querySelectorAll('[data-tick="elapsed"]').forEach(el => { el.textContent = clock((Date.now() - a.startedAt) / 1000); });
   current?.tick?.();
 }
@@ -92,8 +94,8 @@ addEventListener("hashchange", render);
 subscribe(() => { if (!document.querySelector("dialog[open]")) render(); });
 // État du compte (synchro, déconnexion) : on redessine les Réglages, jamais une saisie en cours.
 onAccount(() => { if (location.hash === "#/profil" && !document.querySelector("dialog[open]")) render(); });
-addEventListener("pointerdown", unlockAudio, { once: true });
-document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && tick());
+addEventListener("pointerdown", unlockAudio);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { unlockAudio(); tick(); } });
 setInterval(tick, 250);
 render();
 

@@ -1,5 +1,5 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal } from "../store.js";
-import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, beep, dateLong, pageHead, navbar } from "../ui.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, setAbsent, setStack, STACK_STEPS, inLbs, toLbs, editSet, deleteSet } from "../store.js";
+import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, beep, restBeepPlanned, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
 
 // Anneau de Tabatime : 312 px, trait de 34 px.
@@ -17,10 +17,18 @@ function swapSheet(index) {
   const ex = exercise(e.exerciseId);
   const alts = alternatives(e.exerciseId);
   const vars = Object.entries(variants(e.exerciseId));
-  let query = "", closeSheet;
+  let query = "", closeSheet, absent = !!ex.absent;
+  // Pas dans ma salle : l'exercice n'est plus proposé, et celui choisi le remplace aussi dans la séance type.
+  const pickAlt = x => {
+    if (x.id === e.exerciseId) return;
+    setAbsent(ex.id, absent);
+    swapExercise(index, x.id);
+    const t = absent && keepSwap(state.active.cursor);
+    toast(t ? `${x.name} remplace ${ex.name} dans ${t.name}` : `${x.name} à la place`);
+  };
   const list = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } });
   const draw = muscle => catalogue(list, query, { muscle, pickIcon: "caretRight", note: x => lastLine(x.id),
-    onPick: x => { closeSheet(); if (x.id !== e.exerciseId) { swapExercise(index, x.id); toast(`${x.name} à la place`); } } });
+    onPick: x => { closeSheet(); pickAlt(x); } });
   draw(ex.muscle);
   sheet({
     title: "Machine prise ?",
@@ -31,9 +39,14 @@ function swapSheet(index) {
         const x = vars.find(([q]) => q === k)[1];
         return h("button", { type: "button", class: "chip", "aria-pressed": String(x.id === ex.id), "aria-label": x.name, onClick: () => {
           close();
-          if (x.id !== ex.id) { swapExercise(index, x.id); toast(`${x.name} à la place`); }
+          pickAlt(x);
         } }, EQUIPS[k]);
       })),
+      !ex.mix && h("button", { type: "button", class: "radio-card", role: "checkbox", "aria-checked": String(absent),
+        onClick: ev => { absent = !absent; ev.currentTarget.setAttribute("aria-checked", String(absent)); } },
+        h("span", { class: "radio-dot", "aria-hidden": "true" }),
+        h("span", { class: "radio-text" }, h("span", { class: "body-md fort semibold" }, "Pas dans ma salle"),
+          h("span", { class: "caption" }, "Ne plus le proposer : l'exercice choisi le remplace aussi dans la séance type."))),
       h("span", { class: "overline" }, "Autre exercice"),
       !ex.mix && h("div", { class: "list" }, h("div", { class: "row pick" },
         h("button", { class: "row-btn", onClick: () => {
@@ -52,7 +65,30 @@ function swapSheet(index) {
   });
 }
 
-const weightStepper = (e, note) => chargeStepper({ equip: equipOf(e), value: e.draft.weight, note, onChange: v => { e.draft.weight = v; save(true); } });
+const weightStepper = (e, note) => chargeStepper({ equip: equipOf(e), ex: exercise(e.exerciseId), value: e.draft.weight, note, onChange: v => { e.draft.weight = v; save(true); } });
+
+// Pile de la machine : par 5 lbs, ou un pas plus grand au-delà d'un seuil (extension des jambes : 15 en 15 après 80).
+// Poulie : directe ou démultipliée (la pile affiche le double de la charge réelle).
+function stackSheet(ex, equip) {
+  let step = ex.stack?.step || 5, from = ex.stack?.from ?? 80, ratio = ex.ratio || 1;
+  const fromRow = h("div");
+  const drawFrom = () => fromRow.replaceChildren(step === 5 ? "" : h("div", { class: "field-row" },
+    h("span", { class: "body-md fort" }, "À partir de"),
+    stepper({ value: from, step: 5, min: 5, max: 250, compact: true, format: v => `${v} lbs`, label: "seuil de la pile", onChange: v => { from = v; } })));
+  drawFrom();
+  sheet({
+    title: "Pile", okLabel: "Enregistrer",
+    body: [
+      h("p", { class: "body-sm discret", style: { margin: 0 } }, `${ex.name}, pour toutes tes séances.`),
+      radios(STACK_STEPS.map(n => [n, n === 5 ? "Par 5 lbs" : `Par ${n} lbs après un seuil`, n === 5 ? "Toute la pile au même pas." : `5 lbs en 5 jusqu'au seuil, puis ${n} en ${n}.`]), step,
+        v => { step = v; drawFrom(); }, "Pas de la pile"),
+      fromRow,
+      equip === "poulie" && radios([[1, "Poulie directe", "La charge réelle est celle de la pile."], [0.5, "Poulie démultipliée ½", "Deux poulies sur le câble : tu déplaces la moitié de la pile. L'historique compte la charge réelle."]],
+        ratio, v => { ratio = v; }, "Type de poulie")
+    ],
+    ok: () => { setTimeout(() => { setStack(ex.id, step === 5 ? null : { from, step }, ratio); toast("Pile enregistrée"); }); }
+  });
+}
 
 // Format de l'exercice en cours, choisi avant la première série : séries, EMOM ou Tabata.
 function formatSheet(index) {
@@ -74,12 +110,12 @@ function formatSheet(index) {
 // dans la séance type, pour que la prochaine séance le propose d'emblée.
 const favBtn = (e, ex) => {
   const on = ex.pref === "aime";
-  return h("button", { type: "button", class: "btn secondary sm fav", "aria-pressed": String(on), onClick: () => {
+  return h("button", { type: "button", class: "btn secondary sm square fav", "aria-pressed": String(on), onClick: () => {
     toggleFav(ex.id);
     const t = !on && keepSwap(state.active.cursor);
     toast(on ? `${ex.name} retiré des favoris` : t ? `${ex.name} en favori, gardé dans ${t.name}` : `${ex.name} en favori`);
     save();
-  }, "aria-label": on ? `Retirer ${ex.name} des favoris` : `Mettre ${ex.name} en favori` }, icon("star"), "Favori");
+  }, "aria-label": on ? `Retirer ${ex.name} des favoris` : `Mettre ${ex.name} en favori` }, icon("star"));
 };
 
 // Sans série validée, rien n'est enregistré : on le dit avant de sortir.
@@ -148,7 +184,7 @@ export function finishView() {
   a.finish = a.finish || { feeling: null, note: "" };
   const done = sessionSets(a);
   const planned = a.entries.reduce((t, e) => t + itemSets({ format: e.format, sets: e.target.sets, rounds: e.target.rounds }), 0);
-  const volume = a.entries.reduce((t, e) => t + e.sets.reduce((b, x) => b + x.weight * x.reps, 0), 0);
+  const volume = a.entries.reduce((t, e) => t + e.sets.reduce((b, x) => b + setVolume(x), 0), 0);
   const records = sessionRecords({ startedAt: a.startedAt, entries: a.entries }).length;
   const missing = a.entries.filter(e => e.sets.length < e.target.sets);
   const t = template(a.templateId);
@@ -235,6 +271,7 @@ export function editWorkoutView() {
 }
 
 export function workoutView() {
+  setDraft = null; // retour à la séance : une correction abandonnée repart de la série enregistrée
   const a = state.active;
   if (!a) { leaveIfIdle("#/seance"); return { el: h("div") }; }
   const e = a.entries[a.cursor];
@@ -244,7 +281,7 @@ export function workoutView() {
   const exDone = e.sets.length >= e.target.sets;
   const isLast = a.cursor === a.entries.length - 1;
   const allDone = a.entries.every(x => x.sets.length >= x.target.sets);
-  const volume = a.entries.reduce((t, x) => t + x.sets.reduce((b, s) => b + s.weight * s.reps, 0), 0);
+  const volume = a.entries.reduce((t, x) => t + x.sets.reduce((b, s) => b + setVolume(s), 0), 0);
   const rpeTarget = a.deload ? 6 : CYCLES[a.cycle].rpe;
 
   const setCursor = i => { a.cursor = i; save(); };
@@ -370,7 +407,7 @@ export function workoutView() {
   if (resting) {
     const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
     const time = h("div", { class: "display-lg num" });
-    // Bouton principal pendant le repos : il se remplit avec le temps écoulé, un tap lance la suite sans attendre.
+    // Bouton principal pendant le repos : sa jauge se vide avec le temps restant, comme l'anneau ; un tap lance la suite sans attendre.
     // Après la dernière série d'un exercice, le bouton n'affiche que le temps (l'anneau dit déjà la suite).
     const next = exDone ? null : `Série ${e.sets.length + 1}`;
     const fill = h("span", { class: "rest-fill", "aria-hidden": "true" }), btnTime = h("span", { class: "num" });
@@ -381,7 +418,7 @@ export function workoutView() {
       time.textContent = clock(Math.ceil(left));
       ring.setAttribute("stroke-dashoffset", String(C * (1 - left / a.restTotal)));
       btnTime.textContent = clock(Math.ceil(left));
-      fill.style.transform = `scaleX(${Math.min(1, 1 - left / a.restTotal)})`;
+      fill.style.transform = `scaleX(${Math.min(1, left / a.restTotal)})`;
       restBtn.setAttribute("aria-label", `${next || "Fin du repos"} maintenant, repos restant ${clock(Math.ceil(left))}`);
     };
     update();
@@ -429,7 +466,7 @@ export function workoutView() {
       hero.update = update;
     }
   } else if (exDone) {
-    const exVolume = e.sets.reduce((b, x) => b + x.weight * x.reps, 0);
+    const exVolume = e.sets.reduce((b, x) => b + setVolume(x), 0);
     hero = h("div", { class: "wo-hero" },
       h("div", { class: "overline", style: { color: "var(--etat-succes)" } }, allDone ? "Séance bouclée" : "Exercice terminé"),
       h("span", { class: "body-sm discret num" }, allDone ? "Toutes les séries sont faites. Bien joué."
@@ -452,12 +489,12 @@ export function workoutView() {
     Array.from({ length: Math.max(e.target.sets, e.sets.length) }, (_, i) => {
       const s = e.sets[i];
       const cur = !s && i === e.sets.length && !resting;
-      return h("div", { class: `set-row${s ? " done" : ""}${cur ? " cur" : ""}` },
+      const line = s ? `${interval ? `Round ${i + 1} · ` : ""}${charge(equipOf(e), s.weight)}${s.ratio ? " ½" : ""} × ${s.reps}` : null;
+      // Série validée : un tap ouvre sa correction (charge, reps, RPE), ou la retire.
+      return h(s ? "button" : "div", { class: `set-row${s ? " done" : ""}${cur ? " cur" : ""}`, ...(s && { type: "button", "aria-label": `Corriger ${interval ? "le round" : "la série"} ${i + 1} : ${line}`, onClick: () => go(`#/seance/serie/${a.cursor}/${i}`) }) },
         h("span", { class: "set-idx" }, s ? icon("check") : i + 1),
-        h("span", { class: `body-md num ${s ? "fort" : "discret"}` }, s ? `${interval ? `Round ${i + 1} · ` : ""}${charge(equipOf(e), s.weight)} × ${s.reps}` : cur ? "En cours" : interval ? `Round ${i + 1}` : `${reps(e.target.repsMin, e.target.repsMax)} reps`),
-        s?.rpe ? h("span", { class: "caption num" }, `RPE ${s.rpe}`) : s && i === e.sets.length - 1
-          ? h("button", { class: "btn ghost xs", onClick: () => { e.sets.pop(); a.restEndsAt = null; save(); } }, "Annuler")
-          : h("span"));
+        h("span", { class: `body-md num ${s ? "fort" : "discret"}` }, s ? line : cur ? "En cours" : interval ? `Round ${i + 1}` : `${reps(e.target.repsMin, e.target.repsMax)} reps`),
+        s ? h("span", { class: "set-end" }, s.rpe ? h("span", { class: "caption num" }, `RPE ${s.rpe}`) : null, icon("pencil", "chev")) : h("span"));
     }));
 
   const segs = a.entries.map((x, i) => h("i", { class: x.sets.length >= x.target.sets ? "on" : i === a.cursor ? "cur" : "" }));
@@ -486,7 +523,8 @@ export function workoutView() {
         a.deload && pill("Deload", "attention"),
         !exDone && btn("Machine prise", { variant: "secondary", size: "sm", icon: "swap", onClick: () => swapSheet(a.cursor) }),
         !e.sets.length && !e.clock && btn(FORMATS[e.format || "series"], { variant: "secondary", size: "sm", icon: "timer", onClick: () => formatSheet(a.cursor) }),
-        favBtn(e, ex)),
+        favBtn(e, ex),
+        inLbs(equipOf(e)) && !interval && btn(ex.stack || ex.ratio ? `Pile${ex.ratio ? " ½" : ""} · ${ex.stack ? `${ex.stack.step} lbs` : "5 lbs"}` : "Pile", { variant: "secondary", size: "sm", icon: "sliders", onClick: () => stackSheet(ex, equipOf(e)) })),
       h("div", { class: "segments", "aria-label": `${a.entries.filter(x => x.sets.length >= x.target.sets).length} exercices terminés sur ${a.entries.length}` }, segs)),
     h("div", { class: "scroll" },
       ex.pref === "douleur" && h("div", { class: "hint attention" }, icon("warning"), h("span", { class: "body-sm" }, "Tu as signalé une douleur sur cet exercice : charge allégée, amplitude confortable, ou remplace-le.")),
@@ -513,10 +551,41 @@ export function workoutView() {
         return;
       }
       if (!a.restEndsAt) return;
-      if (Date.now() >= a.restEndsAt) { a.restEndsAt = null; beep(880, 0.15, 3); save(); return; }
+      if (Date.now() >= a.restEndsAt) { if (!restBeepPlanned(a.restEndsAt)) beep(880, 0.18, 3); a.restEndsAt = null; save(); return; }
       hero.update?.();
     }
   };
+}
+
+// Écran dédié pour corriger une série validée : charge, reps, RPE. Rien ne change avant « Enregistrer ».
+// Le brouillon survit à un nouveau rendu (fin de repos pendant la correction).
+let setDraft = null;
+export function editSetView({ i, k }) {
+  const a = state.active, e = a?.entries[+i], s = e?.sets[+k];
+  if (!s) { leaveIfIdle(location.hash); setTimeout(() => go("#/seance")); return { el: h("div") }; }
+  const ex = exercise(e.exerciseId), interval = isInterval(e), what = interval ? "round" : "série";
+  if (setDraft?.key !== location.hash) setDraft = { key: location.hash, weight: s.weight, reps: s.reps, rpe: s.rpe ?? null };
+  const draft = setDraft;
+  const done = () => { setDraft = null; go("#/seance"); };
+  const ok = () => { editSet(+i, +k, draft); toast(`${what === "round" ? "Round" : "Série"} ${+k + 1} corrigé${what === "série" ? "e" : ""}`); done(); };
+  const remove = () => confirmSheet({
+    title: `Retirer ${interval ? "ce round" : "cette série"} ?`,
+    message: `${charge(equipOf(e), s.weight)} × ${s.reps} sur ${ex.name} : ${interval ? "le round sort" : "la série sort"} de la séance, tu pourras ${interval ? "le" : "la"} refaire.`,
+    confirmLabel: `Retirer ${interval ? "le round" : "la série"}`, cancelLabel: "Garder", destructive: true,
+    onConfirm: () => { deleteSet(+i, +k); done(); }
+  });
+  const el = h("div", { class: "screen no-tabs" },
+    navbar({ back: { label: "Séance", href: "#/seance" }, title: `${what === "round" ? "Round" : "Série"} ${+k + 1}`, subtitle: ex.name, action: { label: "OK", onClick: ok } }),
+    h("div", { class: "scroll" },
+      h("p", { class: "caption", style: { margin: 0 } }, `Validée à ${new Date(s.doneAt || a.startedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}. Corrige une erreur de saisie : le reste de la séance ne bouge pas.`),
+      chargeStepper({ equip: equipOf(e), ex: { ...ex, ratio: s.ratio }, value: draft.weight, onChange: v => { draft.weight = v; } }),
+      h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Reps"),
+        stepper({ value: draft.reps, min: 0, max: 200, compact: true, label: "reps", onChange: v => { draft.reps = v; } })),
+      !interval && h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "RPE ", h("span", { class: "caption" }, "optionnel")),
+        chips([[7, "7"], [8, "8"], [9, "9"], [10, "10"]], draft.rpe, v => { draft.rpe = v; })),
+      btn("Enregistrer", { variant: "primary", size: "lg", full: true, onClick: ok }),
+      btn(`Retirer ${interval ? "le round" : "la série"}`, { variant: "ghost", full: true, icon: "trash", onClick: remove })));
+  return { el };
 }
 
 export function summaryView({ id }) {

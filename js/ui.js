@@ -265,18 +265,38 @@ export function spark(values) {
   return svg;
 }
 
-// Bip de fin de repos (Web Audio, débloqué au premier tap comme dans Tabatime).
+// Bips (Web Audio, débloqué au tap comme dans Tabatime). iOS suspend l'audio en arrière-plan :
+// on le réveille à chaque tap et au retour dans l'appli.
 let audio;
 export function unlockAudio() {
   if (!audio) try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
-  audio?.state === "suspended" && audio.resume();
+  if (audio && audio.state !== "running") audio.resume().catch(() => {});
+}
+const running = () => audio?.state === "running";
+function tones(freq, dur, times, start) {
+  const out = [];
+  for (let i = 0; i < times; i++) {
+    const o = audio.createOscillator(), g = audio.createGain(), t = start + i * 0.25;
+    o.type = "square"; o.frequency.value = freq; o.connect(g); g.connect(audio.destination);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.02);
+    out.push(o);
+  }
+  return out;
 }
 export function beep(freq = 880, dur = 0.15, times = 1) {
-  if (!audio) return;
-  for (let i = 0; i < times; i++) {
-    const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + i * 0.25;
-    o.frequency.value = freq; o.connect(g); g.connect(audio.destination);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.start(t); o.stop(t + dur + 0.02);
-  }
+  if (running()) tones(freq, dur, times, audio.currentTime);
 }
+
+// Fin de repos : le bip est calé à l'avance sur l'horloge audio, il sonne à l'heure même si les timers
+// de la page sont ralentis. Rappelé à chaque tick : on ne reprogramme que si l'heure de fin change.
+let planned = { at: null, nodes: [] };
+export function syncRestBeep(at) {
+  if (at === planned.at && (planned.nodes.length || !at)) return;
+  planned.nodes.forEach(o => { try { o.stop(); } catch {} });
+  planned = { at, nodes: [] };
+  const delay = at ? (at - Date.now()) / 1000 : 0;
+  if (delay > 0.3 && running()) planned.nodes = tones(880, 0.18, 3, audio.currentTime + delay);
+}
+// Le bip de fin de repos est-il déjà programmé (pas besoin d'en jouer un de plus) ?
+export const restBeepPlanned = at => planned.at === at && planned.nodes.length > 0;

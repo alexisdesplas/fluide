@@ -1,4 +1,4 @@
-import { state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek } from "../store.js";
+import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek } from "../store.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
@@ -12,11 +12,13 @@ export const chargeNum = (equip, w) => (!w ? "PDC" : inLbs(equip) ? toLbs(w) : n
 export const setsLine = (equip, sets) => sets.map(s => `${s.reps}×${chargeNum(equip, s.weight)}`).join(" · ");
 
 // Stepper de charge réglé sur le matériel : pile en lbs pour les machines (kg en rappel), haltères à l'unité.
-export function chargeStepper({ equip, value, note, onChange }) {
-  const lb = inLbs(equip);
-  return stepper({ value, values: weightScale(equip), max: 500, editable: true, label: "charge",
+// ex : l'exercice, pour sa pile (pas après un seuil) et sa poulie démultipliée (charge réelle en rappel).
+export function chargeStepper({ equip, value, note, onChange, ex }) {
+  const lb = inLbs(equip), ratio = lb ? ex?.ratio || 1 : 1;
+  return stepper({ value, values: weightScale(equip, ex?.stack), max: 500, editable: true, label: "charge",
     format: lb ? v => String(toLbs(v)) : num, parse: lb ? fromLbs : undefined,
-    unit: v => [lb ? "lbs" : equip === "halteres" ? "kg par haltère" : "kg", lb && v ? kg(v) : null, note].filter(Boolean).join(" · "), onChange });
+    unit: v => [lb ? "lbs" : equip === "halteres" ? "kg par haltère" : "kg",
+      lb && v ? (ratio !== 1 ? `poulie ½ : ${kg(v * ratio)} réels` : kg(v)) : null, note].filter(Boolean).join(" · "), onChange });
 }
 
 // chained : exercice d'un superset suivi d'un autre, enchaîné sans repos.
@@ -201,7 +203,7 @@ export function itemView({ id, item }) {
   const done = () => { save(); go(`#/seances/${t.id}`); };
   const set = k => v => { it[k] = v; if (k === "repsMin" && it.repsMax < v) it.repsMax = v; if (k === "repsMax" && it.repsMin > v) it.repsMin = v; save(true); };
   const field = (label, s) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), s);
-  const weight = label => field(label, chargeStepper({ equip: ex.equip, value: it.weight, note: "0 = poids du corps", onChange: set("weight") }));
+  const weight = label => field(label, chargeStepper({ equip: ex.equip, ex, value: it.weight, note: "0 = poids du corps", onChange: set("weight") }));
 
   const el = h("div", { class: "screen no-tabs" },
     navbar({ back: { label: t.name, onClick: done }, title: ex.name, subtitle: ex.muscle, action: { label: "OK", onClick: done } }),
@@ -315,7 +317,8 @@ function reasons(o, p, week) {
   const planned = plannedSetsOf(o.templates);
   const of = st => MUSCLES.filter(m => state.matrix[m].status === st && state.matrix[m].target > 0 && !(end && m === "Mollets"));
   const weak = of("faible"), strong = of("maintien");
-  const define = (p.define || []).filter(m => planned[m] > 0);
+  const goal = k => MUSCLES.filter(m => goalOf(m) === k && planned[m] > 0);
+  const force = goal("force"), endu = goal("endurance");
   return [
     !o.fits && ["warning", `Demande ${sp.days} séances : ${sp.days - p.days > 1 ? `${sp.days - p.days} de plus` : "une de plus"} que ta semaine.`],
     o.freq >= 2 ? ["trend", `Chaque muscle revient ${times(o)} fois par semaine, le rythme visé par Fluide.`]
@@ -327,7 +330,8 @@ function reasons(o, p, week) {
       .map(n => `${list(kept.filter(x => x.planned === n).map(x => x.muscle))} à ${n} séries`).join(", ")}. Tout reste dans les fourchettes Fluide.`],
     o.below.length && ["warning", `${list(o.below.map(x => `${x.muscle} (${x.planned} séries)`))} ${o.below.length > 1 ? "passent" : "passe"} sous ${o.below.length > 1 ? "leur" : "son"} repère Fluide : il faudrait ~${o.need} min par séance, ou une séance de plus.`],
     weak.length && ["check", `Points faibles en priorité : ${list(weak.map(m => `${m} ${planned[m]} séries`))}, coupées en dernier.`],
-    define.length && ["check", `${list(define)} à définir : séries de 12 à 20 reps, 1 min de repos.`],
+    force.length && ["check", `${list(force)} en force : ${GOALS.force.desc.charAt(0).toLowerCase()}${GOALS.force.desc.slice(1, -1)}.`],
+    endu.length && ["check", `${list(endu)} en endurance : ${GOALS.endurance.desc.charAt(0).toLowerCase()}${GOALS.endurance.desc.slice(1, -1)}.`],
     strong.length && ["check", `${list(strong)} ${strong.length > 1 ? "prennent" : "prend"} vite : ${strong.length > 1 ? "maintenus" : "maintenu"} à ${STATUS.maintien.range.join("-")} séries, le volume va aux autres.`],
     end && ["bolt", `Mollets : ${end.calves.sets} × ${end.calves.reps} montées sur pointes lentes en fin de séance, ${Math.min(end.calves.per, o.templates.length)} fois par semaine : le renfo de ton plan corde. La corde fait le reste.`],
     end && o.upper.length && ["check", `Avec la corde, les jambes travaillent 2 fois par semaine : ${list(o.upper)} ${o.upper.length > 1 ? "se font" : "se fait"} sans jambes.`],
@@ -457,10 +461,7 @@ export function weekView() {
       h("p", { class: "caption", style: { margin: 0 } }, `Ceux qui suivent moins. Ils passent en priorité (${STATUS.faible.range.join("-")} séries), coupés en dernier si le temps manque.`),
       strengthChips("faible"),
       h("p", { class: "caption", style: { margin: 0 } }, `Les autres progressent (${STATUS.focus.range.join("-")} séries). Le détail muscle par muscle est dans Réglages Fluide.`),
-      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "À définir")),
-      h("p", { class: "caption", style: { margin: 0 } }, "Des muscles déjà là que tu veux plus dessinés : séries longues (12-20 reps), repos d'une minute. La définition vient surtout du gras en moins (alimentation, pas, corde) : ici le muscle garde son volume sans grossir."),
-      h("div", { class: "chips" }, MUSCLES.map(m => h("button", { type: "button", class: "chip", "aria-pressed": String((p.define || []).includes(m)),
-        onClick: () => { options = null; const d = p.define || []; p.define = d.includes(m) ? d.filter(x => x !== m) : [...d, m]; save(); } }, m))),
+      h("p", { class: "caption", style: { margin: 0 } }, "Force, hypertrophie ou endurance : l'objectif de chaque muscle se règle aussi dans Réglages Fluide, avec le matériel de ta salle."),
       btn("Voir ma recommandation", { variant: "primary", size: "lg", full: true, onClick: done })));
   return { el };
 }

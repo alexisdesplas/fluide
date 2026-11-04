@@ -528,6 +528,7 @@ export const CATALOGUE = [
 ["Salutation au soleil A", "Mobilité", "pdc", null, 253],
 ["Élévation des mollets assis", "Mollets", "machine", "edb:ktsFQAZ", 8],
 ["Élévation des mollets debout à la machine", "Mollets", "machine", "edb:8ozhUIZ", 11],
+["Élévation des mollets debout au poids du corps", "Mollets", "pdc", null, 12],
 ["Presse à mollets", "Mollets", "machine", "edb:ykHcWme", 14],
 ["Élévations des mollets à la machine Smith", "Mollets", "smith", "Smith_Machine_Calf_Raise", 16],
 ["Élévations des mollets debout avec haltères", "Mollets", "halteres", "edb:dPmaUaU", 18],
