@@ -470,7 +470,6 @@ input.input[type="search"] { -webkit-appearance: none; appearance: none; line-he
 .big-targets .stepper.compact button { width: 44px; height: 44px; }
 /* Liens de l'en-tête (Modifier, Terminer) : petits à l'œil, 44 px au doigt sans grandir la ligne. */
 .wo-top .btn.xs { height: 44px; margin: -14px -8px; padding: 0 var(--spacing-8); font-size: 13px; }
-.wo-top-actions { display: flex; gap: var(--spacing-8); }
 .wo-tools { display: flex; gap: var(--spacing-8); flex-wrap: wrap; align-items: center; }
 .wo-stack { display: flex; flex-direction: column; gap: var(--spacing-16); }
 /* Commandes du bas : flèches d'exercice à l'écart du bouton principal ; pendant le repos, −15 s / +15 s autour. */

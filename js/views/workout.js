@@ -689,9 +689,8 @@ export function workoutView() {
     h("div", { class: "wo-head" },
       h("div", { class: "wo-top" },
         h("span", { class: "overline" }, `${a.name} · exercice ${a.cursor + 1} / ${a.entries.length}`, grp ? ` · ${grp.label} ${grp.tag}` : ""),
-        h("div", { class: "wo-top-actions" },
-          h("button", { class: "btn ghost xs", onClick: () => go("#/seance/modifier") }, "Modifier"),
-          h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer"))),
+        // Pas de « Modifier » : une séance lancée ne se réorganise plus (décision du 31/10, l'écran reste sans accès).
+        h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
       h("div", null,
         h("h1", { class: "heading-xl wo-title" }, exerciseTitle(ex)),
         h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, subtitle)),
