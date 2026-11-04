@@ -1,4 +1,4 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, setAbsent, setStack, setWorkoutGear, sessionGear, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, STATUS, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, weeklySets, setAbsent, setStack, setWorkoutGear, sessionGear, gearOf, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, announce, beep, restBeepPlanned, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle, niceName, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
 
@@ -294,6 +294,7 @@ export function editWorkoutView() {
   return { el };
 }
 
+let lockUntil = 0;
 export function workoutView() {
   setDraft = null; // retour à la séance : une correction abandonnée repart de la série enregistrée
   const a = state.active;
@@ -312,14 +313,18 @@ export function workoutView() {
   const volume = a.entries.reduce((t, x) => t + x.sets.reduce((b, s) => b + setVolume(s), 0), 0);
   const rpeTarget = a.deload ? 6 : CYCLES[a.cycle].rpe;
 
-  const setCursor = i => { a.cursor = i; save(); };
+  // Après un changement d'exercice ou une série notée, le bouton principal change de sens au même endroit :
+  // un verrou de 700 ms évite qu'un double tap note une série par erreur.
+  const setCursor = i => { a.cursor = i; a.goAt = null; lockUntil = Date.now() + 700; save(); };
+  const guard = fn => () => { if (Date.now() >= lockUntil) fn(); };
   const grp = groupTag(a.entries, a.cursor);
   if (grp && amrap) grp.label = "AMRAP";
   const nextInGroup = grp && !grp.last ? exercise(a.entries[a.cursor + 1].exerciseId) : null;
 
   // ——— Matériel du jour d'abord : l'ouverture de la séance. Chaque matériel est une grande tuile qui dit combien
   // d'exercices du programme en dépendent ; la séance se réécrit sous les yeux (avant → après), le programme ne bouge pas.
-  if (!a.gearDone && !a.warmupDone && !a.entries.some(x => x.sets.length)) {
+  // Ta salle habituelle suffit presque toujours : l'écran ne s'ouvre que depuis la ligne « Matériel · Changer ».
+  if (a.gearOpen && !a.entries.some(x => x.sets.length)) {
     const gear = sessionGear();
     const swapped = a.entries.filter(x => x.gearSwap);
     const stuck = a.entries.filter(x => !exercise(x.exerciseId).mix && !available(exercise(x.exerciseId)));
@@ -368,9 +373,19 @@ export function workoutView() {
             f ? pill(f, "accent") : ko ? icon("warning", "chev") : null);
         }))),
       h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr" } },
-        btn("C'est bon, on s'échauffe", { variant: "primary", size: "lg", onClick: () => { a.gearDone = true; save(); } })));
+        btn("C'est bon", { variant: "primary", size: "lg", onClick: () => { a.gearOpen = false; save(); } })));
     return { el };
   }
+
+  // Ligne repliée du matériel du jour, tant qu'aucune série n'est notée : ce qui est dispo, ce qui a été adapté, « Changer ».
+  const gearLine = !a.entries.some(x => x.sets.length) && (() => {
+    const gear = sessionGear(), all = gear.length === gearOf().length && gear.every(g => gearOf().includes(g));
+    const n = a.entries.filter(x => x.gearSwap).length;
+    const what = all ? "Tout ton matériel" : Object.entries(GEAR).filter(([k]) => gear.includes(k)).map(([, g]) => g.label).join(", ");
+    return h("div", { class: "gear-line" }, icon("barbell"),
+      h("div", { class: "row-main" }, h("span", { class: "body-sm fort" }, what), n > 0 && h("span", { class: "caption" }, `${n} exercice${n > 1 ? "s" : ""} adapté${n > 1 ? "s" : ""} pour aujourd'hui`)),
+      btn("Changer", { variant: "ghost", size: "sm", onClick: () => { a.gearOpen = true; save(); } }));
+  })();
 
   // ——— Échauffement d'abord : cardio au chrono (comme Tabatime), puis mobilité et séries d'approche.
   // Le chrono se calcule depuis l'heure de départ (survit à la mise en veille) ; la pause décale ce départ.
@@ -478,7 +493,7 @@ export function workoutView() {
           h("div", { class: "overline" }, ropeDay ? `${cardio} · ${ropeDay.kind === "recup" ? "jour récup" : "séance facile"}${ropeDay.deload ? " · deload" : ""}` : cardio),
           h("div", { class: "display-sm num" }, ropeDay ? `${Math.round(total / 60)} min` : dur ? dur[0].replace("-", "–") : clock(total)),
           h("p", { class: "body-md discret", style: { margin: 0 } }, ropeDay ? `${blocksLabel(ropeDay.blocks)}, puis ${mobility}.` : `Montée progressive, puis ${mobility}.`)),
-        ropeNote, approach),
+        ropeNote, approach, gearLine),
       h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr 1.4fr" } },
         btn("Passer", { variant: "secondary", size: "lg", onClick: begin }),
         btn("C'est parti", { variant: "primary", size: "lg", icon: "timer", onClick: () => { a.warm = { start: Date.now(), paused: null, total, blocks }; save(); } }),
@@ -501,6 +516,8 @@ export function workoutView() {
   // Série validée : message avec Annuler (la série sort, le repos qu'elle a lancé aussi).
   const done = () => {
     const i = a.cursor, x = a.entries[i];
+    a.goAt = null;
+    lockUntil = Date.now() + 700;
     logSet();
     const k = x.sets.length - 1, s = x.sets[k];
     const what = isAmrap(x) ? `${exercise(x.exerciseId).name} : tour ${k + 1}` : `${interval ? "Round" : "Série"} ${k + 1}`;
@@ -625,26 +642,40 @@ export function workoutView() {
     const exVolume = e.sets.reduce((b, x) => b + setVolume(x), 0);
     const record = !interval && !amrap && sessionRecords({ startedAt: a.startedAt, entries: [e] })[0];
     const nextEx = !isLast && exercise(a.entries[a.cursor + 1].exerciseId);
+    // La boussole Fluide : où en est ce muscle dans sa cible de la semaine, séance en cours comprise.
+    const m = ex.muscle, target = state.matrix[m]?.target, week = target && weeklySets()[m];
+    const weekCard = target && h("div", { class: "week-card" },
+      h("div", { class: "field-row" }, h("span", { class: "body-md fort medium" }, `${m} cette semaine`),
+        h("span", { class: "body-md num fort" }, `${week} / ${target} séries`)),
+      h("div", { class: "vol-track", role: "progressbar", "aria-label": `${m} : ${week} séries sur ${target} cette semaine`, "aria-valuenow": week, "aria-valuemin": 0, "aria-valuemax": target },
+        h("div", { class: `vol-fill ${week >= target ? "done" : state.matrix[m].status}`, style: { width: `${Math.min(100, (week / target) * 100)}%` } })),
+      h("span", { class: "caption" }, week >= target ? "Cible atteinte : le reste de la semaine est du bonus." : `Encore ${target - week} série${target - week > 1 ? "s" : ""} pour la cible ${STATUS[state.matrix[m].status].label.toLowerCase()}.`));
     hero = h("div", { class: "wo-hero done" },
       h("span", { class: "done-badge", "aria-hidden": "true" }, icon("check")),
-      h("h2", { class: "display-xs" }, allDone ? "Séance bouclée" : "Exercice terminé"),
+      h("h2", { class: "heading-xl" }, allDone ? "Séance bouclée" : "Exercice terminé"),
       h("span", { class: "body-md discret num" }, allDone ? "Toutes les séries sont faites. Bien joué."
         : `${e.sets.length} ${amrap ? "tour" : interval ? "round" : "série"}${e.sets.length > 1 ? "s" : ""}${exVolume ? ` · ${int(exVolume)} kg soulevés` : ""}`),
       record && pill(`Record · 1RM est. ${num(record.value)} kg (+${num(record.delta)})`, "succes"),
       !allDone && (nextEx ? h("span", { class: "body-sm" }, "Ensuite : ", h("b", { class: "fort medium" }, niceName(nextEx.name)))
-        : h("span", { class: "body-sm discret" }, "Il reste des séries sur d'autres exercices.")));
+        : h("span", { class: "body-sm discret" }, "Il reste des séries sur d'autres exercices.")),
+      weekCard);
   } else {
-    // Fin du repos au chrono : l'écran le montre (le bip peut être muet), une fois.
-    const goNow = a.goAt && Date.now() - a.goAt < 5000;
+    // Fin du repos au chrono : « À toi » en grand jusqu'à la prochaine action (le bip peut être muet),
+    // avec le temps écoulé depuis la fin du repos. Le flash ne joue qu'à l'arrivée.
+    const goSince = a.goAt ? Math.max(0, (Date.now() - a.goAt) / 1000) : null;
+    const over = goSince !== null && h("span", { class: "body-sm go-over num" });
     hero = col(
-      h("div", { class: `wo-hero${goNow ? " go" : ""}` },
-        h("div", { class: "overline" }, goNow ? `À toi · série ${e.sets.length + 1} / ${e.target.sets}` : `Série ${e.sets.length + 1} / ${e.target.sets}`),
+      h("div", { class: `wo-hero${goSince !== null ? ` go${goSince < 2 ? " arrive" : ""}` : ""}` },
+        goSince !== null && h("h2", { class: "heading-xl go-title" }, "À toi"),
+        h("div", { class: "overline" }, `Série ${e.sets.length + 1} / ${e.target.sets}`),
+        over,
         h("span", { class: "body-sm discret num" }, `Objectif ${reps(e.target.repsMin, e.target.repsMax)} reps · RPE ${String(rpeTarget).replace(".", ",")}, ${rir(rpeTarget)}`)),
       e.hint === "charge" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Haut de fourchette atteint la dernière fois : ", h("b", { class: "fort medium" }, charge(equipOf(e), e.draft.weight)), ".")),
       e.hint === "reps" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Même charge, vise ", h("b", { class: "fort medium" }, `${e.draft.reps} reps`), " (une de plus que la dernière fois).")),
       weightStepper(e),
       repsStepper("Reps"),
       rpeField(e.draft.rpe, v => { e.draft.rpe = v; save(true); }));
+    if (over) { hero.update = () => { over.textContent = `Repos fini depuis ${clock(Math.floor((Date.now() - a.goAt) / 1000))}`; }; hero.update(); }
   }
 
   const setsList = !amrap && (e.sets.length > 0 || !resting) && h("div", { class: "list" },
@@ -664,14 +695,15 @@ export function workoutView() {
   const primary = allDone || (exDone && isLast)
     ? btn("Terminer la séance", { variant: "primary", size: "lg", onClick: finishSheet })
     : exDone
-      ? btn("Exercice suivant", { variant: "primary", size: "lg", onClick: () => setCursor(a.cursor + 1) })
+      ? btn("Exercice suivant", { variant: "primary", size: "lg", onClick: guard(() => setCursor(a.cursor + 1)) })
       : amrap && !lead.clock
-        ? btn("Lancer l'AMRAP", { variant: "primary", size: "lg", icon: "timer", onClick: () => startAmrap(a.cursor) })
+        ? btn("Lancer l'AMRAP", { variant: "primary", size: "lg", icon: "timer", onClick: guard(() => startAmrap(a.cursor)) })
       : amrap
-        ? btn("Fait", { variant: "primary", size: "lg", icon: "check", onClick: done })
+        ? btn("Fait", { variant: "primary", size: "lg", icon: "check", onClick: guard(done) })
       : canLaunch
-        ? btn("Lancer le chrono", { variant: "primary", size: "lg", icon: "timer", onClick: () => startClock(a.cursor) })
-        : btn(interval ? "Round fait" : "Série faite", { variant: "primary", size: "lg", icon: "check", onClick: done });
+        ? btn("Lancer le chrono", { variant: "primary", size: "lg", icon: "timer", onClick: guard(() => startClock(a.cursor)) })
+        : btn(interval ? "Round fait" : "Série faite", { variant: "primary", size: "lg", icon: "check", onClick: guard(done) });
+  if (a.goAt && !exDone && !resting) primary.classList.add("go");
   // Exercice précédent / suivant : flèches nommées, à l'écart du bouton principal.
   const nav = (dir, ok) => ok
     ? h("button", { type: "button", class: "btn secondary lg nav-arrow", "aria-label": dir < 0 ? "Exercice précédent" : "Exercice suivant", title: dir < 0 ? "Exercice précédent" : "Exercice suivant", onClick: () => setCursor(a.cursor + dir) }, icon(dir < 0 ? "caretLeft" : "caretRight"))
@@ -702,7 +734,7 @@ export function workoutView() {
       h("div", { class: "segments", "aria-label": `${a.entries.filter(entryDone).length} exercices terminés sur ${a.entries.length}` }, segs)),
     h("div", { class: "scroll" },
       ex.pref === "douleur" && h("div", { class: "hint attention" }, icon("warning"), h("span", { class: "body-sm" }, "Tu as signalé une douleur sur cet exercice : charge allégée, amplitude confortable, ou remplace-le.")),
-      hero, setsList),
+      !resting && !exDone && gearLine, hero, setsList),
     h("div", { class: `wo-commands nav${resting ? " resting" : ""}` }, ...bottom,
       h("p", { class: "caption wo-foot num", style: { gridColumn: "1 / -1", margin: 0 } },
         "Durée ", h("span", { "data-tick": "elapsed" }), ` · ${int(volume)} kg soulevés`)));
@@ -726,7 +758,7 @@ export function workoutView() {
         hero.update?.();
         return;
       }
-      if (!a.restEndsAt) return;
+      if (!a.restEndsAt) { hero.update?.(); return; }
       if (Date.now() >= a.restEndsAt) {
         if (!restBeepPlanned(a.restEndsAt)) beep(880, 0.18, 3);
         announce(exDone ? "Repos terminé." : `Repos terminé. À toi : série ${e.sets.length + 1}.`);
