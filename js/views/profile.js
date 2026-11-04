@@ -1,4 +1,4 @@
-import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, MUSCLES, STATUS, CYCLES, PREFS } from "../store.js";
+import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, setGear, gearOf, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GEAR, GOALS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, go, int, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
@@ -87,6 +87,13 @@ export function profileView() {
           h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, "Mes exercices"),
             h("span", { class: "caption" }, `${prefs.aime || 0} favoris · ${prefs.evite || 0} évités · ${prefs.douleur || 0} en douleur`)),
           icon("caretRight", "chev"))),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Matériel de ta salle")),
+      h("p", { class: "caption", style: { margin: 0 } }, "Le programme, les alternatives et « Machine prise » ne proposent que ce matériel. Un exercice absent (pas de machine à mollets…) se retire depuis « Machine prise »."),
+      h("div", { class: "chips" }, Object.entries(GEAR).map(([k, g]) => h("button", { type: "button", class: "chip", "aria-pressed": String(gearOf().includes(k)), onClick: () => {
+        const cur = gearOf(), next = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k];
+        if (!next.length) { toast("Garde au moins un matériel"); return; }
+        setGear(next);
+      } }, g.label))),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif du moment")),
       radios(["Prise de muscle", "Force", "Sèche"].map(v => [v, v]), p.goal, v => { p.goal = v; save(); }, "Objectif du moment"),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Niveau")),
@@ -122,14 +129,19 @@ function muscleSheet(m, planned) {
     h("span", { class: "body-sm" }, "Cible ", h("span", { class: "discret" }, `(repère ${STATUS[status].range.join("-")})`)),
     stepper({ value: target, min: 0, max: 30, compact: true, format: v => `${v} série${v > 1 ? "s" : ""}`, label: `séries ${m}`, onChange: v => { target = v; } })));
   drawTarget();
+  let goal = goalOf(m);
   sheet({
     title: m, okLabel: "Enregistrer",
     body: [
+      h("span", { class: "overline" }, "Volume"),
       radios(Object.entries(STATUS).map(([k, v]) => [k, v.label, `${v.range.join("-")} séries par semaine`]), status, v => { status = v; target = STATUS[v].def; drawTarget(); }, `Statut ${m}`),
       slot,
-      h("p", { class: "caption", style: { margin: 0 } }, `${planned} série${planned > 1 ? "s" : ""} prévue${planned > 1 ? "s" : ""} dans tes séances types.`)
+      h("p", { class: "caption", style: { margin: 0 } }, `${planned} série${planned > 1 ? "s" : ""} prévue${planned > 1 ? "s" : ""} dans tes séances types.`),
+      h("span", { class: "overline" }, "Objectif"),
+      radios(Object.entries(GOALS).map(([k, g]) => [k, g.label, g.desc]), goal, v => { goal = v; }, `Objectif ${m}`),
+      h("p", { class: "caption", style: { margin: 0 } }, "Changer l'objectif recale les reps et le repos de ce muscle dans tes séances types.")
     ],
-    ok: () => { setTimeout(() => setMuscle(m, status, target)); }
+    ok: () => { setTimeout(() => setMuscle(m, status, target, goal)); }
   });
 }
 
@@ -140,14 +152,14 @@ export function matrixView() {
     navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Réglages Fluide", subtitle: `${total} séries / semaine au total` }),
     h("div", { class: "scroll" },
       h("p", { class: "body-sm discret", style: { margin: 0 } },
-        "Pour chaque muscle, dis si tu veux le maintenir, le faire progresser ou en faire ton point faible. Repères par semaine : maintenir 4-8 séries, progresser 10-16, point faible 16-22. On ne pousse pas tout en même temps."),
+        "Pour chaque muscle, dis si tu veux le maintenir, le faire progresser ou en faire ton point faible (le volume), et ce que tu cherches : force, hypertrophie ou endurance (les reps et le repos). Repères par semaine : maintenir 4-8 séries, progresser 10-16, point faible 16-22."),
       h("div", { class: "list" }, MUSCLES.map(m => {
         const { status, target } = state.matrix[m];
         const plan = planned[m] || 0;
         return h("button", { class: "row", onClick: () => muscleSheet(m, plan) },
           h("div", { class: "row-main" },
             h("span", { class: "body-md fort medium" }, m),
-            h("span", { class: "caption num" }, `${STATUS[status].label} · cible ${target} · `,
+            h("span", { class: "caption num" }, `${STATUS[status].label} · ${GOALS[goalOf(m)].label.toLowerCase()} · cible ${target} · `,
               h("span", { style: { color: Math.abs(plan - target) > 2 ? "var(--etat-attention)" : null } }, `${plan} prévue${plan > 1 ? "s" : ""}`))),
           icon("caretRight", "chev"));
       }))));
@@ -157,27 +169,32 @@ export function matrixView() {
 let prefFilter = "all";
 
 export function prefsView() {
-  const list = state.exercises.filter(e => prefFilter === "all" || e.pref === prefFilter).sort((a, b) => a.muscle.localeCompare(b.muscle) || a.name.localeCompare(b.name));
+  const list = state.exercises.filter(e => prefFilter === "all" || (prefFilter === "absent" ? e.absent : e.pref === prefFilter)).sort((a, b) => a.muscle.localeCompare(b.muscle) || a.name.localeCompare(b.name));
   const edit = e => {
     const note = h("textarea", { class: "input", value: e.note || "", placeholder: "Ex. épaule qui tire en bas du mouvement, garder une amplitude courte", "aria-label": "Note" });
-    let pref = e.pref;
+    let pref = e.pref, absent = !!e.absent;
     sheet({
       title: e.name, okLabel: "Enregistrer",
       body: [
         radios(Object.entries(PREFS), pref, v => { pref = v; }, "Ton avis sur l'exercice"),
         h("p", { class: "caption", style: { margin: 0 } }, "Les favoris passent en tête du catalogue et des alternatives. En cas de douleur, note le mouvement ou l'amplitude à éviter."),
+        h("button", { type: "button", class: "radio-card", role: "checkbox", "aria-checked": String(absent),
+          onClick: ev => { absent = !absent; ev.currentTarget.setAttribute("aria-checked", String(absent)); } },
+          h("span", { class: "radio-dot", "aria-hidden": "true" }),
+          h("span", { class: "radio-text" }, h("span", { class: "body-md fort semibold" }, "Pas dans ma salle"),
+            h("span", { class: "caption" }, "Plus proposé dans le programme ni les alternatives. Il reste dans le catalogue."))),
         field("Note", note)
       ],
-      ok: () => { e.note = note.value.trim(); setPref(e.id, pref); }
+      ok: () => { e.note = note.value.trim(); setAbsent(e.id, absent); setPref(e.id, pref); }
     });
   };
   const el = h("div", { class: "screen" },
     navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Mes exercices", subtitle: `${state.exercises.length} exercices` }),
     h("div", { class: "scroll" },
-      segmented([["all", "Tous"], ["aime", "Favoris"], ["evite", "Évités"], ["douleur", "Douleur"]], prefFilter, v => { prefFilter = v; dispatchEvent(new HashChangeEvent("hashchange")); }, "sm"),
+      segmented([["all", "Tous"], ["aime", "Favoris"], ["evite", "Évités"], ["douleur", "Douleur"], ["absent", "Absents"]], prefFilter, v => { prefFilter = v; dispatchEvent(new HashChangeEvent("hashchange")); }, "sm"),
       list.length ? h("div", { class: "list" }, list.map(e => h("div", { class: "row pick" },
         h("button", { class: "row-btn", onClick: () => edit(e) },
-          h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, e.name), h("span", { class: "caption" }, e.note ? `${e.muscle} · ${e.note}` : e.muscle)),
+          h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, e.name), h("span", { class: "caption" }, [e.muscle, e.absent && "pas dans ma salle", e.note].filter(Boolean).join(" · "))),
           e.pref !== "aime" && prefPill(e.pref), icon("caretRight", "chev")),
         e.pref !== "douleur" && h("button", { class: "star", "aria-pressed": String(e.pref === "aime"), "aria-label": e.pref === "aime" ? `Retirer ${e.name} des favoris` : `Mettre ${e.name} en favori`,
           onClick: () => { toggleFav(e.id); dispatchEvent(new HashChangeEvent("hashchange")); } }, icon("star")))))

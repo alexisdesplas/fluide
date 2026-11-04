@@ -295,7 +295,8 @@ textarea.input { height: 88px; padding: var(--spacing-12); resize: none; }
 .ring.sm svg { width: 100%; height: 100%; }
 .ring circle { fill: none; stroke-width: 34; }
 .ring .track { stroke: var(--etat-succes-soft); }
-.ring .prog { stroke: var(--etat-succes); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+/* Pas de transition : redessiné 4 fois par seconde, l'anneau ne fait que se vider (une transition le faisait remonter à chaque rendu). */
+.ring .prog { stroke: var(--etat-succes); stroke-linecap: round; }
 /* Nom d'exercice sur une ligne, tronqué ; l'icône « voir le mouvement » reste visible au bout. */
 .wo-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wo-title .ex-link { display: flex; align-items: center; max-width: 100%; }
@@ -319,13 +320,16 @@ textarea.input { height: 88px; padding: var(--spacing-12); resize: none; }
 .rest-btn > :not(.rest-fill) { position: relative; }
 .rest-btn.solo { justify-content: center; }
 .rest-btn .num { font-size: 16px; font-variant-numeric: tabular-nums; }
-.rest-fill { position: absolute; inset: 0; background: color-mix(in srgb, var(--etat-succes) 22%, transparent); transform-origin: left; transform: scaleX(0); transition: transform 1s linear; }
-@media (prefers-reduced-motion: reduce) { .rest-fill { transition: none; } }
+.rest-fill { position: absolute; inset: 0; background: color-mix(in srgb, var(--etat-succes) 22%, transparent); transform-origin: left; transform: scaleX(1); }
 .ring-center { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-4); }
 .wo-commands { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: var(--spacing-12); padding: var(--spacing-12) var(--spacing-20) calc(var(--spacing-12) + var(--safe-bottom)); border-top: 1px solid var(--bord-discret); background: var(--fond-page); }
 .wo-foot { text-align: center; padding-bottom: var(--spacing-4); }
 .set-row { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: var(--spacing-12); min-height: 44px; padding: 0 var(--spacing-16); }
 .set-row + .set-row { border-top: 1px solid var(--bord-discret); }
+button.set-row { width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+button.set-row + .set-row, .set-row + button.set-row { border-top: 1px solid var(--bord-discret); }
+button.set-row:active { background: var(--surface-2, rgba(255, 255, 255, .04)); }
+.set-end { display: inline-flex; align-items: center; gap: var(--spacing-8); }
 .set-idx { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font: 600 12px/16px var(--font); background: var(--fond-discret); color: var(--texte-discret); }
 .set-row.done .set-idx { background: var(--etat-succes-soft); color: var(--etat-succes); }
 .set-row.cur .set-idx { background: var(--accent-soft); color: var(--accent-texte); }
@@ -366,6 +370,8 @@ dialog.sheet::backdrop { background: rgba(0, 0, 0, .6); }
 /* Mode Modifier d'une séance : flèches à cible tactile de 44 px. */
 .btn.square { width: 44px; height: 44px; padding: 0; }
 .btn.square svg { width: 18px; height: 18px; }
+.btn.sm.square { width: 32px; height: 32px; }
+.btn.sm.square svg { width: 16px; height: 16px; }
 .reorder { display: flex; gap: var(--spacing-8); flex: none; }
 /* Superset / triset : trait d'accent à gauche des exercices liés, bouton « Lier » entre deux lignes. */
 .row.grouped { box-shadow: inset 4px 0 0 var(--accent-texte); }
