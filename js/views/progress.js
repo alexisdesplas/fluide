@@ -122,7 +122,7 @@ export function sessionView({ id }) {
         return h("div", { class: "row" },
           h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, exercise(e.exerciseId)?.name || "Exercice supprimé"),
             (e.swappedFrom || e.extra) && h("span", { class: "caption" }, e.extra ? "Hors programme" : `À la place de ${exercise(e.swappedFrom)?.name || "—"}`),
-            h("span", { class: "caption num" }, (e.format === "emom" || e.format === "tabata" ? `${e.format === "emom" ? "EMOM" : "Tabata"} · ${e.sets.length} rounds · ` : "") + e.sets.map(x => `${x.reps}×${x.weight ? num(x.weight) : "PDC"}${x.rpe ? ` @${x.rpe}` : ""}`).join(" · "))),
+            h("span", { class: "caption num" }, (e.format === "emom" || e.format === "tabata" ? `${e.format === "emom" ? "EMOM" : "Tabata"} · ${e.sets.length} rounds · ` : e.format === "amrap" ? `AMRAP · ${e.sets.length} tours · ` : "") + e.sets.map(x => `${x.reps}×${x.weight ? num(x.weight) : "PDC"}${x.rpe ? ` @${x.rpe}` : ""}`).join(" · "))),
           rec && pill("Record", "succes"));
       })),
       s.note && h("div", { class: "card flat" }, h("span", { class: "overline" }, "Journal"), h("p", { class: "body-md", style: { margin: 0 } }, s.note)),

@@ -18,6 +18,15 @@ export const STATUS = {
   faible: { label: "Point faible", range: [16, 22], def: 18 }
 };
 
+// Objectif de chaque muscle : il fixe les reps et le repos de ses séries (le statut, lui, fixe le volume).
+// main : premier exercice d'un gros muscle dans la séance ; other : le reste.
+export const GOALS = {
+  force: { label: "Force", desc: "Charges lourdes, 4 à 8 reps, 2 min 30 à 3 min de repos.", main: [4, 6, 180], other: [5, 8, 150] },
+  hypertrophie: { label: "Hypertrophie", desc: "8 à 15 reps selon l'exercice, 1 min 15 à 2 min 30 de repos." },
+  endurance: { label: "Endurance", desc: "Séries longues, 15 à 20 reps, 45 s de repos.", main: [15, 20, 45], other: [15, 20, 45] }
+};
+export const goalOf = m => state.matrix[m]?.goal || "hypertrophie";
+
 export const CYCLES = {
   volume: { label: "Volume", desc: "Beaucoup de séries, RPE 6-8, reps 8-15. On accumule le travail.", rpe: 7 },
   intensite: { label: "Intensité", desc: "Charges lourdes, volume réduit, RPE 8-9, reps 4-8.", rpe: 8.5 },
@@ -38,6 +47,10 @@ export const FORMAT_DEFAULTS = {
   tabata: { rounds: 8, work: 20, off: 10, repsMin: 10, repsMax: 10 }
 };
 export const isInterval = x => x?.format === "emom" || x?.format === "tabata";
+// AMRAP : un circuit d'exercices enchaînés sans repos, autant de tours que possible dans le temps donné.
+// Ses exercices forment un groupe ; le premier porte le chrono (clock, target.time). Un tour vaut une série par exercice.
+export const isAmrap = x => x?.format === "amrap";
+export const amrapMembers = (list, i) => groupOf(list, i)?.members || [i];
 
 // Équivalence pour l'objectif Fluide : un Tabata de 8 rounds compte 2 séries, un EMOM 1 série par tranche de 3 minutes.
 const roundsToSets = (format, rounds) => (format === "tabata" ? Math.ceil(rounds / 4) : format === "emom" ? Math.ceil(rounds / 3) : rounds);
@@ -83,6 +96,22 @@ export const restAfter = (list, i) => { const g = groupOf(list, i); return g && 
 // Matériel d'un exercice : il fixe les pas de charge (barre, haltères à l'unité, pile de la machine en lbs).
 export const EQUIPS = { barre: "Barre", halteres: "Haltères", poulie: "Poulie", machine: "Machine", smith: "Smith", kettlebell: "Kettlebell", elastique: "Élastique", pdc: "Poids du corps" };
 
+// Matériel de la salle, par famille. Le programme, les alternatives et les variantes ne proposent que celui-là.
+export const GEAR = {
+  machine: { label: "Machines et poulies", equips: ["machine", "poulie", "smith"] },
+  barre: { label: "Barres", equips: ["barre"] },
+  halteres: { label: "Haltères", equips: ["halteres"] },
+  kettlebell: { label: "Kettlebells", equips: ["kettlebell"] },
+  elastique: { label: "Élastiques", equips: ["elastique"] },
+  pdc: { label: "Poids du corps", equips: ["pdc"] }
+};
+const DEFAULT_GEAR = ["machine", "barre", "halteres", "pdc"];
+export const gearOf = () => state.profile.gear || DEFAULT_GEAR;
+// Matériel de la séance en cours (choisi avant de commencer), sinon celui de la salle.
+export const sessionGear = () => state.active?.gear || gearOf();
+// Exercice faisable : son matériel est coché et il n'est pas marqué absent.
+export const available = (e, gear = sessionGear()) => !e.absent && gear.some(g => GEAR[g].equips.includes(e.equip));
+
 // Anciens noms de Fluide → noms de la base d'exercices : l'historique suit, l'id ne change pas.
 const RENAMED = {
   "Développé couché": "Développé couché avec barre", "Développé incliné haltères": "Développé incliné avec haltères", "Écarté poulie": "Écartés à la poulie",
@@ -119,11 +148,15 @@ const SCALES = {
   machine: range(0, 300, 5).map(lb => Math.round(lb * LB * 10) / 10),
   poulie: range(0, 300, 5).map(lb => Math.round(lb * LB * 10) / 10)
 };
-export const weightScale = equip => SCALES[equip] || SCALES.barre;
-export const nearestWeight = (equip, w) => weightScale(equip).reduce((a, b) => (Math.abs(b - w) < Math.abs(a - w) ? b : a));
-export const nextWeight = (equip, w) => weightScale(equip).find(x => x > w + 0.01) ?? w;
 // Machine et poulie se lisent en lbs, comme sur la pile ; barre, haltères et le reste en kg.
 export const inLbs = equip => equip === "machine" || equip === "poulie";
+// Pile d'une machine précise : par 5 lbs jusqu'à « from », puis par « step » (extension des jambes : 15 en 15 après 80).
+export const STACK_STEPS = [5, 10, 15, 20];
+const stackScale = ({ from, step }) => [...range(0, from, 5), ...range(from + step, Math.max(300, from + step * 10), step)].map(lb => Math.round(lb * LB * 10) / 10);
+// stack : la pile réglée sur l'exercice (sans effet hors machine et poulie).
+export const weightScale = (equip, stack) => (stack && inLbs(equip) ? stackScale(stack) : SCALES[equip] || SCALES.barre);
+export const nearestWeight = (equip, w, stack) => weightScale(equip, stack).reduce((a, b) => (Math.abs(b - w) < Math.abs(a - w) ? b : a));
+export const nextWeight = (equip, w, stack) => weightScale(equip, stack).find(x => x > w + 0.01) ?? w;
 export const toLbs = w => Math.round(w / LB);
 export const fromLbs = n => Math.round(n * LB * 10) / 10;
 // Les haltères se comptent à l'unité : la moitié de la barre, et inversement.
@@ -189,6 +222,9 @@ function migrate(st) {
   for (const t of st.templates) for (const it of t.items) if (typeof it.weight === "number") it.weight = nearestWeight(equipOf_(it.exerciseId), it.weight);
   // Objectif jamais choisi : le challenge corde est en cours, il sert d'échauffement. null veut dire « aucun », on le garde.
   if (st.profile.endurance === undefined) Object.assign(st.profile, { endurance: "corde", enduranceStart: CORDE_START });
+  // « À définir » (séries longues, repos court) devient l'objectif endurance du muscle.
+  for (const m of st.profile.define || []) if (st.matrix[m] && !st.matrix[m].goal) st.matrix[m].goal = "endurance";
+  delete st.profile.define;
   return st;
 }
 
@@ -235,7 +271,13 @@ export function cyclePosition(t = Date.now()) {
 // 1RM estimé (Epley) : une série de 1 rep vaut sa charge.
 export const e1rm = (w, r) => (r <= 1 ? w : w * (1 + r / 30));
 
-export const setVolume = s => s.weight * s.reps;
+// Charge réelle d'une série : une poulie démultipliée (ratio ½) ne déplace que la moitié de la pile.
+// Les séries gardent la valeur lue sur la pile et le ratio du moment : l'historique reste comparable d'une poulie à l'autre.
+export const effWeight = s => s.weight * (s.ratio || 1);
+export const ratioOf = id => exercise(id)?.ratio || 1;
+// Valeur à mettre sur la pile pour une charge réelle donnée, calée sur les pas de l'exercice.
+export const pileFor = (id, equip, w) => nearestWeight(equip, w / ratioOf(id), exercise(id)?.stack);
+export const setVolume = s => effWeight(s) * s.reps;
 export const sessionVolume = s => s.entries.reduce((a, e) => a + e.sets.reduce((b, x) => b + setVolume(x), 0), 0);
 // Séries au sens Fluide : un Tabata de 8 rounds compte 2 séries, un EMOM 1 série par tranche de 3 rounds.
 export const sessionSets = s => s.entries.reduce((a, e) => a + entrySets(e), 0);
@@ -279,7 +321,9 @@ export const byUsefulness = (a, b) => PREF_RANK[a.pref] - PREF_RANK[b.pref] || (
 // Alternatives quand la machine est prise : même muscle, jamais un exercice en douleur.
 export function alternatives(exerciseId) {
   const ex = exercise(exerciseId);
-  return state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur" && !e.mix).sort(byUsefulness);
+  const all = state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur" && !e.mix);
+  const here = all.filter(e => available(e));
+  return (here.length ? here : all).sort(byUsefulness);
 }
 
 // Melting pot : un Tabata ou un EMOM d'exercices choisis sur le moment, sans les saisir. Un par muscle,
@@ -292,11 +336,11 @@ export function meltingPot(muscle) {
 
 // Même mouvement, autre matériel : « Développé couché avec barre » → « … avec haltères », « … à la machine », « … à la Smith Machine ».
 // Le nom sans son matériel sert de clé ; par matériel, l'exercice le plus utile (jamais un exercice en douleur, sauf celui en cours).
-const EQUIP_WORDS = /\s+(?:avec|à|au|aux|sur)\s+(?:la\s+|le\s+|une?\s+)?(?:barre(?:\s+ez)?|haltères?|machine(?:\s+smith)?|smith(?:\s+machine)?|poulie(?:\s+(?:basse|haute))?|câbles?|kettlebells?|élastiques?)(?=\s|$)/g;
+const EQUIP_WORDS = /\s+(?:avec|à|au|aux|sur)\s+(?:la\s+|le\s+|une?\s+)?(?:barre(?:\s+ez)?|haltères?|machine(?:\s+smith)?|smith(?:\s+machine)?|poulie(?:\s+(?:basse|haute))?|câbles?|kettlebells?|élastiques?|poids\s+du\s+corps)(?=\s|$)/g;
 const movement = name => name.toLowerCase().replace(EQUIP_WORDS, "").replace(/\s+/g, " ").trim();
 export function variants(exerciseId) {
   const ex = exercise(exerciseId), key = movement(ex.name), out = { [ex.equip]: ex };
-  for (const e of state.exercises.filter(e => e.muscle === ex.muscle && e.id !== ex.id && e.pref !== "douleur" && movement(e.name) === key).sort(byUsefulness))
+  for (const e of state.exercises.filter(e => e.muscle === ex.muscle && e.id !== ex.id && e.pref !== "douleur" && available(e) && movement(e.name) === key).sort(byUsefulness))
     out[e.equip] ||= e;
   return out;
 }
@@ -319,8 +363,8 @@ export function exerciseHistory(exerciseId, before = Infinity) {
     if (!sets.length) continue;
     rows.push({
       sessionId: s.id, date: s.startedAt, sets,
-      best1rm: Math.max(...sets.map(x => e1rm(x.weight, x.reps))),
-      maxWeight: Math.max(...sets.map(x => x.weight)),
+      best1rm: Math.max(...sets.map(x => e1rm(effWeight(x), x.reps))),
+      maxWeight: Math.max(...sets.map(effWeight)),
       volume: sets.reduce((a, x) => a + setVolume(x), 0)
     });
   }
@@ -333,13 +377,15 @@ export const lastPerformance = (exerciseId, before) => exerciseHistory(exerciseI
 export function suggestion(item, before) {
   const last = lastPerformance(item.exerciseId, before);
   if (!last) return { weight: item.weight, reps: item.repsMin, hint: null, last: null };
-  const top = Math.max(...last.sets.map(s => s.weight));
-  const work = last.sets.filter(s => s.weight === top);
+  const ex = exercise(item.exerciseId), equip = ex?.equip;
+  const top = Math.max(...last.sets.map(effWeight));
+  const work = last.sets.filter(s => Math.abs(effWeight(s) - top) < 0.01);
   const minReps = Math.min(...work.map(s => s.reps));
+  const pile = pileFor(item.exerciseId, equip, top);
   if (top > 0 && work.length >= item.sets && minReps >= item.repsMax) {
-    return { weight: nextWeight(exercise(item.exerciseId)?.equip, top), reps: item.repsMin, hint: "charge", last };
+    return { weight: nextWeight(equip, pile, ex?.stack), reps: item.repsMin, hint: "charge", last };
   }
-  return { weight: top, reps: Math.min(item.repsMax, minReps + 1), hint: "reps", last };
+  return { weight: pile, reps: Math.min(item.repsMax, minReps + 1), hint: "reps", last };
 }
 
 // Records battus dans une séance : meilleur 1RM estimé de l'exercice, comparé à tout ce qui précède.
@@ -347,7 +393,7 @@ export function sessionRecords(s) {
   const out = [];
   for (const e of s.entries) {
     if (!e.sets.length) continue;
-    const best = Math.max(...e.sets.map(x => e1rm(x.weight, x.reps)));
+    const best = Math.max(...e.sets.map(x => e1rm(effWeight(x), x.reps)));
     const prev = exerciseHistory(e.exerciseId, s.startedAt);
     if (!prev.length) continue;
     const prevBest = Math.max(...prev.map(p => p.best1rm));
@@ -375,8 +421,38 @@ export function setMatrix(muscle, status) {
   save();
 }
 
-export function setMuscle(muscle, status, target) {
-  state.matrix[muscle] = { status, target: Math.max(0, target) };
+// Changer l'objectif d'un muscle recale tout de suite les reps et le repos de ses séries dans tes séances types.
+export function setMuscle(muscle, status, target, goal = goalOf(muscle)) {
+  const changed = goal !== goalOf(muscle);
+  state.matrix[muscle] = { status, target: Math.max(0, target), ...(goal !== "hypertrophie" && { goal }) };
+  if (changed) for (const t of state.templates) t.items.forEach((it, i) => {
+    if (isInterval(it) || exercise(it.exerciseId)?.muscle !== muscle) return;
+    const first = t.items.findIndex(x => exercise(x.exerciseId)?.muscle === muscle) === i;
+    Object.assign(it, prescription(muscle, first && BIG.includes(muscle)));
+  });
+  save();
+}
+
+export function setGear(gear) {
+  state.profile.gear = gear;
+  save();
+}
+
+// Exercice absent de ta salle (pas de machine à mollets…) : plus proposé nulle part, sauf si tu le cherches.
+export function setAbsent(exerciseId, absent) {
+  const e = exercise(exerciseId);
+  if (absent) e.absent = true; else delete e.absent;
+  save(true);
+}
+
+// Pile d'une machine (pas après un seuil) et poulie démultipliée : les charges prévues sont recalées.
+export function setStack(exerciseId, stack, ratio) {
+  const e = exercise(exerciseId);
+  if (stack) e.stack = stack; else delete e.stack;
+  if (ratio && ratio !== 1) e.ratio = ratio; else delete e.ratio;
+  const fit = w => nearestWeight(e.equip, w, e.stack);
+  for (const t of state.templates) for (const it of t.items) if (it.exerciseId === exerciseId && typeof it.weight === "number") it.weight = fit(it.weight);
+  for (const x of state.active?.entries || []) if (x.exerciseId === exerciseId && !x.equip) x.draft.weight = fit(x.draft.weight);
   save();
 }
 
@@ -499,7 +575,7 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
   const plan = split.sessions.map(([name, ms]) => (ms.some(m => LEGS_MAIN.includes(m)) && ++legs > maxLegs
     ? [name.replace("Full body", "Haut"), ms.filter(m => !LEGS.includes(m) || m === "Abdos")] : [name, ms]));
   const freq = {}; for (const [, ms] of plan) for (const m of ms) freq[m] = (freq[m] || 0) + 1;
-  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && !e.mix && e.equip !== "elastique" && e.equip !== "kettlebell").sort(byUsefulness));
+  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && !e.mix && available(e, gearOf())).sort(byUsefulness));
   // Un exercice différent à chaque passage ; prefer choisit d'abord parmi ceux qui conviennent (barre pour le premier d'un gros muscle).
   const taken = new Set();
   const pick = (m, prefer = () => true) => {
@@ -512,15 +588,11 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
   const free = e => e.equip === "barre" || e.equip === "smith";
   const cyc = state.cycle.type;
   const known = id => state.templates.flatMap(t => t.items).find(i => i.exerciseId === id);
-  // Muscle à définir : séries longues et repos courts, pas de charge lourde.
-  const define = state.profile.define || [];
+  // L'objectif du muscle (force, hypertrophie, endurance) fixe reps et repos.
   const item = (ex, m, sets, heavy) => {
-    if (define.includes(m)) heavy = false;
     const last = lastPerformance(ex.id);
-    const [repsMin, repsMax] = cyc === "intensite" ? (heavy ? [4, 6] : [6, 10]) : heavy ? [6, 10] : BIG.includes(m) ? [8, 12] : [10, 15];
-    const weight = nearestWeight(ex.equip, last ? last.maxWeight : known(ex.id) ? known(ex.id).weight : BIG.includes(m) ? 20 : 8);
-    if (define.includes(m)) return { id: uid(), exerciseId: ex.id, format: "series", sets, repsMin: 12, repsMax: 20, weight, rest: 60 };
-    return { id: uid(), exerciseId: ex.id, format: "series", sets, repsMin, repsMax, weight, rest: heavy ? 150 : BIG.includes(m) ? 120 : 75 };
+    const weight = last ? pileFor(ex.id, ex.equip, last.maxWeight) : nearestWeight(ex.equip, known(ex.id) ? known(ex.id).weight : BIG.includes(m) ? 20 : 8, ex.stack);
+    return { id: uid(), exerciseId: ex.id, format: "series", sets, ...prescription(m, heavy, cyc), weight };
   };
   const sessions = plan.map(([name, muscles]) => {
     const items = [];
@@ -553,13 +625,22 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
   return sessions;
 }
 
+// Reps et repos d'un exercice selon l'objectif du muscle. heavy : premier exercice d'un gros muscle dans la séance.
+// En hypertrophie, le bloc en cours décide (intensité : plus lourd).
+export function prescription(m, heavy, cyc = state.cycle.type) {
+  const g = GOALS[goalOf(m)];
+  if (g.main) { const [repsMin, repsMax, rest] = heavy ? g.main : g.other; return { repsMin, repsMax, rest }; }
+  const [repsMin, repsMax] = cyc === "intensite" ? (heavy ? [4, 6] : [6, 10]) : heavy ? [6, 10] : BIG.includes(m) ? [8, 12] : [10, 15];
+  return { repsMin, repsMax, rest: heavy ? 150 : BIG.includes(m) ? 120 : 75 };
+}
+
 // Séance trop longue pour le temps donné : repos raccourcis d'abord, puis une série en moins sur les exercices
 // les moins prioritaires (maintenir avant progresser avant point faible, isolation avant polyarticulaires).
 // On reste d'abord dans la fourchette Fluide de chaque muscle ; on n'en sort que si le temps ne suffit vraiment pas.
 const PRIORITY = { maintien: 0, focus: 1, faible: 2 };
 function fitTime(t, minutes, keep, canCut) {
   if (!minutes || estimate(t) <= minutes) return;
-  for (const it of t.items) it.rest = Math.max(60, it.rest - 30);
+  for (const it of t.items) it.rest = Math.max(Math.min(60, it.rest), it.rest - 30);
   const muscle = it => exercise(it.exerciseId).muscle;
   const score = it => PRIORITY[state.matrix[muscle(it)].status] * 10 + (BIG.includes(muscle(it)) ? 5 : 0) - it.sets;
   const trim = ok => {
@@ -651,7 +732,8 @@ export function deleteTemplate(id) {
 
 export function addItem(templateId, exerciseId) {
   const last = lastPerformance(exerciseId);
-  const item = { id: uid(), exerciseId, format: "series", sets: 3, repsMin: 8, repsMax: 12, weight: nearestWeight(exercise(exerciseId).equip, last ? last.maxWeight : 20), rest: 90 };
+  const ex = exercise(exerciseId);
+  const item = { id: uid(), exerciseId, format: "series", sets: 3, repsMin: 8, repsMax: 12, weight: last ? pileFor(exerciseId, ex.equip, last.maxWeight) : nearestWeight(ex.equip, 20, ex.stack), rest: 90 };
   template(templateId).items.push(item);
   save();
   return item;
@@ -687,7 +769,7 @@ export function removeItem(templateId, itemId) {
 export function replaceItemExercise(templateId, itemId, exerciseId) {
   const it = template(templateId).items.find(x => x.id === itemId);
   const last = lastPerformance(exerciseId), equip = exercise(exerciseId).equip;
-  it.weight = last ? nearestWeight(equip, last.maxWeight) : convertWeight(exercise(it.exerciseId).equip, equip, it.weight);
+  it.weight = last ? pileFor(exerciseId, equip, last.maxWeight) : convertWeight(exercise(it.exerciseId).equip, equip, it.weight);
   it.exerciseId = exerciseId;
   save();
 }
@@ -724,12 +806,13 @@ export function startWorkout(templateId) {
       return {
         exerciseId: item.exerciseId, format: "series", itemId: item.id, startSets: sets, group: item.group,
         target: { sets, repsMin: item.repsMin, repsMax: item.repsMax, rest: item.rest },
-        draft: { weight: nearestWeight(exercise(item.exerciseId).equip, s.weight), reps: s.reps, rpe: null }, hint: pos.deload ? null : s.hint,
+        draft: { weight: nearestWeight(exercise(item.exerciseId).equip, s.weight, exercise(item.exerciseId).stack), reps: s.reps, rpe: null }, hint: pos.deload ? null : s.hint,
         sets: []
       };
     })
   };
-  save();
+  state.active.entries.forEach((e, i) => { e.slot = i; });
+  setWorkoutGear(gearOf());
 }
 
 function intervalEntry(exerciseId, item, deload) {
@@ -774,7 +857,15 @@ export function logSet() {
     save();
     return;
   }
-  e.sets.push({ weight: e.draft.weight, reps: e.draft.reps, rpe: e.draft.rpe, doneAt: Date.now() });
+  if (isAmrap(e)) {
+    // Circuit : exercice suivant tout de suite, sans repos ; après le dernier, nouveau tour.
+    e.sets.push({ weight: e.draft.weight, reps: e.draft.reps, doneAt: Date.now() });
+    const m = amrapMembers(a.entries, a.cursor);
+    a.cursor = m[(m.indexOf(a.cursor) + 1) % m.length];
+    save();
+    return;
+  }
+  e.sets.push({ weight: e.draft.weight, reps: e.draft.reps, rpe: e.draft.rpe, doneAt: Date.now(), ...(ratioOf(e.exerciseId) !== 1 && { ratio: ratioOf(e.exerciseId) }) });
   e.draft.rpe = null;
   // Superset / triset : on passe à l'exercice suivant du groupe sans repos ; le tour fini, repos puis retour au premier.
   const g = groupOf(a.entries, a.cursor);
@@ -802,6 +893,115 @@ export function logSet() {
   save();
 }
 
+// Matériel du jour, choisi avant la première série : chaque exercice impossible avec ce matériel passe
+// au même mouvement avec un autre matériel, sinon au meilleur exercice du même muscle. Un exercice ainsi
+// remplacé revient à celui du programme dès que son matériel est recoché. Les exercices déjà commencés ne bougent pas.
+export function setWorkoutGear(gear) {
+  const a = state.active;
+  a.gear = gear;
+  restoreFormats(a);
+  a.entries.forEach((e, i) => {
+    if (e.sets.length) return;
+    const base = exercise(e.gearSwap ? e.swappedFrom : e.exerciseId);
+    if (!base || base.mix) return;
+    if (available(base)) {
+      if (e.gearSwap) { swapExercise(i, base.id); delete a.entries[i].gearSwap; }
+      return;
+    }
+    if (available(exercise(e.exerciseId))) return; // déjà faisable (exercice du programme ou remplaçant)
+    // Jamais un exercice déjà prévu dans la séance (pas deux fois les élévations latérales).
+    const used = new Set(a.entries.filter((_, j) => j !== i).map(x => x.exerciseId));
+    const ok = x => x.id !== base.id && available(x) && !used.has(x.id);
+    const next = Object.values(variants(base.id)).find(ok) || alternatives(base.id).find(ok);
+    if (!next || next.id === e.exerciseId) return;
+    swapExercise(i, next.id);
+    a.entries[i].gearSwap = true;
+  });
+  gearFormats(a, gear);
+  save();
+}
+
+// Sans machines ni barres, la charge ne monte plus finement : on progresse en densité.
+// Kettlebells en AMRAP (tous enchaînés en un circuit), poids du corps en EMOM, haltères en Tabata.
+// En salle équipée, tout revient en séries, dans l'ordre du programme.
+export const GEAR_FORMATS = { kettlebell: "amrap", pdc: "emom", halteres: "tabata" };
+export const outdoorGear = gear => !gear.includes("machine") && !gear.includes("barre");
+function restoreFormats(a) {
+  for (const e of a.entries) {
+    if (!e.gearFormat) continue;
+    const back = e.gearFormat;
+    for (const k of ["clock", "lastBeep", "done", "group", "gearFormat"]) delete e[k];
+    Object.assign(e, back);
+    if (!back.group) delete e.group;
+  }
+  if (a.entries.every(e => e.slot !== undefined)) a.entries.sort((x, y) => x.slot - y.slot);
+}
+function gearFormats(a, gear) {
+  if (!outdoorGear(gear)) return;
+  const backup = e => ({ format: e.format || "series", target: e.target, draft: e.draft, hint: e.hint, ...(e.group && { group: e.group }) });
+  const circuit = [];
+  a.entries.forEach((e, i) => {
+    if (e.sets.length || e.clock) return;
+    const f = GEAR_FORMATS[equipOf(e)];
+    if (!f || f === e.format) return;
+    const keep = backup(e);
+    if (f === "amrap") { circuit.push(e); e.gearFormat = keep; return; }
+    const next = intervalEntry(e.exerciseId, { format: f, weight: e.draft.weight, ...FORMAT_DEFAULTS[f] }, a.deload);
+    for (const k of ["format", "target", "draft", "hint", "clock"]) e[k] = next[k];
+    delete e.group;
+    e.gearFormat = keep;
+  });
+  if (!circuit.length) return;
+  // Le circuit prend la place du premier exercice kettlebell ; ~80 s par série prévue, entre 8 et 20 min.
+  const planned = circuit.reduce((n, e) => n + e.gearFormat.target.sets, 0);
+  const time = Math.min(20, Math.max(8, Math.round((planned * 80) / 60))) * 60;
+  const g = uid(), at = a.entries.indexOf(circuit[0]);
+  a.entries = a.entries.filter(e => !circuit.includes(e));
+  a.entries.splice(at, 0, ...circuit);
+  circuit.forEach((e, k) => Object.assign(e, {
+    format: "amrap", group: g, hint: null,
+    target: { sets: e.gearFormat.target.sets, repsMin: 10, repsMax: 10, rest: 0, ...(k === 0 && { time }) },
+    draft: { ...e.draft, reps: 10, rpe: null }
+  }));
+  if (circuit.length === 1) delete circuit[0].group;
+  a.cursor = 0;
+}
+
+export function startAmrap(index) {
+  const a = state.active, m = amrapMembers(a.entries, index);
+  a.entries[m[0]].clock = Date.now();
+  a.cursor = m[0];
+  a.restEndsAt = null;
+  save();
+}
+// Temps écoulé (ou arrêt) : les tours faits deviennent les séries de chaque exercice du circuit.
+export function endAmrap(index) {
+  const a = state.active, m = amrapMembers(a.entries, index), lead = a.entries[m[0]];
+  lead.clock = null;
+  lead.done = true;
+  for (const i of m) a.entries[i].target.sets = a.entries[i].sets.length;
+  a.cursor = m.at(-1);
+  save();
+}
+export const amrapLeft = (lead, now = Date.now()) => Math.max(0, lead.target.time - (lead.clock ? (now - lead.clock) / 1000 : 0));
+
+// Corriger une série déjà validée (erreur de saisie), n'importe laquelle de la séance en cours.
+export function editSet(index, k, { weight, reps, rpe }) {
+  const s = state.active.entries[index].sets[k];
+  Object.assign(s, { weight, reps, rpe: rpe ?? null });
+  save();
+}
+
+// Retirer une série validée : le repos qu'elle avait lancé s'arrête si c'était la dernière de la séance.
+export function deleteSet(index, k) {
+  const a = state.active, e = a.entries[index];
+  const latest = Math.max(...a.entries.flatMap(x => x.sets.map(s => s.doneAt || 0)));
+  if ((e.sets[k].doneAt || 0) === latest) a.restEndsAt = null;
+  e.sets.splice(k, 1);
+  e.sets.forEach((s, i) => { if (s.round) s.round = i + 1; });
+  save();
+}
+
 // Machine prise : on remplace l'exercice pour cette séance seulement, le programme ne bouge pas.
 // Si des séries sont déjà faites, elles restent sur l'exercice d'origine et l'alternative reprend les séries restantes.
 export function swapExercise(index, exerciseId) {
@@ -821,8 +1021,9 @@ export function swapExercise(index, exerciseId) {
   e.exerciseId = exerciseId;
   delete e.equip;
   const equip = exercise(exerciseId).equip;
-  // Jamais fait : la charge suit le matériel, sauf au poids du corps (traction, melting pot) où on part sans lest.
-  e.draft = { weight: last ? nearestWeight(equip, Math.max(...last.sets.map(s => s.weight))) : equip === "pdc" ? 0 : convertWeight(from, equip, e.draft.weight), reps: e.target.repsMin, rpe: null };
+  // Jamais fait : la charge suit le matériel ; kettlebell, on part d'un poids courant (16 kg, 12 kg sur un petit muscle).
+  const fresh = equip === "pdc" ? 0 : equip === "kettlebell" ? (BIG.includes(exercise(exerciseId).muscle) ? 16 : 12) : convertWeight(from, equip, e.draft.weight);
+  e.draft = { weight: last ? pileFor(exerciseId, equip, last.maxWeight) : fresh, reps: e.target.repsMin, rpe: null };
   e.hint = null;
   save();
 }
@@ -832,7 +1033,7 @@ export function swapExercise(index, exerciseId) {
 export function setEntryFormat(index, format) {
   const a = state.active, e = a.entries[index];
   if (e.sets.length || e.format === format) return;
-  const keep = { itemId: e.itemId, swappedFrom: e.swappedFrom, extra: e.extra };
+  const keep = { itemId: e.itemId, swappedFrom: e.swappedFrom, extra: e.extra, slot: e.slot, gearSwap: e.gearSwap };
   let next;
   if (format === "series") {
     const sets = a.deload ? 2 : 3;
@@ -867,11 +1068,11 @@ export function addExtra(exerciseId, format = "series") {
   const at = g ? (a.entries[g.members[0]].sets.length ? g.members.at(-1) + 1 : g.members[0]) : a.cursor + (a.entries[a.cursor].sets.length ? 1 : 0);
   a.edited = true;
   const equip = exercise(exerciseId).equip;
-  const weight = nearestWeight(equip, last ? Math.max(...last.sets.map(s => s.weight)) : 0);
+  const weight = last ? pileFor(exerciseId, equip, last.maxWeight) : 0;
   a.entries.splice(at, 0, format === "series" ? {
     exerciseId, extra: true, format,
     target: { sets: 3, repsMin: 8, repsMax: 12, rest: 90 },
-    draft: { weight: last ? weight : nearestWeight(equip, 20), reps: 10, rpe: null }, hint: null,
+    draft: { weight: last ? weight : nearestWeight(equip, 20, exercise(exerciseId).stack), reps: 10, rpe: null }, hint: null,
     sets: []
   } : { ...intervalEntry(exerciseId, { format, weight, ...FORMAT_DEFAULTS[format] }), extra: true });
   a.cursor = at;
@@ -947,7 +1148,7 @@ export function finishWorkout(feeling, note, keep) {
     cycle: a.cycle, week: a.week, deload: a.deload, feeling, note: note.trim(),
     entries: a.entries.filter(e => e.sets.length).map(e => ({
       exerciseId: e.exerciseId, swappedFrom: e.swappedFrom, extra: e.extra, equip: e.equip, format: e.format || "series",
-      sets: e.sets.map(({ weight, reps, rpe }) => ({ weight, reps, rpe }))
+      sets: e.sets.map(({ weight, reps, rpe, ratio }) => ({ weight, reps, rpe, ...(ratio && { ratio }) }))
     }))
   };
   if (keep && a.edited) keepInTemplate(a);
