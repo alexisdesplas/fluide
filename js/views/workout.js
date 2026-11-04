@@ -1,6 +1,6 @@
 import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, setAbsent, setStack, setWorkoutGear, sessionGear, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet } from "../store.js";
-import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, beep, restBeepPlanned, dateLong, pageHead, navbar } from "../ui.js";
-import { prefPill, catalogue, exerciseTitle, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
+import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, announce, beep, restBeepPlanned, dateLong, pageHead, navbar } from "../ui.js";
+import { prefPill, catalogue, exerciseTitle, niceName, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
 
 // Anneau de Tabatime : 312 px, trait de 34 px.
 const R = 139, C = 2 * Math.PI * R;
@@ -31,9 +31,9 @@ function swapSheet(index) {
     onPick: x => { closeSheet(); pickAlt(x); } });
   draw(ex.muscle);
   sheet({
-    title: "Machine prise ?",
+    title: "Remplacer l'exercice",
     body: close => { closeSheet = close; return [
-      h("p", { class: "body-sm discret", style: { margin: 0 } }, `Le programme ne change pas : seule cette séance prend l'alternative.`),
+      h("p", { class: "body-sm discret", style: { margin: 0 } }, `Machine prise, ou absente de ta salle : choisis un autre exercice. Le programme ne change pas, seule cette séance le prend.`),
       vars.length > 1 && h("span", { class: "overline" }, "Même mouvement avec"),
       vars.length > 1 && h("div", { class: "chips" }, Object.keys(EQUIPS).filter(k => vars.some(([q]) => q === k)).map(k => {
         const x = vars.find(([q]) => q === k)[1];
@@ -103,6 +103,30 @@ function formatSheet(index) {
         ["emom", FORMATS.emom, `${FORMAT_DEFAULTS.emom.rounds} rounds de ${FORMAT_DEFAULTS.emom.repsMin} reps, un au début de chaque minute.`],
         ["tabata", FORMATS.tabata, `${FORMAT_DEFAULTS.tabata.rounds} rounds de ${FORMAT_DEFAULTS.tabata.work} s d'effort, ${FORMAT_DEFAULTS.tabata.off} s de repos.`]
       ], e.format || "series", v => { close(); setEntryFormat(index, v); toast(`${ex.name} en ${FORMATS[v].toLowerCase()}`); }, "Format")]
+  });
+}
+
+// Effort ressenti (RPE) : libellé, quatre puces pleine largeur, et ce que veut dire la note.
+const rpeField = (value, onChange) => h("div", { class: "field rpe" },
+  h("span", { class: "body-md fort" }, "Effort ressenti ", h("span", { class: "caption" }, "RPE, optionnel")),
+  chips([[7, "7"], [8, "8"], [9, "9"], [10, "10"]], value, onChange),
+  h("span", { class: "caption" }, "Sur 10 : 7 = encore 3 reps en réserve, 10 = plus une seule."));
+
+// Options de l'exercice en cours, rarement utiles en pleine série : format (avant la première série) et pile de la machine.
+const canFormat = e => !isAmrap(e) && !e.sets.length && !e.clock;
+function optionsSheet(index) {
+  const e = state.active.entries[index], ex = exercise(e.exerciseId), equip = equipOf(e);
+  const row = (title, value, desc, onClick) => h("button", { type: "button", class: "row", onClick },
+    h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, title, " · ", h("span", { class: "discret" }, value)), h("span", { class: "caption" }, desc)),
+    icon("caretRight", "chev"));
+  sheet({
+    title: "Options de l'exercice",
+    body: close => [
+      h("p", { class: "body-sm discret", style: { margin: 0 } }, niceName(ex.name)),
+      h("div", { class: "list" },
+        canFormat(e) && row("Format", FORMATS[e.format || "series"], "Séries, EMOM ou Tabata, pour cette séance.", () => { close(); setTimeout(() => formatSheet(index)); }),
+        inLbs(equip) && !isInterval(e) && row("Pile", `${ex.stack ? `${ex.stack.step} lbs après ${ex.stack.from}` : "5 lbs"}${ex.ratio ? " · poulie ½" : ""}`,
+          "Pas des poids sur la machine, et poulie démultipliée.", () => { close(); setTimeout(() => stackSheet(ex, equip)); }))]
   });
 }
 
@@ -293,41 +317,56 @@ export function workoutView() {
   if (grp && amrap) grp.label = "AMRAP";
   const nextInGroup = grp && !grp.last ? exercise(a.entries[a.cursor + 1].exerciseId) : null;
 
-  // ——— Matériel du jour d'abord : la séance s'adapte avant l'échauffement (séance pas encore commencée).
+  // ——— Matériel du jour d'abord : l'ouverture de la séance. Chaque matériel est une grande tuile qui dit combien
+  // d'exercices du programme en dépendent ; la séance se réécrit sous les yeux (avant → après), le programme ne bouge pas.
   if (!a.gearDone && !a.warmupDone && !a.entries.some(x => x.sets.length)) {
     const gear = sessionGear();
     const swapped = a.entries.filter(x => x.gearSwap);
     const stuck = a.entries.filter(x => !exercise(x.exerciseId).mix && !available(exercise(x.exerciseId)));
-    const el = h("div", { class: "screen workout" },
+    // Par matériel : exercices qui s'en servent aujourd'hui, et exercices du programme adaptés faute de l'avoir.
+    const uses = (k, id) => GEAR[k].equips.includes(exercise(id)?.equip);
+    const usedNow = k => a.entries.filter(x => uses(k, x.exerciseId)).length;
+    const adapted = k => a.entries.filter(x => x.gearSwap && uses(k, x.swappedFrom)).length;
+    const toggle = k => {
+      const next = gear.includes(k) ? gear.filter(x => x !== k) : [...gear, k];
+      if (!next.length) { toast("Garde au moins un matériel"); return; }
+      setWorkoutGear(next);
+      const n = a.entries.filter(x => x.gearSwap).length;
+      announce(n ? `${n} exercice${n > 1 ? "s" : ""} adapté${n > 1 ? "s" : ""}.` : "Séance telle que prévue.");
+    };
+    const formatOf = x => (x.format === "amrap" ? "AMRAP" : x.format && x.format !== "series" ? FORMATS[x.format] : null);
+    const status = stuck.length ? `${stuck.length} exercice${stuck.length > 1 ? "s" : ""} sans équivalent avec ce matériel.`
+      : swapped.length ? `${swapped.length} exercice${swapped.length > 1 ? "s" : ""} adapté${swapped.length > 1 ? "s" : ""} pour aujourd'hui. Le programme ne change pas.`
+      : "Tout est là : la séance se fait telle que prévue.";
+    const el = h("div", { class: "screen workout big-targets" },
       h("div", { class: "wo-head" },
         h("div", { class: "wo-top" },
           h("span", { class: "overline" }, a.name, a.deload ? " · deload" : "", " · avant de commencer"),
           h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
         h("div", null,
-          h("h1", { class: "heading-xl" }, "Matériel aujourd'hui"),
-          h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, "Décoche ce qui n'est pas dispo : la séance s'adapte."))),
+          h("h1", { class: "heading-xl" }, "Qu'as-tu sous la main ?"),
+          h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, "Touche ce qui manque aujourd'hui : la séance s'adapte."))),
       h("div", { class: "scroll" },
-        h("div", { class: "chips" }, Object.entries(GEAR).map(([k, g]) => h("button", { type: "button", class: "chip", "aria-pressed": String(gear.includes(k)), onClick: () => {
-          const next = gear.includes(k) ? gear.filter(x => x !== k) : [...gear, k];
-          if (!next.length) { toast("Garde au moins un matériel"); return; }
-          setWorkoutGear(next);
-        } }, g.label))),
-        h("p", { class: "caption", style: { margin: 0 } }, "Par défaut, le matériel de ta salle (Réglages). Ce choix vaut pour cette séance seulement."),
-        outdoorGear(gear) && h("div", { class: "hint" }, icon("timer"), h("span", { class: "body-sm" },
-          "Sans machines ni barres, on progresse en densité : kettlebells enchaînés en AMRAP, poids du corps en EMOM, haltères en Tabata. Le bouton Format repasse un exercice en séries.")),
-        h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, `${a.entries.length} exercice${a.entries.length > 1 ? "s" : ""}`)),
-        h("div", { class: "list" }, a.entries.map(x => {
-          const ex = exercise(x.exerciseId), from = x.gearSwap && exercise(x.swappedFrom);
-          const ko = stuck.includes(x);
-          return h("div", { class: "row" },
-            h("div", { class: "row-main" },
-              h("span", { class: "body-md fort medium" }, ex.name),
-              h("span", { class: "caption", style: ko ? { color: "var(--etat-attention)" } : null },
-                [EQUIPS[ex.equip], x.format === "amrap" ? "AMRAP" : FORMATS[x.format] !== FORMATS.series && FORMATS[x.format],
-                  ko ? "rien d'équivalent avec ce matériel" : from && `à la place de ${from.name}`].filter(Boolean).join(" · "))),
-            ko ? icon("warning", "chev") : from ? icon("swap", "chev") : null);
+        h("div", { class: "gear-grid", role: "group", "aria-label": "Matériel disponible aujourd'hui" }, Object.entries(GEAR).map(([k, g]) => {
+          const on = gear.includes(k), n = usedNow(k), m = adapted(k);
+          return h("button", { type: "button", class: "gear-tile", "aria-pressed": String(on), onClick: () => toggle(k) },
+            h("span", { class: "gear-check", "aria-hidden": "true" }, on ? icon("check") : null),
+            h("span", { class: "body-md fort medium" }, g.label),
+            h("span", { class: "caption" }, on ? (n ? `${n} exercice${n > 1 ? "s" : ""} aujourd'hui` : "Pas utilisé aujourd'hui")
+              : m ? `${m} exercice${m > 1 ? "s" : ""} adapté${m > 1 ? "s" : ""}` : "Pas prévu aujourd'hui"));
         })),
-        swapped.length > 0 && h("p", { class: "caption", style: { margin: 0 } }, `${swapped.length} exercice${swapped.length > 1 ? "s" : ""} adapté${swapped.length > 1 ? "s" : ""} pour aujourd'hui : le programme ne change pas.`)),
+        h("p", { class: `body-sm gear-status${stuck.length ? " warn" : swapped.length ? " changed" : ""}`, style: { margin: 0 } }, status),
+        outdoorGear(gear) && h("div", { class: "hint" }, icon("timer"), h("span", { class: "body-sm" },
+          "Sans machines ni barres, on progresse en densité : kettlebells enchaînés en AMRAP, poids du corps en EMOM, haltères en Tabata.")),
+        h("div", { class: "list" }, a.entries.map(x => {
+          const xe = exercise(x.exerciseId), from = x.gearSwap && exercise(x.swappedFrom), ko = stuck.includes(x), f = formatOf(x);
+          return h("div", { class: `row gear-row${from ? " swapped" : ""}${ko ? " ko" : ""}` },
+            h("div", { class: "row-main" },
+              from && h("span", { class: "caption gear-from" }, niceName(from.name)),
+              h("span", { class: "body-md fort medium" }, niceName(xe.name)),
+              h("span", { class: "caption" }, ko ? `${EQUIPS[xe.equip]} · rien d'équivalent : remplace-le en séance, ou recoche ${EQUIPS[xe.equip].toLowerCase()}` : EQUIPS[xe.equip])),
+            f ? pill(f, "accent") : ko ? icon("warning", "chev") : null);
+        }))),
       h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr" } },
         btn("C'est bon, on s'échauffe", { variant: "primary", size: "lg", onClick: () => { a.gearDone = true; save(); } })));
     return { el };
@@ -344,7 +383,7 @@ export function workoutView() {
     const ropeDay = rope && rope.kind !== "long" ? rope : null;
     const plan = state.profile.warmup || "";
     const dur = plan.match(/(\d+)(?:\s*[-–]\s*(\d+))?\s*min/);
-    const cardio = ropeDay ? `Corde · S${ropeDay.week}` : plan.replace(/\d.*$/, "").trim() || "Cardio";
+    const cardio = ropeDay ? `Corde à sauter · semaine ${ropeDay.week}` : plan.replace(/\d.*$/, "").trim() || "Cardio";
     const total = ropeDay ? blocksTotal(ropeDay.blocks) : (dur ? +(dur[2] || dur[1]) : 5) * 60;
     const blocks = ropeDay && ropeDay.blocks[0] > 1 ? ropeDay.blocks : null;
     const ropeNote = rope && h("div", { class: "hint" }, icon("bolt"), h("span", { class: "body-sm" },
@@ -384,6 +423,7 @@ export function workoutView() {
         time.textContent = clock(Math.ceil(ph ? ph.left : l));
         ring.setAttribute("stroke-dashoffset", String(done ? 0 : C * (1 - (ph ? ph.left / ph.len : l / w.total))));
         if (!ph) return;
+        if (label.textContent && label.textContent !== (ph.effort ? `Effort ${ph.round} / ${ph.n}` : "Repos")) announce(ph.effort ? `Effort ${ph.round} sur ${ph.n}.` : "Repos.");
         label.textContent = ph.effort ? `Effort ${ph.round} / ${ph.n}` : "Repos";
         sub.textContent = w.paused ? "En pause" : `Reste ${clock(Math.ceil(l))} au total`;
         ringBox.classList.toggle("chauffe", ph.effort);
@@ -392,21 +432,27 @@ export function workoutView() {
         h("svg", { viewBox: "0 0 312 312", width: 312, height: 312, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
         h("div", { class: "ring-center" }, label, time, sub));
       update();
+      // Recommencer efface le chrono : on le confirme dès qu'il a tourné un peu.
+      const restart = () => (w.total - left() < 30 ? (a.warm = null, save()) : confirmSheet({
+        title: "Recommencer l'échauffement ?", message: `${clock(Math.round(w.total - left()))} déjà faits : le chrono repart de zéro.`,
+        confirmLabel: "Recommencer", cancelLabel: "Continuer", onConfirm: () => { a.warm = null; save(); }
+      }));
       const toggle = () => { if (w.paused) { w.start += Date.now() - w.paused; w.paused = null; } else w.paused = Date.now(); save(); };
       const el = h("div", { class: "screen workout" }, head,
         h("div", { class: "scroll wo-center" },
           h("div", { class: "wo-hero" },
             ringBox,
             h("p", { class: "body-md discret", style: { margin: 0 } }, "Ensuite : ", h("b", { class: "fort medium" }, mobility))),
-          done && approach),
+          approach),
         done
           ? h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr 1.4fr" } },
               btn("Refaire", { variant: "secondary", size: "lg", onClick: () => { a.warm = null; save(); } }),
               btn("Commencer la séance", { variant: "primary", size: "lg", onClick: begin }), foot)
           : h("div", { class: "wo-commands" },
-              btn("Reset", { variant: "secondary", size: "lg", onClick: () => { a.warm = null; save(); } }),
+              btn("Recommencer", { variant: "secondary", size: "lg", onClick: restart }),
               btn(w.paused ? "Reprendre" : "Pause", { variant: "primary", size: "lg", onClick: toggle }),
               btn("Passer", { variant: "secondary", size: "lg", onClick: begin }), foot));
+      el.classList.add("big-targets");
       return {
         el,
         tick() {
@@ -419,14 +465,14 @@ export function workoutView() {
       };
     }
 
-    const el = h("div", { class: "screen workout" },
+    const el = h("div", { class: "screen workout big-targets" },
       h("div", { class: "wo-head" },
         h("div", { class: "wo-top" },
           h("span", { class: "overline" }, a.name, a.deload ? " · deload" : "", " · avant la première série"),
           h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
         h("div", null,
           h("h1", { class: "heading-xl" }, "Échauffement"),
-          h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, "Corde à sauter, puis mobilité"))),
+          h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, `${cardio}, puis mobilité`))),
       h("div", { class: "scroll wo-center" },
         h("div", { class: "wo-hero" },
           h("div", { class: "overline" }, ropeDay ? `${cardio} · ${ropeDay.kind === "recup" ? "jour récup" : "séance facile"}${ropeDay.deload ? " · deload" : ""}` : cardio),
@@ -434,58 +480,76 @@ export function workoutView() {
           h("p", { class: "body-md discret", style: { margin: 0 } }, ropeDay ? `${blocksLabel(ropeDay.blocks)}, puis ${mobility}.` : `Montée progressive, puis ${mobility}.`)),
         ropeNote, approach),
       h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr 1.4fr" } },
-        btn("Abandonner", { variant: "secondary", size: "lg", onClick: abandonSheet }),
+        btn("Passer", { variant: "secondary", size: "lg", onClick: begin }),
         btn("C'est parti", { variant: "primary", size: "lg", icon: "timer", onClick: () => { a.warm = { start: Date.now(), paused: null, total, blocks }; save(); } }),
         foot));
     return { el };
   }
 
-  // ——— Héros : repos (anneau) ou série à faire (steppers)
+  // ——— Héros : série à faire, repos, chrono (EMOM, Tabata, AMRAP) ou exercice terminé.
   const interval = isInterval(e);
   const formatLine = e.format === "emom" ? `EMOM ${e.target.rounds} × ${clock(e.target.every)} · ${e.target.repsMin} reps`
     : `Tabata ${e.target.rounds} × ${e.target.work} s / ${e.target.off} s`;
-  const draftSteppers = repsLabel => [
-    weightStepper(e, "0 = poids du corps"),
-    h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, repsLabel),
-      stepper({ value: e.draft.reps, min: 0, max: 200, compact: true, label: "reps", onChange: v => { e.draft.reps = v; save(true); } }))];
-  let hero, restBtn;
+  const repsStepper = (label, max = 100) => h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, label),
+    stepper({ value: e.draft.reps, min: 0, max, compact: true, label: "reps", onChange: v => { e.draft.reps = v; save(true); } }));
+  const draftSteppers = repsLabel => [weightStepper(e, "0 = poids du corps"), repsStepper(repsLabel, 200)];
+  // RPE : effort ressenti sur 10 ; 10 − RPE = reps qu'il restait en réserve.
+  const rir = r => (r >= 10 ? "à fond" : `${10 - Math.round(r)} rep${10 - Math.round(r) > 1 ? "s" : ""} en réserve`);
+  const col = (...kids) => h("div", { class: "wo-stack" }, ...kids);
+  let hero, restBtn, bottom;
+
+  // Série validée : message avec Annuler (la série sort, le repos qu'elle a lancé aussi).
+  const done = () => {
+    const i = a.cursor, x = a.entries[i];
+    logSet();
+    const k = x.sets.length - 1, s = x.sets[k];
+    const what = isAmrap(x) ? `${exercise(x.exerciseId).name} : tour ${k + 1}` : `${interval ? "Round" : "Série"} ${k + 1}`;
+    toast(`${what} noté${isAmrap(x) || interval ? "" : "e"} · ${charge(equipOf(x), s.weight)} × ${s.reps}`, {
+      label: "Annuler", onClick: () => { if (!state.active?.entries[i]?.sets[k]) return; state.active.cursor = i; deleteSet(i, k); toast("Annulé"); }
+    });
+  };
+
   if (resting) {
     const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
     const time = h("div", { class: "display-lg num" });
     // Bouton principal pendant le repos : sa jauge se vide avec le temps restant, comme l'anneau ; un tap lance la suite sans attendre.
-    // Après la dernière série d'un exercice, le bouton n'affiche que le temps (l'anneau dit déjà la suite).
-    const next = exDone ? null : `Série ${e.sets.length + 1}`;
+    const nextLabel = exDone ? "Fin du repos" : `Lancer la série ${e.sets.length + 1}`;
     const fill = h("span", { class: "rest-fill", "aria-hidden": "true" }), btnTime = h("span", { class: "num" });
-    restBtn = h("button", { class: `btn lg rest-btn${next ? "" : " solo"}`, type: "button", onClick: () => { a.restEndsAt = null; save(); } },
-      fill, next && h("span", { class: "rest-label" }, next), btnTime);
+    restBtn = h("button", { class: "btn lg rest-btn", type: "button", onClick: () => { a.restEndsAt = null; save(); } },
+      fill, h("span", { class: "rest-label" }, nextLabel), btnTime);
     const update = () => {
       const left = Math.max(0, (a.restEndsAt - Date.now()) / 1000);
       time.textContent = clock(Math.ceil(left));
       ring.setAttribute("stroke-dashoffset", String(C * (1 - left / a.restTotal)));
       btnTime.textContent = clock(Math.ceil(left));
       fill.style.transform = `scaleX(${Math.min(1, left / a.restTotal)})`;
-      restBtn.setAttribute("aria-label", `${next || "Fin du repos"} maintenant, repos restant ${clock(Math.ceil(left))}`);
+      restBtn.setAttribute("aria-label", `${nextLabel} maintenant, repos restant ${clock(Math.ceil(left))}`);
     };
     update();
     const shift = d => { a.restEndsAt = Math.max(Date.now(), a.restEndsAt + d * 1000); a.restTotal = Math.max(a.restTotal + d, 1); save(true); update(); };
-    // Repos : anneau réduit, sans « Ensuite … » (la liste des séries et le bouton du bas disent déjà la suite).
-    hero = h("div", { class: "wo-hero rest" },
-      h("div", { class: "ring sm" },
-        h("svg", { viewBox: "0 0 312 312", "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
-        h("div", { class: "ring-center" }, h("div", { class: "overline" }, "Repos"), time)),
-      h("div", { style: { display: "flex", gap: "8px", marginTop: "8px" } },
-        btn("−15 s", { variant: "secondary", size: "sm", onClick: () => shift(-15) }),
-        btn("+15 s", { variant: "secondary", size: "sm", onClick: () => shift(15) }),
-        btn("Passer", { variant: "ghost", size: "sm", onClick: () => { a.restEndsAt = null; save(); } })));
+    // Le repos est le moment où l'on charge la barre : la série suivante se prépare ici.
+    const nextEx = exDone && !isLast ? exercise(a.entries[a.cursor + 1].exerciseId) : null;
+    hero = col(
+      h("div", { class: "wo-hero rest" },
+        h("div", { class: "ring sm repos" },
+          h("svg", { viewBox: "0 0 312 312", "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
+          h("div", { class: "ring-center" }, h("div", { class: "overline" }, "Repos"), time))),
+      exDone
+        ? nextEx && h("div", { class: "hint" }, icon("caretRight"), h("span", { class: "body-sm" }, "Ensuite : ", h("b", { class: "fort medium" }, niceName(nextEx.name)), "."))
+        : h("div", { class: "card next-set" },
+            h("span", { class: "heading-md" }, `Série ${e.sets.length + 1} / ${e.target.sets}`),
+            weightStepper(e), repsStepper("Reps")));
     hero.update = update;
+    // Ajuster le repos au pouce, de part et d'autre du bouton principal.
+    bottom = [btn("−15 s", { variant: "secondary", size: "lg", onClick: () => shift(-15) }), restBtn, btn("+15 s", { variant: "secondary", size: "lg", onClick: () => shift(15) })];
   } else if (interval && !exDone) {
     const st = intervalState(e);
     if (!st) {
-      hero = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
-        h("div", { class: "wo-hero", style: { paddingBottom: 0 } },
+      hero = col(
+        h("div", { class: "wo-hero" },
           h("div", { class: "overline" }, `${FORMATS[e.format]} · round ${e.sets.length + 1} / ${e.target.rounds}`),
           h("div", { class: "display-sm num" }, e.format === "emom" ? clock(e.target.every) : `${e.target.work} / ${e.target.off} s`),
-          h("span", { class: "body-sm discret" }, e.format === "emom" ? `${e.target.repsMin} reps au début de chaque intervalle, le reste sert de repos.` : "Effort puis repos, au chrono. Note tes reps à chaque round.")),
+          h("span", { class: "body-sm discret" }, e.format === "emom" ? `${e.target.repsMin} reps au début de chaque minute, le reste sert de repos.` : "Effort puis repos, au chrono. Note tes reps à chaque round.")),
         ...draftSteppers(e.format === "emom" ? "Reps par round" : "Reps du round"));
     } else {
       const kind = e.format === "emom" ? "emom" : st.phase;
@@ -496,30 +560,43 @@ export function workoutView() {
         h("div", { class: "ring-center" }, over, time, sub));
       const update = () => {
         const x = intervalState(e); if (!x) return;
-        const k = e.format === "emom" ? "emom" : x.phase;
-        wrap.className = `ring ${k}`;
+        wrap.className = `ring ${e.format === "emom" ? "emom" : x.phase}`;
         over.textContent = e.format === "emom" ? `Round ${Math.min(x.round, e.target.rounds)} / ${e.target.rounds}` : `${x.phase === "effort" ? "Effort" : "Repos"} · round ${Math.min(x.round, e.target.rounds)} / ${e.target.rounds}`;
         time.textContent = clock(Math.ceil(x.left));
         sub.textContent = `${e.sets.length} round${e.sets.length > 1 ? "s" : ""} noté${e.sets.length > 1 ? "s" : ""}`;
         ring.setAttribute("stroke-dashoffset", String(C * (1 - x.left / x.total)));
       };
       update();
-      hero = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
+      const stop = () => confirmSheet({
+        title: "Arrêter le chrono ?",
+        message: `${e.sets.length} round${e.sets.length > 1 ? "s" : ""} noté${e.sets.length > 1 ? "s" : ""} : ${e.sets.length > 1 ? "ils restent" : "il reste"}. Le chrono repart de zéro si tu le relances.`,
+        confirmLabel: "Arrêter le chrono", cancelLabel: "Continuer", onConfirm: () => stopClock(a.cursor)
+      });
+      hero = col(
         h("div", { class: `wo-hero ${kind}` }, wrap,
-          btn("Arrêter le chrono", { variant: "ghost", size: "sm", onClick: () => stopClock(a.cursor) })),
+          btn("Arrêter le chrono", { variant: "ghost", size: "sm", onClick: stop })),
         ...draftSteppers("Reps du round"));
       hero.update = update;
     }
   } else if (amrap && !exDone) {
     const m = amrapMembers(a.entries, a.cursor);
     const round = Math.min(...m.map(i => a.entries[i].sets.length)) + 1;
+    // Le circuit, exercice en cours surligné, tours faits par exercice : juste sous le chrono, toujours visible.
+    const circuit = h("div", { class: "list" }, m.map((i, n) => {
+      const x = a.entries[i], cur = i === a.cursor;
+      return h("button", { type: "button", class: `set-row${cur ? " cur" : ""}`, "aria-current": cur ? "step" : null, onClick: () => setCursor(i) },
+        h("span", { class: "set-idx" }, String(n + 1)),
+        h("span", { class: `body-md ${cur ? "fort" : "discret"}` }, niceName(exercise(x.exerciseId).name),
+          h("span", { class: "caption num", style: { display: "block" } }, `${x.draft.reps} reps · ${charge(equipOf(x), x.draft.weight)}`)),
+        h("span", { class: "caption num" }, `${x.sets.length} tour${x.sets.length > 1 ? "s" : ""} fait${x.sets.length > 1 ? "s" : ""}`));
+    }));
     if (!lead.clock) {
-      hero = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
-        h("div", { class: "wo-hero", style: { paddingBottom: 0 } },
+      hero = col(
+        h("div", { class: "wo-hero" },
           h("div", { class: "overline" }, `AMRAP · ${m.length} exercice${m.length > 1 ? "s" : ""}`),
           h("div", { class: "display-sm num" }, clock(lead.target.time)),
           h("span", { class: "body-sm discret" }, "Enchaîne les exercices sans repos, autant de tours que possible. Règle la charge et les reps de chacun avant de lancer.")),
-        ...draftSteppers("Reps"));
+        circuit, ...draftSteppers("Reps"));
     } else {
       const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
       const time = h("div", { class: "display-lg num" });
@@ -529,44 +606,48 @@ export function workoutView() {
         ring.setAttribute("stroke-dashoffset", String(C * (1 - left / lead.target.time)));
       };
       update();
-      hero = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
-        h("div", { class: "wo-hero effort" },
-          h("div", { class: "ring sm effort" },
+      const stop = () => confirmSheet({
+        title: "Arrêter l'AMRAP ?",
+        message: `${round - 1} tour${round - 1 > 1 ? "s" : ""} complet${round - 1 > 1 ? "s" : ""}, il reste ${clock(Math.ceil(amrapLeft(lead)))}. Le circuit s'arrête et les tours faits comptent comme séries.`,
+        confirmLabel: "Arrêter l'AMRAP", cancelLabel: "Continuer le circuit", onConfirm: () => endAmrap(a.cursor)
+      });
+      hero = col(
+        h("div", { class: "wo-hero" },
+          h("div", { class: "ring sm amrap" },
             h("svg", { viewBox: "0 0 312 312", "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
             h("div", { class: "ring-center" }, h("div", { class: "overline" }, `Tour ${round}`), time)),
-          btn("Arrêter l'AMRAP", { variant: "ghost", size: "sm", onClick: () => endAmrap(a.cursor) })),
-        ...draftSteppers("Reps"));
+          btn("Arrêter l'AMRAP", { variant: "ghost", size: "sm", onClick: stop })),
+        circuit, ...draftSteppers("Reps"));
       hero.update = update;
     }
   } else if (exDone) {
+    // Fin d'exercice : le moment fort de la séance (volume, record battu, la suite).
     const exVolume = e.sets.reduce((b, x) => b + setVolume(x), 0);
-    hero = h("div", { class: "wo-hero" },
-      h("div", { class: "overline", style: { color: "var(--etat-succes)" } }, allDone ? "Séance bouclée" : "Exercice terminé"),
-      h("span", { class: "body-sm discret num" }, allDone ? "Toutes les séries sont faites. Bien joué."
-        : `${e.sets.length} ${amrap ? "tour" : interval ? "round" : "série"}${e.sets.length > 1 ? "s" : ""}${exVolume ? ` · volume ${int(exVolume)} kg` : ""}. ${isLast ? "Il reste des séries sur d'autres exercices." : "Passe à l'exercice suivant."}`));
+    const record = !interval && !amrap && sessionRecords({ startedAt: a.startedAt, entries: [e] })[0];
+    const nextEx = !isLast && exercise(a.entries[a.cursor + 1].exerciseId);
+    hero = h("div", { class: "wo-hero done" },
+      h("span", { class: "done-badge", "aria-hidden": "true" }, icon("check")),
+      h("h2", { class: "display-xs" }, allDone ? "Séance bouclée" : "Exercice terminé"),
+      h("span", { class: "body-md discret num" }, allDone ? "Toutes les séries sont faites. Bien joué."
+        : `${e.sets.length} ${amrap ? "tour" : interval ? "round" : "série"}${e.sets.length > 1 ? "s" : ""}${exVolume ? ` · ${int(exVolume)} kg soulevés` : ""}`),
+      record && pill(`Record · 1RM est. ${num(record.value)} kg (+${num(record.delta)})`, "succes"),
+      !allDone && (nextEx ? h("span", { class: "body-sm" }, "Ensuite : ", h("b", { class: "fort medium" }, niceName(nextEx.name)))
+        : h("span", { class: "body-sm discret" }, "Il reste des séries sur d'autres exercices.")));
   } else {
-    hero = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
-      h("div", { class: "wo-hero", style: { paddingBottom: 0 } },
-        h("div", { class: "overline" }, `Série ${e.sets.length + 1} / ${e.target.sets}`),
-        h("span", { class: "body-sm discret num" }, `Objectif ${reps(e.target.repsMin, e.target.repsMax)} reps · RPE ${String(rpeTarget).replace(".", ",")}`)),
+    // Fin du repos au chrono : l'écran le montre (le bip peut être muet), une fois.
+    const goNow = a.goAt && Date.now() - a.goAt < 5000;
+    hero = col(
+      h("div", { class: `wo-hero${goNow ? " go" : ""}` },
+        h("div", { class: "overline" }, goNow ? `À toi · série ${e.sets.length + 1} / ${e.target.sets}` : `Série ${e.sets.length + 1} / ${e.target.sets}`),
+        h("span", { class: "body-sm discret num" }, `Objectif ${reps(e.target.repsMin, e.target.repsMax)} reps · RPE ${String(rpeTarget).replace(".", ",")}, ${rir(rpeTarget)}`)),
       e.hint === "charge" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Haut de fourchette atteint la dernière fois : ", h("b", { class: "fort medium" }, charge(equipOf(e), e.draft.weight)), ".")),
       e.hint === "reps" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Même charge, vise ", h("b", { class: "fort medium" }, `${e.draft.reps} reps`), " (une de plus que la dernière fois).")),
       weightStepper(e),
-      h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Reps"),
-        stepper({ value: e.draft.reps, min: 0, max: 100, compact: true, label: "reps", onChange: v => { e.draft.reps = v; save(true); } })),
-      h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "RPE ", h("span", { class: "caption" }, "optionnel")),
-        chips([[7, "7"], [8, "8"], [9, "9"], [10, "10"]], e.draft.rpe, v => { e.draft.rpe = v; save(true); })));
+      repsStepper("Reps"),
+      rpeField(e.draft.rpe, v => { e.draft.rpe = v; save(true); }));
   }
 
-  // AMRAP : le circuit, exercice en cours surligné, tours faits par exercice.
-  const circuitList = amrap && !exDone && h("div", { class: "list" }, amrapMembers(a.entries, a.cursor).map(i => {
-    const x = a.entries[i], xe = exercise(x.exerciseId), cur = i === a.cursor;
-    return h("button", { type: "button", class: `set-row${cur ? " cur" : ""}`, onClick: () => setCursor(i) },
-      h("span", { class: "set-idx" }, String(amrapMembers(a.entries, a.cursor).indexOf(i) + 1)),
-      h("span", { class: `body-md ${cur ? "fort" : "discret"}` }, xe.name, h("span", { class: "caption num", style: { display: "block" } }, `${x.draft.reps} reps · ${charge(equipOf(x), x.draft.weight)}`)),
-      h("span", { class: "caption num" }, `${x.sets.length} tour${x.sets.length > 1 ? "s" : ""}`));
-  }));
-  const setsList = circuitList || (e.sets.length > 0 || !resting) && h("div", { class: "list" },
+  const setsList = !amrap && (e.sets.length > 0 || !resting) && h("div", { class: "list" },
     Array.from({ length: Math.max(e.target.sets, e.sets.length) }, (_, i) => {
       const s = e.sets[i];
       const cur = !s && i === e.sets.length && !resting;
@@ -580,52 +661,58 @@ export function workoutView() {
 
   const segs = a.entries.map((x, i) => h("i", { class: entryDone(x, i) ? "on" : i === a.cursor ? "cur" : "" }));
   const canLaunch = interval && !exDone && !e.clock && !e.sets.length;
-  const primary = resting && !canLaunch
-    ? restBtn
-    : allDone || (exDone && isLast)
-      ? btn("Terminer", { variant: "primary", size: "lg", onClick: finishSheet })
-      : exDone
-        ? btn("Suivant", { variant: "primary", size: "lg", onClick: () => setCursor(a.cursor + 1) })
-        : amrap && !lead.clock
-          ? btn("Lancer", { variant: "primary", size: "lg", icon: "timer", onClick: () => startAmrap(a.cursor) })
-        : amrap
-          ? btn("Fait", { variant: "primary", size: "lg", icon: "check", onClick: () => logSet() })
-        : canLaunch
-          ? btn("Lancer", { variant: "primary", size: "lg", icon: "timer", onClick: () => startClock(a.cursor) })
-          : btn(interval ? "Round fait" : "Série faite", { variant: "primary", size: "lg", icon: "check", onClick: () => logSet() });
+  const primary = allDone || (exDone && isLast)
+    ? btn("Terminer la séance", { variant: "primary", size: "lg", onClick: finishSheet })
+    : exDone
+      ? btn("Exercice suivant", { variant: "primary", size: "lg", onClick: () => setCursor(a.cursor + 1) })
+      : amrap && !lead.clock
+        ? btn("Lancer l'AMRAP", { variant: "primary", size: "lg", icon: "timer", onClick: () => startAmrap(a.cursor) })
+      : amrap
+        ? btn("Fait", { variant: "primary", size: "lg", icon: "check", onClick: done })
+      : canLaunch
+        ? btn("Lancer le chrono", { variant: "primary", size: "lg", icon: "timer", onClick: () => startClock(a.cursor) })
+        : btn(interval ? "Round fait" : "Série faite", { variant: "primary", size: "lg", icon: "check", onClick: done });
+  // Exercice précédent / suivant : flèches nommées, à l'écart du bouton principal.
+  const nav = (dir, ok) => ok
+    ? h("button", { type: "button", class: "btn secondary lg nav-arrow", "aria-label": dir < 0 ? "Exercice précédent" : "Exercice suivant", title: dir < 0 ? "Exercice précédent" : "Exercice suivant", onClick: () => setCursor(a.cursor + dir) }, icon(dir < 0 ? "caretLeft" : "caretRight"))
+    : h("span", { "aria-hidden": "true" });
+  bottom ||= [nav(-1, a.cursor > 0), primary, nav(1, !isLast && !exDone)];
 
-  const el = h("div", { class: "screen workout" },
+  const equip = equipOf(e);
+  const subtitle = [EQUIPS[equip], ex.muscle,
+    amrap ? `AMRAP ${clock(lead.target.time)}, sans repos` : interval ? formatLine
+      : nextInGroup ? `puis ${niceName(nextInGroup.name)}, sans repos` : grp ? `repos ${clock(e.target.rest)} après le tour` : `repos ${clock(e.target.rest)}`,
+    e.extra && "hors programme"].filter(Boolean).join(" · ");
+  const hasOptions = !exDone && (canFormat(e) || (inLbs(equip) && !interval));
+
+  const el = h("div", { class: "screen workout big-targets" },
     h("div", { class: "wo-head" },
       h("div", { class: "wo-top" },
         h("span", { class: "overline" }, `${a.name} · exercice ${a.cursor + 1} / ${a.entries.length}`, grp ? ` · ${grp.label} ${grp.tag}` : ""),
-        h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
+        h("div", { class: "wo-top-actions" },
+          h("button", { class: "btn ghost xs", onClick: () => go("#/seance/modifier") }, "Modifier"),
+          h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer"))),
       h("div", null,
         h("h1", { class: "heading-xl wo-title" }, exerciseTitle(ex)),
-        h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, amrap ? `${ex.muscle} · AMRAP ${clock(lead.target.time)}, sans repos` : interval ? `${ex.muscle} · ${formatLine}`
-          : nextInGroup ? `${ex.muscle} · puis ${nextInGroup.name}, sans repos` : grp ? `${ex.muscle} · repos ${clock(e.target.rest)} après le tour` : `${ex.muscle} · repos ${clock(e.target.rest)}`,
-          e.equip ? ` · ${EQUIPS[e.equip].toLowerCase()}` : "", e.extra ? " · hors programme" : "")),
-      h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
-        a.deload && pill("Deload", "attention"),
-        !exDone && btn("Machine prise", { variant: "secondary", size: "sm", icon: "swap", onClick: () => swapSheet(a.cursor) }),
-        !amrap && !e.sets.length && !e.clock && btn(FORMATS[e.format || "series"], { variant: "secondary", size: "sm", icon: "timer", onClick: () => formatSheet(a.cursor) }),
-        favBtn(e, ex),
-        inLbs(equipOf(e)) && !interval && btn(ex.stack || ex.ratio ? `Pile${ex.ratio ? " ½" : ""} · ${ex.stack ? `${ex.stack.step} lbs` : "5 lbs"}` : "Pile", { variant: "secondary", size: "sm", icon: "sliders", onClick: () => stackSheet(ex, equipOf(e)) })),
+        h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, subtitle)),
+      h("div", { class: "wo-tools" },
+        a.deload && pill("Deload · volume ÷ 2", "attention"),
+        !exDone && btn("Remplacer", { variant: "secondary", size: "sm", icon: "swap", onClick: () => swapSheet(a.cursor) }),
+        hasOptions && btn("Options", { variant: "secondary", size: "sm", icon: "sliders", onClick: () => optionsSheet(a.cursor) }),
+        favBtn(e, ex)),
       h("div", { class: "segments", "aria-label": `${a.entries.filter(entryDone).length} exercices terminés sur ${a.entries.length}` }, segs)),
     h("div", { class: "scroll" },
       ex.pref === "douleur" && h("div", { class: "hint attention" }, icon("warning"), h("span", { class: "body-sm" }, "Tu as signalé une douleur sur cet exercice : charge allégée, amplitude confortable, ou remplace-le.")),
       hero, setsList),
-    h("div", { class: "wo-commands" },
-      btn("Précédent", { variant: "secondary", size: "lg", disabled: a.cursor === 0, onClick: () => setCursor(a.cursor - 1) }),
-      primary,
-      btn("Suivant", { variant: "secondary", size: "lg", disabled: isLast, onClick: () => setCursor(a.cursor + 1) }),
+    h("div", { class: `wo-commands nav${resting ? " resting" : ""}` }, ...bottom,
       h("p", { class: "caption wo-foot num", style: { gridColumn: "1 / -1", margin: 0 } },
-        "Durée ", h("span", { "data-tick": "elapsed" }), ` · volume ${int(volume)} kg`)));
+        "Durée ", h("span", { "data-tick": "elapsed" }), ` · ${int(volume)} kg soulevés`)));
 
   return {
     el,
     tick() {
       if (amrap && lead.clock) {
-        if (amrapLeft(lead) <= 0) { beep(660, 0.18, 3); endAmrap(a.cursor); return; }
+        if (amrapLeft(lead) <= 0) { beep(660, 0.18, 3); announce("AMRAP terminé."); endAmrap(a.cursor); return; }
         hero.update?.();
         return;
       }
@@ -633,7 +720,7 @@ export function workoutView() {
         const x = intervalState(e);
         const key = x.done ? "done" : `${x.round}-${x.phase}`;
         if (e.lastBeep !== key) {
-          if (e.lastBeep) beep(x.done ? 660 : x.phase === "effort" ? 880 : 520, 0.15, x.done ? 3 : 1);
+          if (e.lastBeep) { beep(x.done ? 660 : x.phase === "effort" ? 880 : 520, 0.15, x.done ? 3 : 1); announce(x.done ? "Chrono terminé." : x.phase === "effort" ? `Effort, round ${x.round}.` : "Repos."); }
           e.lastBeep = key;
         }
         if (x.done) { stopClock(a.cursor); return; }
@@ -641,7 +728,11 @@ export function workoutView() {
         return;
       }
       if (!a.restEndsAt) return;
-      if (Date.now() >= a.restEndsAt) { if (!restBeepPlanned(a.restEndsAt)) beep(880, 0.18, 3); a.restEndsAt = null; save(); return; }
+      if (Date.now() >= a.restEndsAt) {
+        if (!restBeepPlanned(a.restEndsAt)) beep(880, 0.18, 3);
+        announce(exDone ? "Repos terminé." : `Repos terminé. À toi : série ${e.sets.length + 1}.`);
+        a.restEndsAt = null; a.goAt = Date.now(); save(); return;
+      }
       hero.update?.();
     }
   };
@@ -664,15 +755,14 @@ export function editSetView({ i, k }) {
     confirmLabel: `Retirer ${interval ? "le round" : "la série"}`, cancelLabel: "Garder", destructive: true,
     onConfirm: () => { deleteSet(+i, +k); done(); }
   });
-  const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Séance", href: "#/seance" }, title: `${what === "round" ? "Round" : "Série"} ${+k + 1}`, subtitle: ex.name, action: { label: "OK", onClick: ok } }),
+  const el = h("div", { class: "screen no-tabs big-targets" },
+    navbar({ back: { label: "Séance", href: "#/seance" }, title: `${what === "round" ? "Round" : "Série"} ${+k + 1}`, subtitle: niceName(ex.name) }),
     h("div", { class: "scroll" },
       h("p", { class: "caption", style: { margin: 0 } }, `Validée à ${new Date(s.doneAt || a.startedAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}. Corrige une erreur de saisie : le reste de la séance ne bouge pas.`),
       chargeStepper({ equip: equipOf(e), ex: { ...ex, ratio: s.ratio }, value: draft.weight, onChange: v => { draft.weight = v; } }),
       h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Reps"),
         stepper({ value: draft.reps, min: 0, max: 200, compact: true, label: "reps", onChange: v => { draft.reps = v; } })),
-      !interval && h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "RPE ", h("span", { class: "caption" }, "optionnel")),
-        chips([[7, "7"], [8, "8"], [9, "9"], [10, "10"]], draft.rpe, v => { draft.rpe = v; })),
+      !interval && rpeField(draft.rpe, v => { draft.rpe = v; }),
       btn("Enregistrer", { variant: "primary", size: "lg", full: true, onClick: ok }),
       btn(`Retirer ${interval ? "le round" : "la série"}`, { variant: "ghost", full: true, icon: "trash", onClick: remove })));
   return { el };
