@@ -504,3 +504,18 @@ input.input[type="search"] { -webkit-appearance: none; appearance: none; line-he
 .gear-row .gear-from { text-decoration: line-through; text-decoration-color: var(--bord-base); }
 .gear-row.ko .caption:last-child { color: var(--etat-attention); }
 .rpe .chips { display: grid; grid-template-columns: repeat(4, 1fr); }
+/* Petit anneau (repos, AMRAP) : chiffres réduits pour tenir dans le cercle, même au-delà de 10:00. */
+.ring.sm .display-lg { font-size: 44px; line-height: 44px; }
+/* « À toi » : reste affiché jusqu'à la prochaine action, lisible de loin ; le flash ne joue qu'à l'arrivée. */
+.wo-hero.go { border-radius: var(--radius-md); background: color-mix(in srgb, var(--etat-succes) 10%, transparent); padding: var(--spacing-16); animation: none; }
+.wo-hero.go.arrive { animation: go 1.6s var(--ease-out); }
+.go-title { color: var(--etat-succes); font-size: 40px; line-height: 44px; }
+.go-over { color: var(--etat-succes); }
+.btn.primary.go { box-shadow: 0 0 0 3px var(--fond-page), 0 0 0 5px var(--etat-succes); }
+/* Volume de la semaine du muscle, en fin d'exercice. */
+.week-card { align-self: stretch; display: flex; flex-direction: column; gap: var(--spacing-8); margin-top: var(--spacing-16); padding: var(--spacing-16); border-radius: var(--radius-md); background: var(--fond-carte); border: 1px solid var(--bord-discret); text-align: left; }
+/* Matériel du jour replié en une ligne. */
+.gear-line { display: flex; align-items: center; gap: var(--spacing-12); padding: var(--spacing-4) var(--spacing-4) var(--spacing-4) var(--spacing-16); border-radius: var(--radius-md); background: var(--fond-carte); border: 1px solid var(--bord-discret); }
+.gear-line > svg { width: 18px; height: 18px; color: var(--accent-texte); flex: none; }
+.gear-line .row-main { flex: 1; min-width: 0; }
+.gear-row .gear-from { text-decoration-color: var(--texte-discret); }
