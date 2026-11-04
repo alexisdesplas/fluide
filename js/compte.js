@@ -80,6 +80,28 @@ export async function signUp(email, password) {
   return afterSignIn();
 }
 
+// Google : on part sur la page Google (via Supabase), qui revient sur l'app avec la session dans l'adresse.
+// Le fournisseur doit être activé dans Supabase (supabase/README.md) : on le vérifie avant de partir.
+export async function googleEnabled() {
+  const s = await call("/auth/v1/settings");
+  return Boolean(s?.external?.google);
+}
+export function signInWithGoogle() {
+  const back = encodeURIComponent(location.origin + location.pathname);
+  location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${back}`;
+}
+// Retour de Google : la session est là, il reste à lire le compte puis à voir quelles données garder.
+let oauth = null;
+export const googleReturning = () => Boolean(oauth);
+export async function finishGoogle() {
+  const user = await call("/auth/v1/user", { auth: oauth.access_token });
+  session({ ...oauth, user });
+  oauth = null;
+  const result = await afterSignIn();
+  if (result !== "choose") pullSteps();
+  return result;
+}
+
 // Mot de passe oublié : Supabase envoie un lien qui revient sur l'app avec un jeton de récupération.
 export async function sendReset(email) {
   const back = encodeURIComponent(location.origin + location.pathname);
@@ -106,6 +128,15 @@ export async function setNewPassword(password) {
     history.replaceState(null, "", `${location.pathname}#/compte/nouveau`);
   } else if (hash.get("access_token") && ["signup", "email", "magiclink"].includes(hash.get("type"))) {
     meta.confirmed = true; keep();
+    history.replaceState(null, "", `${location.pathname}#/compte`);
+  } else if (hash.get("access_token")) {
+    // Retour de Google (pas de type) : écran d'attente le temps de lire le compte.
+    oauth = { access_token: hash.get("access_token"), refresh_token: hash.get("refresh_token"), expires_in: +hash.get("expires_in") || 3600 };
+    history.replaceState(null, "", `${location.pathname}#/compte/google`);
+  } else if ((hash.get("error") || new URLSearchParams(location.search).get("error")) && !hash.get("error_code")) {
+    const err = hash.get("error") || new URLSearchParams(location.search).get("error");
+    meta.error = err === "access_denied" ? "Connexion Google annulée." : "Connexion Google impossible : réessaie.";
+    keep();
     history.replaceState(null, "", `${location.pathname}#/compte`);
   } else if (hash.get("error_code")) {
     meta.error = hash.get("error_code") === "otp_expired" ? "Lien expiré : redemande un e-mail de mot de passe oublié." : "Lien invalide : redemande un e-mail.";

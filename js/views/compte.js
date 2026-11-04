@@ -1,4 +1,4 @@
-import { configured, account, signedIn, confirmed, clearConfirmed, signIn, signUp, sendReset, recovering, setNewPassword, remoteSummary, resolve, signOut, syncNow, shortcutKeyInfo, newShortcutKey, deleteShortcutKey } from "../compte.js";
+import { configured, account, signedIn, confirmed, clearConfirmed, signIn, signUp, googleEnabled, signInWithGoogle, googleReturning, finishGoogle, sendReset, recovering, setNewPassword, remoteSummary, resolve, signOut, syncNow, shortcutKeyInfo, newShortcutKey, deleteShortcutKey } from "../compte.js";
 import { state } from "../store.js";
 import { h, icon, btn, pill, go, navbar, sheet, confirmSheet, toast, dateShort, int } from "../ui.js";
 
@@ -45,6 +45,28 @@ async function landed(result) {
   toast(result === "pulled" ? "Données du compte récupérées" : "Connecté : tes données sont sur ton compte");
 }
 
+// Logo Google (le « G » quatre couleurs, imposé par Google sur ses boutons de connexion).
+const G = () => { const svg = h("svg", { viewBox: "0 0 48 48", width: 20, height: 20, "aria-hidden": "true" });
+  for (const [fill, d] of [["#EA4335", "M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"],
+    ["#4285F4", "M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17z"],
+    ["#FBBC05", "M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C.9 16.6 0 20.2 0 24s.9 7.4 2.6 10.7l7.9-6.1z"],
+    ["#34A853", "M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.3 0-11.6-4.2-13.5-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"]])
+    svg.append(h("path", { svg: true, fill, d }));
+  return svg; };
+
+// « Continuer avec Google », au-dessus du formulaire, puis « ou » avant l'e-mail. Un seul bouton pour créer et se connecter :
+// le premier passage par Google crée le compte. On vérifie que Google est activé sur le compte avant de quitter l'app.
+function googleBlock(onFail) {
+  const b = h("button", { type: "button", class: "btn secondary lg full google-btn", onClick: async () => {
+    b.disabled = true;
+    try {
+      if (!(await googleEnabled())) { onFail({ field: null, msg: "La connexion Google n'est pas encore activée sur le compte Fluide. Utilise ton e-mail pour l'instant." }); b.disabled = false; return; }
+      signInWithGoogle();
+    } catch (e) { onFail(why(e)); b.disabled = false; }
+  } }, G(), "Continuer avec Google");
+  return [b, h("div", { class: "or-sep", role: "separator" }, h("span", { class: "caption" }, "ou avec ton e-mail"))];
+}
+
 // Formulaire commun aux deux écrans : e-mail, mot de passe, erreur générale, bouton.
 function authForm({ newPassword, help, label, onSubmit }) {
   const email = h("input", { class: "input", type: "email", name: "email", inputmode: "email", autocomplete: "username", autocapitalize: "off", placeholder: "prenom@exemple.fr", value: account().email || "", "aria-label": "Adresse e-mail" });
@@ -82,18 +104,34 @@ export function signInView() {
   const el = h("div", { class: "screen no-tabs" },
     navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Se connecter" }),
     h("div", { class: "scroll" }, head("cloudCheck", "Ton compte Fluide", "Séances, programme, corde, réglages : tout est gardé sur ton compte et revient sur un autre téléphone ou après une réinstallation."),
-      validated, form, bascule("Pas encore de compte ?", "Créer mon compte", "#/compte/creer")));
+      validated, ...googleBlock(fail), form, bascule("Pas encore de compte ?", "Créer mon compte", "#/compte/creer")));
+  return { el };
+}
+
+// Retour de Google : on lit le compte, puis comme une connexion par e-mail (données à garder si besoin).
+export function googleView() {
+  if (!googleReturning()) { setTimeout(() => go(signedIn() ? "#/profil" : "#/compte")); return { el: h("div") }; }
+  const status = h("p", { class: "body-md discret", style: { margin: 0 } }, "Un instant, on récupère ton compte…");
+  const retry = btn("Réessayer", { variant: "primary", size: "lg", full: true, onClick: () => go("#/compte") });
+  retry.hidden = true;
+  finishGoogle().then(landed).catch(e => {
+    status.textContent = e instanceof TypeError ? "Pas de réseau : réessaie une fois connecté." : "Connexion Google impossible : réessaie, ou connecte-toi avec ton e-mail.";
+    retry.hidden = false;
+  });
+  const el = h("div", { class: "screen no-tabs" },
+    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Connexion Google" }),
+    h("div", { class: "scroll" }, head("cloudCheck", "Connexion avec Google", null), status, retry));
   return { el };
 }
 
 // Créer mon compte
 export function signUpView() {
   if (signedIn()) { setTimeout(() => go("#/profil")); return { el: h("div") }; }
-  const { form } = authForm({ newPassword: true, label: "Créer mon compte", help: "8 caractères au moins. L'iPhone peut en proposer un et le garder dans ton trousseau.", onSubmit: signUp });
+  const { form, fail } = authForm({ newPassword: true, label: "Créer mon compte", help: "8 caractères au moins. L'iPhone peut en proposer un et le garder dans ton trousseau.", onSubmit: signUp });
   const el = h("div", { class: "screen no-tabs" },
     navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Créer mon compte" }),
     h("div", { class: "scroll" }, head("userCirclePlus", "Créer ton compte", "Garde tes séances, ton programme et ta corde sur ton compte, et retrouve-les sur un autre téléphone."),
-      form, bascule("Déjà un compte ?", "Me connecter", "#/compte")));
+      ...googleBlock(fail), form, bascule("Déjà un compte ?", "Me connecter", "#/compte")));
   return { el };
 }
 

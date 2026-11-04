@@ -5,7 +5,7 @@ import { templatesView, templateView, itemView, pickerView, programView, weekVie
 import { workoutView, finishView, editWorkoutView, editSetView, summaryView } from "./views/workout.js";
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
 import { profileView, matrixView, prefsView } from "./views/profile.js";
-import { signInView, signUpView, confirmView, resetView, stepsAutoView } from "./views/compte.js";
+import { signInView, signUpView, confirmView, resetView, stepsAutoView, googleView } from "./views/compte.js";
 import { onAccount } from "./compte.js";
 
 // Routes : #/chemin/:param. Chaque vue renvoie { el, tab?, tick? }.
@@ -29,6 +29,7 @@ const ROUTES = [
   ["compte/valider", confirmView],
   ["compte/nouveau", resetView],
   ["compte/pas", stepsAutoView],
+  ["compte/google", googleView],
   ["progres", progressView],
   ["progres/historique", historyView],
   ["progres/historique/:id", sessionView],
