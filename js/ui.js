@@ -221,11 +221,21 @@ export function confirmSheet({ title, message, confirmLabel, cancelLabel = "Annu
   });
 }
 
-export function toast(text) {
+// Message bref en bas d'écran. action : { label, onClick } ajoute un bouton (Annuler…) et garde le message 5 s.
+export function toast(text, action) {
   document.querySelector(".toast")?.remove();
-  const t = h("div", { class: "toast", role: "status" }, text);
+  const t = h("div", { class: `toast${action ? " with-action" : ""}`, role: "status" }, h("span", null, text),
+    action && h("button", { type: "button", onClick: () => { t.remove(); action.onClick(); } }, action.label));
   document.body.append(t);
-  setTimeout(() => t.remove(), 2500);
+  setTimeout(() => t.remove(), action ? 5000 : 2500);
+}
+
+// Annonce pour VoiceOver (repos terminé, changement de phase…), sans rien afficher.
+export function announce(text) {
+  let live = document.getElementById("sr-live");
+  if (!live) document.body.append(live = h("div", { id: "sr-live", class: "sr-only", "aria-live": "polite", role: "status" }));
+  live.textContent = "";
+  setTimeout(() => { live.textContent = text; }, 50);
 }
 
 // Courbe : points {x: temps, y}, axe des y resserré sur les données.

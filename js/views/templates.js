@@ -89,10 +89,19 @@ export function movementSheet(e) {
   sheet({ title: e.name, body });
 }
 
+// Noms du catalogue écrits « Développé avec Kettlebell à un Bras » : à l'affichage, majuscule au premier mot
+// et aux noms propres seulement. Le nom stocké ne change pas (il sert de clé).
+const PROPER = new Set(["Smith", "EZ", "Arnold", "TRX", "Scott", "Zottman", "Jefferson", "Pallof", "Larsen", "JM", "Tate", "Spoto", "Pendlay", "Yates", "Kroc", "Meadows", "Seal", "Bulgarian", "Copenhague", "Nordic", "Hack", "Landmine", "Jackson", "Hindu", "Romanian"]);
+export const niceName = name => {
+  const words = name.split(" ");
+  if (words.slice(1).filter(w => /^\p{Lu}\p{Ll}/u.test(w)).length < 2) return name;
+  return words.map((w, i) => (i === 0 || PROPER.has(w) || /^\p{Lu}{2,}$/u.test(w) ? w : w.toLowerCase())).join(" ");
+};
+
 // Nom d'exercice : quand des photos existent, il ouvre le mouvement sans quitter l'app.
 export const exerciseTitle = (e, attrs = {}) => hasMovement(e)
-  ? h("button", { ...attrs, type: "button", class: `${attrs.class || ""} ex-link`, "aria-label": `${e.name}, voir le mouvement`, onClick: () => movementSheet(e) }, h("span", { class: "ex-name" }, e.name), icon("play"))
-  : h("span", attrs, e.name);
+  ? h("button", { ...attrs, type: "button", class: `${attrs.class || ""} ex-link`, "aria-label": `${niceName(e.name)}, voir le mouvement`, onClick: () => movementSheet(e) }, h("span", { class: "ex-name" }, niceName(e.name)), icon("play"))
+  : h("span", attrs, niceName(e.name));
 
 function nameSheet({ title, value = "", okLabel, onOk }) {
   const input = h("input", { class: "input", value, placeholder: "Ex. Haut A, Push, Full body", maxLength: 40, "aria-label": "Nom" });
