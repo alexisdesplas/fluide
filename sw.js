@@ -1,4 +1,4 @@
-const CACHE = "fluide-v34";
+const CACHE = "fluide-v35";
 const ASSETS = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const ASSETS = [
   "./js/store.js",
   "./js/exercices.js",
   "./js/config.js",
+  "./js/version.js",
   "./js/compte.js",
   "./js/ui.js",
   "./js/views/today.js",

@@ -3,6 +3,7 @@ import { h, icon, pageHead, navbar, btn, go, int, num, stepper, segmented, radio
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
 import { accountCard } from "./compte.js";
+import { VERSION } from "../version.js";
 
 const field = (label, control) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), control);
 
@@ -123,7 +124,9 @@ export function profileView() {
       h("p", { class: "caption", style: { margin: 0 } }, "Une copie de tes données dans un fichier, en plus du compte."),
       h("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" } },
         btn("Exporter", { variant: "secondary", icon: "download", onClick: download }),
-        btn("Importer", { variant: "secondary", icon: "upload", onClick: upload }))));
+        btn("Importer", { variant: "secondary", icon: "upload", onClick: upload })),
+      // Version installée : la même que la release GitHub, pour savoir si l'iPhone a bien la dernière.
+      h("a", { class: "caption app-version num", href: `https://github.com/alexisdesplas/fluide/releases/tag/v${VERSION}`, target: "_blank", rel: "noopener" }, `Fluide v${VERSION}`)));
   return { el, tab: "profil" };
 }
 
