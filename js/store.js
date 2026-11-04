@@ -47,6 +47,10 @@ export const FORMAT_DEFAULTS = {
   tabata: { rounds: 8, work: 20, off: 10, repsMin: 10, repsMax: 10 }
 };
 export const isInterval = x => x?.format === "emom" || x?.format === "tabata";
+// AMRAP : un circuit d'exercices enchaînés sans repos, autant de tours que possible dans le temps donné.
+// Ses exercices forment un groupe ; le premier porte le chrono (clock, target.time). Un tour vaut une série par exercice.
+export const isAmrap = x => x?.format === "amrap";
+export const amrapMembers = (list, i) => groupOf(list, i)?.members || [i];
 
 // Équivalence pour l'objectif Fluide : un Tabata de 8 rounds compte 2 séries, un EMOM 1 série par tranche de 3 minutes.
 const roundsToSets = (format, rounds) => (format === "tabata" ? Math.ceil(rounds / 4) : format === "emom" ? Math.ceil(rounds / 3) : rounds);
@@ -807,6 +811,7 @@ export function startWorkout(templateId) {
       };
     })
   };
+  state.active.entries.forEach((e, i) => { e.slot = i; });
   setWorkoutGear(gearOf());
 }
 
@@ -852,6 +857,14 @@ export function logSet() {
     save();
     return;
   }
+  if (isAmrap(e)) {
+    // Circuit : exercice suivant tout de suite, sans repos ; après le dernier, nouveau tour.
+    e.sets.push({ weight: e.draft.weight, reps: e.draft.reps, doneAt: Date.now() });
+    const m = amrapMembers(a.entries, a.cursor);
+    a.cursor = m[(m.indexOf(a.cursor) + 1) % m.length];
+    save();
+    return;
+  }
   e.sets.push({ weight: e.draft.weight, reps: e.draft.reps, rpe: e.draft.rpe, doneAt: Date.now(), ...(ratioOf(e.exerciseId) !== 1 && { ratio: ratioOf(e.exerciseId) }) });
   e.draft.rpe = null;
   // Superset / triset : on passe à l'exercice suivant du groupe sans repos ; le tour fini, repos puis retour au premier.
@@ -886,6 +899,7 @@ export function logSet() {
 export function setWorkoutGear(gear) {
   const a = state.active;
   a.gear = gear;
+  restoreFormats(a);
   a.entries.forEach((e, i) => {
     if (e.sets.length) return;
     const base = exercise(e.gearSwap ? e.swappedFrom : e.exerciseId);
@@ -903,8 +917,73 @@ export function setWorkoutGear(gear) {
     swapExercise(i, next.id);
     a.entries[i].gearSwap = true;
   });
+  gearFormats(a, gear);
   save();
 }
+
+// Sans machines ni barres, la charge ne monte plus finement : on progresse en densité.
+// Kettlebells en AMRAP (tous enchaînés en un circuit), poids du corps en EMOM, haltères en Tabata.
+// En salle équipée, tout revient en séries, dans l'ordre du programme.
+export const GEAR_FORMATS = { kettlebell: "amrap", pdc: "emom", halteres: "tabata" };
+export const outdoorGear = gear => !gear.includes("machine") && !gear.includes("barre");
+function restoreFormats(a) {
+  for (const e of a.entries) {
+    if (!e.gearFormat) continue;
+    const back = e.gearFormat;
+    for (const k of ["clock", "lastBeep", "done", "group", "gearFormat"]) delete e[k];
+    Object.assign(e, back);
+    if (!back.group) delete e.group;
+  }
+  if (a.entries.every(e => e.slot !== undefined)) a.entries.sort((x, y) => x.slot - y.slot);
+}
+function gearFormats(a, gear) {
+  if (!outdoorGear(gear)) return;
+  const backup = e => ({ format: e.format || "series", target: e.target, draft: e.draft, hint: e.hint, ...(e.group && { group: e.group }) });
+  const circuit = [];
+  a.entries.forEach((e, i) => {
+    if (e.sets.length || e.clock) return;
+    const f = GEAR_FORMATS[equipOf(e)];
+    if (!f || f === e.format) return;
+    const keep = backup(e);
+    if (f === "amrap") { circuit.push(e); e.gearFormat = keep; return; }
+    const next = intervalEntry(e.exerciseId, { format: f, weight: e.draft.weight, ...FORMAT_DEFAULTS[f] }, a.deload);
+    for (const k of ["format", "target", "draft", "hint", "clock"]) e[k] = next[k];
+    delete e.group;
+    e.gearFormat = keep;
+  });
+  if (!circuit.length) return;
+  // Le circuit prend la place du premier exercice kettlebell ; ~80 s par série prévue, entre 8 et 20 min.
+  const planned = circuit.reduce((n, e) => n + e.gearFormat.target.sets, 0);
+  const time = Math.min(20, Math.max(8, Math.round((planned * 80) / 60))) * 60;
+  const g = uid(), at = a.entries.indexOf(circuit[0]);
+  a.entries = a.entries.filter(e => !circuit.includes(e));
+  a.entries.splice(at, 0, ...circuit);
+  circuit.forEach((e, k) => Object.assign(e, {
+    format: "amrap", group: g, hint: null,
+    target: { sets: e.gearFormat.target.sets, repsMin: 10, repsMax: 10, rest: 0, ...(k === 0 && { time }) },
+    draft: { ...e.draft, reps: 10, rpe: null }
+  }));
+  if (circuit.length === 1) delete circuit[0].group;
+  a.cursor = 0;
+}
+
+export function startAmrap(index) {
+  const a = state.active, m = amrapMembers(a.entries, index);
+  a.entries[m[0]].clock = Date.now();
+  a.cursor = m[0];
+  a.restEndsAt = null;
+  save();
+}
+// Temps écoulé (ou arrêt) : les tours faits deviennent les séries de chaque exercice du circuit.
+export function endAmrap(index) {
+  const a = state.active, m = amrapMembers(a.entries, index), lead = a.entries[m[0]];
+  lead.clock = null;
+  lead.done = true;
+  for (const i of m) a.entries[i].target.sets = a.entries[i].sets.length;
+  a.cursor = m.at(-1);
+  save();
+}
+export const amrapLeft = (lead, now = Date.now()) => Math.max(0, lead.target.time - (lead.clock ? (now - lead.clock) / 1000 : 0));
 
 // Corriger une série déjà validée (erreur de saisie), n'importe laquelle de la séance en cours.
 export function editSet(index, k, { weight, reps, rpe }) {
@@ -942,8 +1021,9 @@ export function swapExercise(index, exerciseId) {
   e.exerciseId = exerciseId;
   delete e.equip;
   const equip = exercise(exerciseId).equip;
-  // Jamais fait : la charge suit le matériel, sauf au poids du corps (traction, melting pot) où on part sans lest.
-  e.draft = { weight: last ? pileFor(exerciseId, equip, last.maxWeight) : equip === "pdc" ? 0 : convertWeight(from, equip, e.draft.weight), reps: e.target.repsMin, rpe: null };
+  // Jamais fait : la charge suit le matériel ; kettlebell, on part d'un poids courant (16 kg, 12 kg sur un petit muscle).
+  const fresh = equip === "pdc" ? 0 : equip === "kettlebell" ? (BIG.includes(exercise(exerciseId).muscle) ? 16 : 12) : convertWeight(from, equip, e.draft.weight);
+  e.draft = { weight: last ? pileFor(exerciseId, equip, last.maxWeight) : fresh, reps: e.target.repsMin, rpe: null };
   e.hint = null;
   save();
 }
@@ -953,7 +1033,7 @@ export function swapExercise(index, exerciseId) {
 export function setEntryFormat(index, format) {
   const a = state.active, e = a.entries[index];
   if (e.sets.length || e.format === format) return;
-  const keep = { itemId: e.itemId, swappedFrom: e.swappedFrom, extra: e.extra };
+  const keep = { itemId: e.itemId, swappedFrom: e.swappedFrom, extra: e.extra, slot: e.slot, gearSwap: e.gearSwap };
   let next;
   if (format === "series") {
     const sets = a.deload ? 2 : 3;

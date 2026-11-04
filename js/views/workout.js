@@ -1,4 +1,4 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, setAbsent, setStack, setWorkoutGear, sessionGear, GEAR, available, STACK_STEPS, inLbs, toLbs, editSet, deleteSet } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, setAbsent, setStack, setWorkoutGear, sessionGear, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, beep, restBeepPlanned, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
 
@@ -278,21 +278,26 @@ export function workoutView() {
   const ex = exercise(e.exerciseId);
   const now = Date.now();
   const resting = a.restEndsAt && a.restEndsAt > now && !e.clock;
-  const exDone = e.sets.length >= e.target.sets;
+  // AMRAP : le circuit est fini quand le temps est écoulé (ou arrêté), pas au nombre de séries.
+  const leadOf = i => a.entries[amrapMembers(a.entries, i)[0]];
+  const entryDone = (x, i) => (isAmrap(x) ? !!leadOf(i).done : x.sets.length >= x.target.sets);
+  const amrap = isAmrap(e), lead = amrap ? leadOf(a.cursor) : null;
+  const exDone = entryDone(e, a.cursor);
   const isLast = a.cursor === a.entries.length - 1;
-  const allDone = a.entries.every(x => x.sets.length >= x.target.sets);
+  const allDone = a.entries.every(entryDone);
   const volume = a.entries.reduce((t, x) => t + x.sets.reduce((b, s) => b + setVolume(s), 0), 0);
   const rpeTarget = a.deload ? 6 : CYCLES[a.cycle].rpe;
 
   const setCursor = i => { a.cursor = i; save(); };
   const grp = groupTag(a.entries, a.cursor);
+  if (grp && amrap) grp.label = "AMRAP";
   const nextInGroup = grp && !grp.last ? exercise(a.entries[a.cursor + 1].exerciseId) : null;
 
   // ——— Matériel du jour d'abord : la séance s'adapte avant l'échauffement (séance pas encore commencée).
   if (!a.gearDone && !a.warmupDone && !a.entries.some(x => x.sets.length)) {
     const gear = sessionGear();
     const swapped = a.entries.filter(x => x.gearSwap);
-    const stuck = a.entries.filter(x => !x.gearSwap && !exercise(x.exerciseId).mix && !available(exercise(x.exerciseId)));
+    const stuck = a.entries.filter(x => !exercise(x.exerciseId).mix && !available(exercise(x.exerciseId)));
     const el = h("div", { class: "screen workout" },
       h("div", { class: "wo-head" },
         h("div", { class: "wo-top" },
@@ -308,6 +313,8 @@ export function workoutView() {
           setWorkoutGear(next);
         } }, g.label))),
         h("p", { class: "caption", style: { margin: 0 } }, "Par défaut, le matériel de ta salle (Réglages). Ce choix vaut pour cette séance seulement."),
+        outdoorGear(gear) && h("div", { class: "hint" }, icon("timer"), h("span", { class: "body-sm" },
+          "Sans machines ni barres, on progresse en densité : kettlebells enchaînés en AMRAP, poids du corps en EMOM, haltères en Tabata. Le bouton Format repasse un exercice en séries.")),
         h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, `${a.entries.length} exercice${a.entries.length > 1 ? "s" : ""}`)),
         h("div", { class: "list" }, a.entries.map(x => {
           const ex = exercise(x.exerciseId), from = x.gearSwap && exercise(x.swappedFrom);
@@ -316,8 +323,9 @@ export function workoutView() {
             h("div", { class: "row-main" },
               h("span", { class: "body-md fort medium" }, ex.name),
               h("span", { class: "caption", style: ko ? { color: "var(--etat-attention)" } : null },
-                from ? `${EQUIPS[ex.equip]} · à la place de ${from.name}` : ko ? `${EQUIPS[ex.equip]} · rien d'équivalent avec ce matériel` : EQUIPS[ex.equip])),
-            from ? icon("swap", "chev") : ko ? icon("warning", "chev") : null);
+                [EQUIPS[ex.equip], x.format === "amrap" ? "AMRAP" : FORMATS[x.format] !== FORMATS.series && FORMATS[x.format],
+                  ko ? "rien d'équivalent avec ce matériel" : from && `à la place de ${from.name}`].filter(Boolean).join(" · "))),
+            ko ? icon("warning", "chev") : from ? icon("swap", "chev") : null);
         })),
         swapped.length > 0 && h("p", { class: "caption", style: { margin: 0 } }, `${swapped.length} exercice${swapped.length > 1 ? "s" : ""} adapté${swapped.length > 1 ? "s" : ""} pour aujourd'hui : le programme ne change pas.`)),
       h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr" } },
@@ -502,12 +510,40 @@ export function workoutView() {
         ...draftSteppers("Reps du round"));
       hero.update = update;
     }
+  } else if (amrap && !exDone) {
+    const m = amrapMembers(a.entries, a.cursor);
+    const round = Math.min(...m.map(i => a.entries[i].sets.length)) + 1;
+    if (!lead.clock) {
+      hero = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
+        h("div", { class: "wo-hero", style: { paddingBottom: 0 } },
+          h("div", { class: "overline" }, `AMRAP · ${m.length} exercice${m.length > 1 ? "s" : ""}`),
+          h("div", { class: "display-sm num" }, clock(lead.target.time)),
+          h("span", { class: "body-sm discret" }, "Enchaîne les exercices sans repos, autant de tours que possible. Règle la charge et les reps de chacun avant de lancer.")),
+        ...draftSteppers("Reps"));
+    } else {
+      const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
+      const time = h("div", { class: "display-lg num" });
+      const update = () => {
+        const left = amrapLeft(lead);
+        time.textContent = clock(Math.ceil(left));
+        ring.setAttribute("stroke-dashoffset", String(C * (1 - left / lead.target.time)));
+      };
+      update();
+      hero = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
+        h("div", { class: "wo-hero effort" },
+          h("div", { class: "ring sm effort" },
+            h("svg", { viewBox: "0 0 312 312", "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
+            h("div", { class: "ring-center" }, h("div", { class: "overline" }, `Tour ${round}`), time)),
+          btn("Arrêter l'AMRAP", { variant: "ghost", size: "sm", onClick: () => endAmrap(a.cursor) })),
+        ...draftSteppers("Reps"));
+      hero.update = update;
+    }
   } else if (exDone) {
     const exVolume = e.sets.reduce((b, x) => b + setVolume(x), 0);
     hero = h("div", { class: "wo-hero" },
       h("div", { class: "overline", style: { color: "var(--etat-succes)" } }, allDone ? "Séance bouclée" : "Exercice terminé"),
       h("span", { class: "body-sm discret num" }, allDone ? "Toutes les séries sont faites. Bien joué."
-        : `${e.sets.length} ${interval ? "rounds" : "séries"}${exVolume ? ` · volume ${int(exVolume)} kg` : ""}. ${isLast ? "Il reste des séries sur d'autres exercices." : "Passe à l'exercice suivant."}`));
+        : `${e.sets.length} ${amrap ? "tour" : interval ? "round" : "série"}${e.sets.length > 1 ? "s" : ""}${exVolume ? ` · volume ${int(exVolume)} kg` : ""}. ${isLast ? "Il reste des séries sur d'autres exercices." : "Passe à l'exercice suivant."}`));
   } else {
     hero = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
       h("div", { class: "wo-hero", style: { paddingBottom: 0 } },
@@ -522,7 +558,15 @@ export function workoutView() {
         chips([[7, "7"], [8, "8"], [9, "9"], [10, "10"]], e.draft.rpe, v => { e.draft.rpe = v; save(true); })));
   }
 
-  const setsList = (e.sets.length > 0 || !resting) && h("div", { class: "list" },
+  // AMRAP : le circuit, exercice en cours surligné, tours faits par exercice.
+  const circuitList = amrap && !exDone && h("div", { class: "list" }, amrapMembers(a.entries, a.cursor).map(i => {
+    const x = a.entries[i], xe = exercise(x.exerciseId), cur = i === a.cursor;
+    return h("button", { type: "button", class: `set-row${cur ? " cur" : ""}`, onClick: () => setCursor(i) },
+      h("span", { class: "set-idx" }, String(amrapMembers(a.entries, a.cursor).indexOf(i) + 1)),
+      h("span", { class: `body-md ${cur ? "fort" : "discret"}` }, xe.name, h("span", { class: "caption num", style: { display: "block" } }, `${x.draft.reps} reps · ${charge(equipOf(x), x.draft.weight)}`)),
+      h("span", { class: "caption num" }, `${x.sets.length} tour${x.sets.length > 1 ? "s" : ""}`));
+  }));
+  const setsList = circuitList || (e.sets.length > 0 || !resting) && h("div", { class: "list" },
     Array.from({ length: Math.max(e.target.sets, e.sets.length) }, (_, i) => {
       const s = e.sets[i];
       const cur = !s && i === e.sets.length && !resting;
@@ -534,7 +578,7 @@ export function workoutView() {
         s ? h("span", { class: "set-end" }, s.rpe ? h("span", { class: "caption num" }, `RPE ${s.rpe}`) : null, icon("pencil", "chev")) : h("span"));
     }));
 
-  const segs = a.entries.map((x, i) => h("i", { class: x.sets.length >= x.target.sets ? "on" : i === a.cursor ? "cur" : "" }));
+  const segs = a.entries.map((x, i) => h("i", { class: entryDone(x, i) ? "on" : i === a.cursor ? "cur" : "" }));
   const canLaunch = interval && !exDone && !e.clock && !e.sets.length;
   const primary = resting && !canLaunch
     ? restBtn
@@ -542,6 +586,10 @@ export function workoutView() {
       ? btn("Terminer", { variant: "primary", size: "lg", onClick: finishSheet })
       : exDone
         ? btn("Suivant", { variant: "primary", size: "lg", onClick: () => setCursor(a.cursor + 1) })
+        : amrap && !lead.clock
+          ? btn("Lancer", { variant: "primary", size: "lg", icon: "timer", onClick: () => startAmrap(a.cursor) })
+        : amrap
+          ? btn("Fait", { variant: "primary", size: "lg", icon: "check", onClick: () => logSet() })
         : canLaunch
           ? btn("Lancer", { variant: "primary", size: "lg", icon: "timer", onClick: () => startClock(a.cursor) })
           : btn(interval ? "Round fait" : "Série faite", { variant: "primary", size: "lg", icon: "check", onClick: () => logSet() });
@@ -553,16 +601,16 @@ export function workoutView() {
         h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
       h("div", null,
         h("h1", { class: "heading-xl wo-title" }, exerciseTitle(ex)),
-        h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, interval ? `${ex.muscle} · ${formatLine}`
+        h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, amrap ? `${ex.muscle} · AMRAP ${clock(lead.target.time)}, sans repos` : interval ? `${ex.muscle} · ${formatLine}`
           : nextInGroup ? `${ex.muscle} · puis ${nextInGroup.name}, sans repos` : grp ? `${ex.muscle} · repos ${clock(e.target.rest)} après le tour` : `${ex.muscle} · repos ${clock(e.target.rest)}`,
           e.equip ? ` · ${EQUIPS[e.equip].toLowerCase()}` : "", e.extra ? " · hors programme" : "")),
       h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
         a.deload && pill("Deload", "attention"),
         !exDone && btn("Machine prise", { variant: "secondary", size: "sm", icon: "swap", onClick: () => swapSheet(a.cursor) }),
-        !e.sets.length && !e.clock && btn(FORMATS[e.format || "series"], { variant: "secondary", size: "sm", icon: "timer", onClick: () => formatSheet(a.cursor) }),
+        !amrap && !e.sets.length && !e.clock && btn(FORMATS[e.format || "series"], { variant: "secondary", size: "sm", icon: "timer", onClick: () => formatSheet(a.cursor) }),
         favBtn(e, ex),
         inLbs(equipOf(e)) && !interval && btn(ex.stack || ex.ratio ? `Pile${ex.ratio ? " ½" : ""} · ${ex.stack ? `${ex.stack.step} lbs` : "5 lbs"}` : "Pile", { variant: "secondary", size: "sm", icon: "sliders", onClick: () => stackSheet(ex, equipOf(e)) })),
-      h("div", { class: "segments", "aria-label": `${a.entries.filter(x => x.sets.length >= x.target.sets).length} exercices terminés sur ${a.entries.length}` }, segs)),
+      h("div", { class: "segments", "aria-label": `${a.entries.filter(entryDone).length} exercices terminés sur ${a.entries.length}` }, segs)),
     h("div", { class: "scroll" },
       ex.pref === "douleur" && h("div", { class: "hint attention" }, icon("warning"), h("span", { class: "body-sm" }, "Tu as signalé une douleur sur cet exercice : charge allégée, amplitude confortable, ou remplace-le.")),
       hero, setsList),
@@ -576,6 +624,11 @@ export function workoutView() {
   return {
     el,
     tick() {
+      if (amrap && lead.clock) {
+        if (amrapLeft(lead) <= 0) { beep(660, 0.18, 3); endAmrap(a.cursor); return; }
+        hero.update?.();
+        return;
+      }
       if (interval && e.clock) {
         const x = intervalState(e);
         const key = x.done ? "done" : `${x.round}-${x.phase}`;
@@ -645,7 +698,7 @@ export function summaryView({ id }) {
           pill(`1RM est. ${num(r.value)} kg (+${num(r.delta)})`, "succes")))),
       h("div", { class: "list" }, s.entries.map(e => h("button", { class: "row", onClick: () => go(`#/progres/${e.exerciseId}`) },
         h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, exercise(e.exerciseId).name),
-          h("span", { class: "caption num" }, (isInterval(e) ? `${FORMATS[e.format]} · ${e.sets.length} rounds · ` : "") + e.sets.map(x => `${x.reps}×${x.weight ? num(x.weight) : "PDC"}`).join(" · "))),
+          h("span", { class: "caption num" }, (isInterval(e) ? `${FORMATS[e.format]} · ${e.sets.length} rounds · ` : e.format === "amrap" ? `AMRAP · ${e.sets.length} tours · ` : "") + e.sets.map(x => `${x.reps}×${x.weight ? num(x.weight) : "PDC"}`).join(" · "))),
         icon("caretRight", "chev")))),
       s.note && h("div", { class: "card flat" }, h("span", { class: "overline" }, "Journal"), h("p", { class: "body-md", style: { margin: 0 } }, s.note)),
       btn("Retour à l'accueil", { variant: "primary", size: "lg", full: true, onClick: () => go("#/") }),

@@ -1,5 +1,5 @@
 import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, setGear, gearOf, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GEAR, GOALS } from "../store.js";
-import { h, icon, pageHead, navbar, btn, go, int, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
+import { h, icon, pageHead, navbar, btn, go, int, num, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
 import { accountCard } from "./compte.js";
@@ -103,6 +103,12 @@ export function profileView() {
       radios([["corde", "Avec le challenge", "Plan 18 semaines vers 1 h non-stop : la séance corde du jour sert d'échauffement, le programme garde le jour long loin des jambes."],
         [null, "Sans challenge", "Muscu seule : l'échauffement ci-dessous, le programme ne regarde que tes réglages Fluide."]],
         p.endurance ? "corde" : null, v => { p.endurance = v; if (v && p.enduranceStart == null) p.enduranceStart = startOfWeek(Date.now()); save(); }, "Challenge corde à sauter"),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Toi")),
+      h("div", { class: "card" },
+        h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Âge"),
+          stepper({ value: p.age ?? 30, min: 14, max: 90, compact: true, format: v => `${v} ans`, label: "âge", onChange: set("age") })),
+        h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Poids"),
+          stepper({ value: p.bodyWeight ?? 75, step: 0.5, min: 35, max: 200, compact: true, format: v => `${num(v)} kg`, label: "poids", onChange: set("bodyWeight") }))),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Routine")),
       h("div", { class: "card" },
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Séances / semaine"),
