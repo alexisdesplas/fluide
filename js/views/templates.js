@@ -1,6 +1,7 @@
-import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, startWorkout, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek } from "../store.js";
+import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek } from "../store.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
+import { startSheet } from "./places.js";
 
 export const prefPill = pref =>
   pref === "aime" ? pill("Favori", "accent") : pref === "evite" ? pill("Je n'aime pas") : pref === "douleur" ? pill("Douleur", "danger") : null;
@@ -13,9 +14,10 @@ export const setsLine = (equip, sets) => sets.map(s => `${s.reps}×${chargeNum(e
 
 // Stepper de charge réglé sur le matériel : pile en lbs pour les machines (kg en rappel), haltères à l'unité.
 // ex : l'exercice, pour sa pile (pas après un seuil) et sa poulie démultipliée (charge réelle en rappel).
-export function chargeStepper({ equip, value, note, onChange, ex }) {
+// values : les seules charges possibles, quand le lieu les limite.
+export function chargeStepper({ equip, value, note, onChange, ex, values }) {
   const lb = inLbs(equip), ratio = lb ? ex?.ratio || 1 : 1;
-  return stepper({ value, values: weightScale(equip, ex?.stack), max: 500, editable: true, label: "charge",
+  return stepper({ value, values: values || weightScale(equip, ex?.stack), max: 500, editable: true, label: "charge",
     format: lb ? v => String(toLbs(v)) : num, parse: lb ? fromLbs : undefined,
     unit: v => [lb ? "lbs" : equip === "halteres" ? "kg par haltère" : "kg",
       lb && v ? (ratio !== 1 ? `poulie ½ : ${kg(v * ratio)} réels` : kg(v)) : null, note].filter(Boolean).join(" · "), onChange });
@@ -52,15 +54,16 @@ export const linkRow = (list, i, onToggle) => {
 // filtrés par muscle et par matériel. Sans recherche ni filtre, chaque muscle montre ses 5 plus utiles.
 // Le premier dessin d'un écran passe muscle (null pour tout voir) pour repartir des filtres à zéro.
 const filter = { muscle: null, equip: null };
-export function catalogue(list, query, { onPick, note, pickIcon = "plus", muscle }) {
+// only : ce qu'on montre sans recherche (hors de la salle, ce qui se fait sur place) ; la recherche voit tout.
+export function catalogue(list, query, { onPick, note, pickIcon = "plus", muscle, only }) {
   if (muscle !== undefined) Object.assign(filter, { muscle, equip: null }); // ouverture : muscle imposé (ou aucun), matériel libre
   const q = query.trim().toLowerCase();
-  const match = e => !e.mix && (!q || e.name.toLowerCase().includes(q)) && (!filter.muscle || e.muscle === filter.muscle) && (!filter.equip || e.equip === filter.equip);
+  const match = e => !e.mix && (!only || q || only(e)) && (!q || e.name.toLowerCase().includes(q)) && (!filter.muscle || e.muscle === filter.muscle) && (!filter.equip || e.equip === filter.equip);
   const short = !q && !filter.muscle;
   const favs = state.exercises.filter(e => e.pref === "aime" && match(e)).sort((a, b) => a.name.localeCompare(b.name));
   const groups = GROUPS.map(m => [m, state.exercises.filter(e => e.muscle === m && e.pref !== "aime" && match(e)).sort(byUsefulness)])
     .filter(([, xs]) => xs.length);
-  const redraw = () => catalogue(list, query, { onPick, note, pickIcon });
+  const redraw = () => catalogue(list, query, { onPick, note, pickIcon, only });
   const chipRow = (options, key) => h("div", { class: "chips scroll-x" }, options.map(([v, label]) =>
     h("button", { type: "button", class: "chip", "aria-pressed": String(filter[key] === v), onClick: () => { filter[key] = filter[key] === v ? null : v; redraw(); } }, label)));
   const row = e => h("div", { class: "row pick", style: e.pref === "douleur" ? { opacity: .6 } : null },
@@ -194,7 +197,7 @@ export function templateView({ id }) {
           draft
             ? btn("Revenir au programme", { variant: "primary", size: "lg", full: true, onClick: leave })
             : btn(`Démarrer ${t.name}`, { variant: "primary", size: "lg", full: true, disabled: !t.items.length || !!state.active,
-                onClick: () => { startWorkout(t.id); go("#/seance"); } }),
+                onClick: () => startSheet(t.id) }),
           !draft && state.active && h("p", { class: "caption", style: { margin: 0, textAlign: "center" } },
             `Une séance est déjà en cours (${state.active?.name}). Termine-la ou reprends-la d'abord.`)
         ]));
