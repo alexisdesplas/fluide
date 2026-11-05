@@ -1,6 +1,7 @@
-import { state, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklyGoal, history, template, setHabit, habit, dayKey, stepsAverage, startWorkout, STATUS, MUSCLES, CYCLES } from "../store.js";
+import { state, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklyGoal, history, template, setHabit, habit, dayKey, stepsAverage, STATUS, MUSCLES, CYCLES } from "../store.js";
 import { h, icon, pageHead, btn, pill, go, int, dateLong, ago, stepper, toast } from "../ui.js";
 import { account } from "../compte.js";
+import { startSheet } from "./places.js";
 
 export { estimate };
 
@@ -124,7 +125,7 @@ export function todayView() {
             next.items.length, next.items.length > 1 ? " exercices · " : " exercice · ", next.items.reduce((a, i) => a + (pos.deload ? Math.ceil(itemSets(i) / 2) : itemSets(i)), 0), " séries",
             pos.deload ? " (deload)" : ""),
           h("div", { class: "hint" }, icon("bolt"), h("span", { class: "body-sm" }, "Échauffement : ", h("b", { class: "fort medium" }, warmupLine()), ", puis séries d'approche sur le premier exercice.")),
-          btn(`Démarrer ${next.name}`, { variant: "primary", size: "lg", full: true, onClick: () => { startWorkout(next.id); go("#/seance"); } }),
+          btn(`Démarrer ${next.name}`, { variant: "primary", size: "lg", full: true, onClick: () => startSheet(next.id) }),
           btn("Choisir une autre séance", { variant: "ghost", full: true, onClick: () => go("#/seances") }))
       : h("div", { class: "card empty" }, icon("list"), h("p", { class: "body-md", style: { margin: 0 } }, "Aucune séance type pour l'instant."),
           btn("Choisir un programme", { variant: "primary", onClick: () => go("#/seances/programme") }));
