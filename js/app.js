@@ -53,7 +53,7 @@ function match(hash) {
 const TABS = [
   ["", "today", "Aujourd'hui"],
   ["seances", "list", "Séances"],
-  ["progres", "chart", "Progrès"],
+  ["progres", "chart", "Stats"],
   ["profil", "sliders", "Réglages"]
 ];
 

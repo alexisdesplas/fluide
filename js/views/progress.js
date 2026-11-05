@@ -25,7 +25,7 @@ export function progressView() {
     [1, 2].every(w => (weeklySets(Date.now() - w * WEEK)[m] || 0) < target * 0.8) && state.sessions.some(s => s.startedAt < startOfWeek(Date.now()) - WEEK)).map(([m]) => m);
 
   const el = h("div", { class: "screen" },
-    pageHead("Progrès", `Bloc ${CYCLES[state.cycle.type].label} · ${pos.deload ? "deload" : `semaine ${Math.min(pos.week, state.cycle.weeks)} / ${state.cycle.weeks}`}`),
+    pageHead("Stats", `Bloc ${CYCLES[state.cycle.type].label} · ${pos.deload ? "deload" : `semaine ${Math.min(pos.week, state.cycle.weeks)} / ${state.cycle.weeks}`}`),
     h("div", { class: "scroll" },
       segmented([[0, "Cette semaine"], [1, "Semaine dernière"]], weekOffset, v => { weekOffset = v; dispatchEvent(new HashChangeEvent("hashchange")); }),
       h("div", { class: "stat-grid" },
@@ -67,7 +67,7 @@ export function exerciseProgressView({ id }) {
   const top = rows.flatMap(r => r.sets.map(s => ({ ...s, date: r.date }))).sort((a, b) => e1rm(b.weight, b.reps) - e1rm(a.weight, a.reps))[0];
 
   const el = h("div", { class: "screen" },
-    navbar({ back: { label: "Progrès", href: "#/progres" }, title: e.name, subtitle: e.muscle }),
+    navbar({ back: { label: "Stats", href: "#/progres" }, title: e.name, subtitle: e.muscle }),
     h("div", { class: "scroll" },
       segmented(Object.entries(labels), metric, v => { metric = v; dispatchEvent(new HashChangeEvent("hashchange")); }, "sm"),
       !rows.length && h("div", { class: "card empty" }, icon("chart"), h("p", { class: "body-md", style: { margin: 0 } }, "Pas encore fait. Ta courbe démarre à la première série validée.")),
@@ -91,7 +91,7 @@ export function historyView() {
     months.set(k, [...(months.get(k) || []), s]);
   }
   const el = h("div", { class: "screen" },
-    navbar({ back: { label: "Progrès", href: "#/progres" }, title: "Historique", subtitle: `${all.length} séance${all.length > 1 ? "s" : ""}` }),
+    navbar({ back: { label: "Stats", href: "#/progres" }, title: "Historique", subtitle: `${all.length} séance${all.length > 1 ? "s" : ""}` }),
     h("div", { class: "scroll" },
       all.length ? [...months].map(([m, list]) => h("div", null,
         h("div", { class: "overline", style: { margin: "0 0 8px" } }, m),
