@@ -1,4 +1,4 @@
-import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek } from "../store.js";
+import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, SESSIONS_PER_WEEK } from "../store.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 import { startSheet } from "./places.js";
@@ -54,7 +54,7 @@ export const linkRow = (list, i, onToggle) => {
 // filtrés par muscle et par matériel. Sans recherche ni filtre, chaque muscle montre ses 5 plus utiles.
 // Le premier dessin d'un écran passe muscle (null pour tout voir) pour repartir des filtres à zéro.
 const filter = { muscle: null, equip: null };
-// only : ce qu'on montre sans recherche (hors de la salle, ce qui se fait sur place) ; la recherche voit tout.
+// only : ce qu'on montre sans recherche ; la recherche voit tout.
 export function catalogue(list, query, { onPick, note, pickIcon = "plus", muscle, only }) {
   if (muscle !== undefined) Object.assign(filter, { muscle, equip: null }); // ouverture : muscle imposé (ou aucun), matériel libre
   const q = query.trim().toLowerCase();
@@ -450,7 +450,7 @@ export function weekView() {
     navbar({ back: { label: "Programme", onClick: done }, title: "Ta semaine", subtitle: "Séances, temps, objectif", action: { label: "OK", onClick: done } }),
     h("div", { class: "scroll" },
       h("div", { class: "card" },
-        field("Séances de muscu par semaine", stepper({ value: p.days, min: 2, max: 6, unit: "séances", label: "séances par semaine", onChange: set("days") })),
+        field("Séances de muscu par semaine", stepper({ value: p.days, ...SESSIONS_PER_WEEK, unit: "séances", label: "séances par semaine", onChange: set("days") })),
         field("Temps par séance", stepper({ value: p.minutes, values: SESSION_MINUTES, min: SESSION_MINUTES[0], max: SESSION_MINUTES.at(-1), format: v => `${v} min`, label: "minutes par séance", onChange: set("minutes") }),
           "Échauffement compris. Une séance trop longue perd d'abord du repos, puis des séries sur les muscles à maintenir.")),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif longue durée")),

@@ -7,6 +7,7 @@ App perso de musculation (PWA iPhone) pilotée par le **Système Fluide** (skill
 - Dépôt public : https://github.com/alexisdesplas/fluide (branche `main`), hébergement Vercel (projet `fluide` relié au dépôt) : https://alexis-fluide.vercel.app/ — chaque push déploie, incrémenter `CACHE` dans `sw.js`.
 - Figma : fichier /Perso `QZ94FGPStTONZYIJcXnyHX`, page `Fluide · App` (après `Tabatime · App`, sous l'intercalaire `── SPORT`).
 - Livrables UI : `livrables/fluide/`.
+- Règles de gestion : `regles-gestion.md`, registre numéroté et écarts avec le code.
 
 ## Design system
 - Hardwood, mode « Indigo DT » (comme les écrans Hardwood de Tabatime). Police Inter. Icônes Phosphor (Stroke, Regular).
@@ -78,6 +79,8 @@ App perso de musculation (PWA iPhone) pilotée par le **Système Fluide** (skill
 - 05/11/2026 — Onglet et écran « Progrès » renommés « Stats » (demande d'Alexis). L'adresse `#/progres` reste, elle ne se voit pas dans l'app installée.
 - 05/11/2026 — Détail du volume par muscle retiré d'Aujourd'hui, il doublait Stats : la carte Objectif Fluide y résume la semaine et mène à Stats. Séances garde le volume prévu, qui sert à ajuster les séances types.
 - 05/11/2026 — Lieux de séance (retour d'Alexis : « j'ai des haltères de 5 kilos et tu me proposes du DC incliné »). Tranché par Alexis : description dans Réglages › Mes lieux, écran dédié par lieu ; charges exactes cochées (haltères, kettlebells) et charge max pour la barre, plus le matériel autour (bancs, barre de traction, dips, anneaux, chaise) ; feuille « Où aujourd'hui ? » à « Démarrer », dernier lieu en tête ; ordre d'adaptation : tempo lent si la charge suffit à moitié, sinon même mouvement, sinon autre exercice du muscle, sinon retiré de cette séance, avec le message à l'écran. Valeurs données par Alexis et mises par défaut : salle complète, 2 haltères de 5 kg à la maison, barre de traction et dips au street ; l'écran « à la première utilisation » proposé n'a donc plus de raison d'être. Ce qu'un exercice demande est déduit de son nom (`needsOf` dans `js/store.js`). À la salle, les séances restent identiques à la v0.7.3 ; les séries en tempo lent ne font pas redescendre la charge suivante.
+- 05/11/2026 — Registre des règles de gestion créé à la demande d'Alexis (`regles-gestion.md`) : 154 règles relevées dans le code en v0.7.3, 169 avec les lieux de la v0.8.0, identifiants stables `RG-<domaine>-<numéro>`, 12 écarts listés au départ.
+- 05/11/2026 — v0.8.1, à la demande d'Alexis : 5 bugs du registre corrigés. Les puces Points forts / faibles gardent l'objectif du muscle ; EMOM et Tabata ne battent plus de record ; remplacer un EMOM ou un Tabata commencé laisse les rounds faits sur l'exercice d'origine ; « Remplacer » ne propose plus les exercices absents, en douleur ou au matériel décoché (une recherche les retrouve) ; 2 à 6 séances par semaine partout (choix de ces bornes parce que les programmes s'y arrêtent). Nouveaux écarts non corrigés : E-13 (remplacer un exercice en plein AMRAP) et E-14 (remplacer après des séries en tempo lent leur enlève la marque tempo).
 
 ## Hypothèses ouvertes
 - Lieux : seuils de charge (85 %, 50 %, 125 %) et charges types d'un exercice jamais fait à ajuster à l'usage. Les bêta-testeurs partent eux aussi des valeurs d'Alexis (haltères 5 kg à la maison) : la feuille les affiche, à décider si un nouveau compte doit les décrire d'abord.
