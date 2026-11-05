@@ -1,6 +1,7 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, STATUS, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, weeklySets, setAbsent, setStack, setWorkoutGear, sessionGear, gearOf, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet, proposable } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, STATUS, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, weeklySets, setAbsent, setStack, setWorkoutGear, setWorkoutPlace, sessionGear, sessionPlaceKey, placeOf, placeLoads, reachable, PLACES, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet, proposable } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, announce, beep, restBeepPlanned, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle, niceName, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
+import { placeSummary } from "./places.js";
 
 // Anneau de Tabatime : 312 px, trait de 34 px.
 const R = 139, C = 2 * Math.PI * R;
@@ -18,6 +19,7 @@ function swapSheet(index) {
   const alts = alternatives(e.exerciseId);
   const vars = Object.entries(variants(e.exerciseId));
   let query = "", closeSheet, absent = !!ex.absent;
+  const atGym = sessionPlaceKey() === "gym";
   // Pas dans ma salle : l'exercice n'est plus proposé, et celui choisi le remplace aussi dans la séance type.
   const pickAlt = x => {
     if (x.id === e.exerciseId) return;
@@ -34,7 +36,7 @@ function swapSheet(index) {
   sheet({
     title: "Remplacer l'exercice",
     body: close => { closeSheet = close; return [
-      h("p", { class: "body-sm discret", style: { margin: 0 } }, `Machine prise, ou absente de ta salle : choisis un autre exercice. Le programme ne change pas, seule cette séance le prend.`),
+      h("p", { class: "body-sm discret", style: { margin: 0 } }, atGym ? `Machine prise, ou absente de ta salle : choisis un autre exercice. Le programme ne change pas, seule cette séance le prend.` : `Choisis un exercice que ton matériel permet. Le programme ne change pas, seule cette séance le prend. La recherche voit tout le catalogue.`),
       vars.length > 1 && h("span", { class: "overline" }, "Même mouvement avec"),
       vars.length > 1 && h("div", { class: "chips" }, Object.keys(EQUIPS).filter(k => vars.some(([q]) => q === k)).map(k => {
         const x = vars.find(([q]) => q === k)[1];
@@ -43,7 +45,7 @@ function swapSheet(index) {
           pickAlt(x);
         } }, EQUIPS[k]);
       })),
-      !ex.mix && h("button", { type: "button", class: "radio-card", role: "checkbox", "aria-checked": String(absent),
+      !ex.mix && atGym && h("button", { type: "button", class: "radio-card", role: "checkbox", "aria-checked": String(absent),
         onClick: ev => { absent = !absent; ev.currentTarget.setAttribute("aria-checked", String(absent)); } },
         h("span", { class: "radio-dot", "aria-hidden": "true" }),
         h("span", { class: "radio-text" }, h("span", { class: "body-md fort semibold" }, "Pas dans ma salle"),
@@ -60,13 +62,13 @@ function swapSheet(index) {
             h("span", { class: "caption" }, `Tabata ou EMOM de ${ex.muscle.toLowerCase()}, tes exercices sans les saisir`)),
           icon("caretRight", "chev")))),
       h("input", { class: "input", type: "search", placeholder: "Chercher un exercice", "aria-label": "Chercher un exercice", onInput: ev => { query = ev.target.value; draw(); } }),
-      !alts.length && h("p", { class: "body-sm discret", style: { margin: 0 } }, `Aucun autre exercice disponible pour ${ex.muscle} : cherche-le par son nom, ou attends la machine.`),
+      !alts.length && h("p", { class: "body-sm discret", style: { margin: 0 } }, `Aucun autre exercice disponible pour ${ex.muscle} : cherche-le par son nom${atGym ? ", ou attends la machine" : ""}.`),
       list,
-      btn("Attendre la machine", { variant: "ghost", full: true, onClick: close })]; }
+      btn(atGym ? "Attendre la machine" : "Garder cet exercice", { variant: "ghost", full: true, onClick: close })]; }
   });
 }
 
-const weightStepper = (e, note) => chargeStepper({ equip: equipOf(e), ex: exercise(e.exerciseId), value: e.draft.weight, note, onChange: v => { e.draft.weight = v; save(true); } });
+const weightStepper = (e, note) => chargeStepper({ equip: equipOf(e), ex: exercise(e.exerciseId), value: e.draft.weight, note, values: placeLoads(equipOf(e)) && [...placeLoads(equipOf(e))].sort((x, y) => x - y), onChange: v => { e.draft.weight = v; save(true); } });
 
 // Pile de la machine : par 5 lbs, ou un pas plus grand au-delà d'un seuil (extension des jambes : 15 en 15 après 80).
 // Poulie : directe ou démultipliée (la pile affiche le double de la charge réelle).
@@ -328,7 +330,9 @@ export function workoutView() {
   if (a.gearOpen && !a.entries.some(x => x.sets.length)) {
     const gear = sessionGear();
     const swapped = a.entries.filter(x => x.gearSwap);
-    const stuck = a.entries.filter(x => !exercise(x.exerciseId).mix && !available(exercise(x.exerciseId)));
+    const stuck = a.entries.filter(x => !exercise(x.exerciseId).mix && !(available(exercise(x.exerciseId)) && reachable(exercise(x.exerciseId))));
+    const dropped = a.dropped || [];
+    const place = sessionPlaceKey();
     // Par matériel : exercices qui s'en servent aujourd'hui, et exercices du programme adaptés faute de l'avoir.
     const uses = (k, id) => GEAR[k].equips.includes(exercise(id)?.equip);
     const usedNow = k => a.entries.filter(x => uses(k, x.exerciseId)).length;
@@ -336,13 +340,19 @@ export function workoutView() {
     const toggle = k => {
       const next = gear.includes(k) ? gear.filter(x => x !== k) : [...gear, k];
       if (!next.length) { toast("Garde au moins un matériel"); return; }
+      // Coché sans charge décrite pour ce lieu : rien ne pourrait s'en servir.
+      if (!gear.includes(k) && (k === "halteres" || k === "kettlebell") && placeLoads(k)?.length === 0) { toast("Indique d'abord tes charges : touche Modifier"); return; }
       setWorkoutGear(next);
       const n = a.entries.filter(x => x.gearSwap).length;
       announce(n ? `${n} exercice${n > 1 ? "s" : ""} adapté${n > 1 ? "s" : ""}.` : "Séance telle que prévue.");
     };
     const formatOf = x => (x.format === "amrap" ? "AMRAP" : x.format && x.format !== "series" ? FORMATS[x.format] : null);
+    const tempo = a.entries.filter(x => x.tempo);
+    const changes = [swapped.length && `${swapped.length} exercice${swapped.length > 1 ? "s" : ""} adapté${swapped.length > 1 ? "s" : ""}`,
+      dropped.length && `${dropped.length} retiré${dropped.length > 1 ? "s" : ""}`].filter(Boolean).join(", ");
     const status = stuck.length ? `${stuck.length} exercice${stuck.length > 1 ? "s" : ""} sans équivalent avec ce matériel.`
-      : swapped.length ? `${swapped.length} exercice${swapped.length > 1 ? "s" : ""} adapté${swapped.length > 1 ? "s" : ""} pour aujourd'hui. Le programme ne change pas.`
+      : changes ? `${changes} pour aujourd'hui. Le programme ne change pas.`
+      : tempo.length ? "Mêmes exercices, en tempo lent. Le programme ne change pas."
       : "Tout est là : la séance se fait telle que prévue.";
     const el = h("div", { class: "screen workout big-targets" },
       h("div", { class: "wo-head" },
@@ -353,6 +363,11 @@ export function workoutView() {
           h("h1", { class: "heading-xl" }, "Qu'as-tu sous la main ?"),
           h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, "Touche ce qui manque aujourd'hui : la séance s'adapte."))),
       h("div", { class: "scroll" },
+        h("div", { class: "chips", role: "group", "aria-label": "Lieu de la séance" }, Object.entries(PLACES).map(([k, pl]) =>
+          h("button", { type: "button", class: "chip", "aria-pressed": String(k === place), onClick: () => { if (k !== place) { setWorkoutPlace(k); announce(`${pl.label} : séance adaptée.`); } } }, pl.short))),
+        h("div", { class: "gear-place" },
+          h("span", { class: "caption" }, placeSummary(place)),
+          btn("Modifier", { variant: "ghost", size: "sm", onClick: () => go(`#/profil/lieux/${place}`) })),
         h("div", { class: "gear-grid", role: "group", "aria-label": "Matériel disponible aujourd'hui" }, Object.entries(GEAR).map(([k, g]) => {
           const on = gear.includes(k), n = usedNow(k), m = adapted(k);
           return h("button", { type: "button", class: "gear-tile", "aria-pressed": String(on), onClick: () => toggle(k) },
@@ -363,16 +378,22 @@ export function workoutView() {
         })),
         h("p", { class: `body-sm gear-status${stuck.length ? " warn" : swapped.length ? " changed" : ""}`, style: { margin: 0 } }, status),
         outdoorGear(gear) && h("div", { class: "hint" }, icon("timer"), h("span", { class: "body-sm" },
-          "Sans machines ni barres, on progresse en densité : kettlebells enchaînés en AMRAP, poids du corps en EMOM, haltères en Tabata.")),
+          "Sans machines ni barres, on progresse en densité : kettlebells enchaînés en AMRAP, poids du corps en EMOM, haltères en Tabata.",
+          tempo.length ? " Charge trop légère : tempo lent, 15 à 20 reps." : "")),
         h("div", { class: "list" }, a.entries.map(x => {
           const xe = exercise(x.exerciseId), from = x.gearSwap && exercise(x.swappedFrom), ko = stuck.includes(x), f = formatOf(x);
           return h("div", { class: `row gear-row${from ? " swapped" : ""}${ko ? " ko" : ""}` },
             h("div", { class: "row-main" },
               from && h("span", { class: "caption gear-from" }, niceName(from.name)),
               h("span", { class: "body-md fort medium" }, niceName(xe.name)),
-              h("span", { class: "caption" }, ko ? `${EQUIPS[xe.equip]} · rien d'équivalent : remplace-le en séance, ou recoche ${EQUIPS[xe.equip].toLowerCase()}` : EQUIPS[xe.equip])),
-            f ? pill(f, "accent") : ko ? icon("warning", "chev") : null);
-        }))),
+              h("span", { class: "caption" }, ko ? `${EQUIPS[xe.equip]} · rien d'équivalent : remplace-le en séance, ou recoche ${EQUIPS[xe.equip].toLowerCase()}`
+                : [EQUIPS[xe.equip], placeLoads(xe.equip) && `${num(x.draft.weight)} kg`, x.tempo && `tempo lent, ${x.target.repsMin}-${x.target.repsMax} reps`].filter(Boolean).join(" · "))),
+            f ? pill(f, "accent") : x.tempo ? pill("Tempo", "accent") : ko ? icon("warning", "chev") : null);
+        }),
+        dropped.map(x => h("div", { class: "row gear-row swapped" },
+          h("div", { class: "row-main" },
+            h("span", { class: "caption gear-from" }, niceName(exercise(x.exerciseId).name)),
+            h("span", { class: "caption" }, `${exercise(x.exerciseId).muscle} : rien de faisable ici, retiré de cette séance`)))))),
       h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr" } },
         btn("C'est bon", { variant: "primary", size: "lg", onClick: () => { a.gearOpen = false; save(); } })));
     return { el };
@@ -380,11 +401,11 @@ export function workoutView() {
 
   // Ligne repliée du matériel du jour, tant qu'aucune série n'est notée : ce qui est dispo, ce qui a été adapté, « Changer ».
   const gearLine = !a.entries.some(x => x.sets.length) && (() => {
-    const gear = sessionGear(), all = gear.length === gearOf().length && gear.every(g => gearOf().includes(g));
-    const n = a.entries.filter(x => x.gearSwap).length;
-    const what = all ? "Tout ton matériel" : Object.entries(GEAR).filter(([k]) => gear.includes(k)).map(([, g]) => g.label).join(", ");
+    const gear = sessionGear(), key = sessionPlaceKey(), base = placeOf(key).gear, all = gear.length === base.length && gear.every(g => base.includes(g));
+    const n = a.entries.filter(x => x.gearSwap || x.tempo).length, out = a.dropped?.length || 0;
+    const what = all ? PLACES[key].label : `${PLACES[key].label} · ${Object.entries(GEAR).filter(([k]) => gear.includes(k)).map(([, g]) => g.label).join(", ")}`;
     return h("div", { class: "gear-line" }, icon("barbell"),
-      h("div", { class: "row-main" }, h("span", { class: "body-sm fort" }, what), n > 0 && h("span", { class: "caption" }, `${n} exercice${n > 1 ? "s" : ""} adapté${n > 1 ? "s" : ""} pour aujourd'hui`)),
+      h("div", { class: "row-main" }, h("span", { class: "body-sm fort" }, what), (n > 0 || out > 0) && h("span", { class: "caption" }, [n && `${n} exercice${n > 1 ? "s" : ""} adapté${n > 1 ? "s" : ""}`, out && `${out} retiré${out > 1 ? "s" : ""}`].filter(Boolean).join(", "), " pour aujourd'hui")),
       btn("Changer", { variant: "ghost", size: "sm", onClick: () => { a.gearOpen = true; save(); } }));
   })();
 
@@ -673,6 +694,7 @@ export function workoutView() {
         h("span", { class: "body-sm discret num" }, `Objectif ${reps(e.target.repsMin, e.target.repsMax)} reps · RPE ${String(rpeTarget).replace(".", ",")}, ${rir(rpeTarget)}`)),
       e.hint === "charge" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Haut de fourchette atteint la dernière fois : ", h("b", { class: "fort medium" }, charge(equipOf(e), e.draft.weight)), ".")),
       e.hint === "reps" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Même charge, vise ", h("b", { class: "fort medium" }, `${e.draft.reps} reps`), " (une de plus que la dernière fois).")),
+      e.tempo && h("div", { class: "hint" }, icon("timer"), h("span", { class: "body-sm" }, "Charge légère aujourd'hui : ", h("b", { class: "fort medium" }, "3 s à la descente"), ", et va chercher les 15 à 20 reps. Ces séries ne changent pas ta charge de référence.")),
       weightStepper(e),
       repsStepper("Reps"),
       rpeField(e.draft.rpe, v => { e.draft.rpe = v; save(true); }));

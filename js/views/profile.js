@@ -1,8 +1,9 @@
-import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, setGear, gearOf, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GEAR, GOALS, SESSIONS_PER_WEEK } from "../store.js";
+import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GOALS, SESSIONS_PER_WEEK } from "../store.js";
 import { h, icon, pageHead, navbar, btn, go, int, num, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
 import { accountCard } from "./compte.js";
+import { placeRows } from "./places.js";
 import { VERSION } from "../version.js";
 
 const field = (label, control) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), control);
@@ -88,13 +89,9 @@ export function profileView() {
           h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, "Mes exercices"),
             h("span", { class: "caption" }, `${prefs.aime || 0} favoris · ${prefs.evite || 0} évités · ${prefs.douleur || 0} en douleur`)),
           icon("caretRight", "chev"))),
-      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Matériel de ta salle")),
-      h("p", { class: "caption", style: { margin: 0 } }, "Ton matériel habituel : le programme s'y tient, et chaque séance part de ce choix. Avant de commencer, tu peux décocher ce qui n'est pas dispo ce jour-là, la séance s'adapte. Un exercice absent (pas de machine à mollets…) se retire depuis « Machine prise »."),
-      h("div", { class: "chips" }, Object.entries(GEAR).map(([k, g]) => h("button", { type: "button", class: "chip", "aria-pressed": String(gearOf().includes(k)), onClick: () => {
-        const cur = gearOf(), next = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k];
-        if (!next.length) { toast("Garde au moins un matériel"); return; }
-        setGear(next);
-      } }, g.label))),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Mes lieux")),
+      h("p", { class: "caption", style: { margin: 0 } }, "Le matériel, les charges et ce qu'il y a autour, lieu par lieu. Au démarrage d'une séance, tu dis où tu es : elle s'adapte, le programme reste celui de la salle. Un exercice absent de ta salle se retire depuis « Remplacer »."),
+      placeRows(),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif du moment")),
       radios(["Prise de muscle", "Force", "Sèche"].map(v => [v, v]), p.goal, v => { p.goal = v; save(); }, "Objectif du moment"),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Niveau")),

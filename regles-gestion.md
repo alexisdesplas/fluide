@@ -1,6 +1,6 @@
 # Règles de gestion — Fluide
 
-Relevé du 05/11/2026 sur la v0.7.3 (commit `e2377f1`), mis à jour pour la v0.7.4. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
+Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance) et la v0.8.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
 
 ## Lire ce registre
 
@@ -13,7 +13,7 @@ Relevé du 05/11/2026 sur la v0.7.3 (commit `e2377f1`), mis à jour pour la v0.7
 - **Source** : le fichier et la fonction, plutôt qu'un numéro de ligne qui bougerait. Les fichiers sont dans `js/`, sauf `schema.sql` dans `supabase/`.
 - **Mise à jour** : toute PR qui ajoute, change ou retire une règle met à jour ce fichier.
 
-**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.7.4, essayées aussi dans l'app.
+**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.8.1, essayées aussi dans l'app. Les règles de lieux viennent de la lecture de la v0.8.0, avec quelques scénarios exécutés (maison, exercice absent, tempo lent).
 
 ## Décompte
 
@@ -28,10 +28,11 @@ Relevé du 05/11/2026 sur la v0.7.3 (commit `e2377f1`), mis à jour pour la v0.7
 | Performance et progression | PER | 8 |
 | Séance en cours | SEA | 33 |
 | Matériel du jour | MAT | 10 |
+| Lieux de séance | LIE | 15 |
 | Séances types | TPL | 8 |
 | Pas du jour | PAS | 8 |
 | Compte et données | CPT | 9 |
-| **Total** | | **154** |
+| **Total** | | **169** |
 
 Dont 3 sans accès (RG-SEA-28 à 30).
 
@@ -119,9 +120,9 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 | RG-EXE-01 | Ordre de proposition : Favori, Neutre, Je n'aime pas, Douleur ; puis les exercices déjà faits ; puis les plus courants ; puis l'ordre alphabétique. | `store.js` › `byUsefulness` | Active |
 | RG-EXE-02 | Sans recherche ni filtre de muscle, le catalogue montre les favoris puis les 5 exercices les plus utiles de chaque muscle. Avec un filtre ou une recherche, jusqu'à 150 par groupe. Le Melting pot n'y figure jamais. | `views/templates.js` › `catalogue` | Active |
 | RG-EXE-03 | Un exercice en Douleur n'entre ni dans un programme généré, ni dans une adaptation au matériel, ni dans la liste de « Remplacer » sans recherche. Il reste cherchable, ne peut pas être mis en favori, et une alerte s'affiche en séance. | `store.js` › `proposable`, `alternatives`, `variants`, `generateProgram` ; `views/workout.js` › `swapSheet`, `workoutView` | Active |
-| RG-EXE-04 | Un exercice marqué « Pas dans ma salle » n'est plus proposé par les programmes et les alternatives, ni dans la liste de « Remplacer » sans recherche, pas plus qu'un exercice au matériel décoché. Une recherche les retrouve. | `store.js` › `proposable`, `available`, `setAbsent` ; `views/workout.js` › `swapSheet` ; `views/templates.js` › `catalogue` | Active |
+| RG-EXE-04 | Un exercice marqué « Pas dans ma salle » (à la salle seulement, voir RG-LIE-14) n'est plus proposé par les programmes et les alternatives, ni dans la liste de « Remplacer » sans recherche, pas plus qu'un exercice au matériel décoché ou à la charge hors de portée. Une recherche les retrouve. | `store.js` › `proposable`, `available`, `setAbsent` ; `views/workout.js` › `swapSheet` ; `views/templates.js` › `catalogue` | Active |
 | RG-EXE-05 | Créer un exercice n'est possible que si la recherche ne trouve pas ce nom exact. Il demande un des 10 muscles et un matériel ; le nom prend une majuscule. | `views/templates.js` › `pickerView` ; `store.js` › `createExercise` | Active |
-| RG-EXE-06 | Le matériel de la salle garde au moins une famille cochée. Par défaut : machines et poulies, barres, haltères, poids du corps. | `store.js` › `DEFAULT_GEAR` ; `views/profile.js` › `profileView` | Active |
+| RG-EXE-06 | Le matériel d'un lieu garde au moins une famille cochée. Le programme se tient au matériel de la salle, complet par défaut. | `store.js` › `defaultPlaces`, `gearOf` ; `views/places.js` › `placeView` | Active |
 | RG-EXE-07 | La famille « Machines et poulies » couvre les machines, les poulies et la Smith. Barres, haltères, kettlebells, élastiques et poids du corps sont chacun une famille. | `store.js` › `GEAR` | Active |
 | RG-EXE-08 | Le même mouvement avec un autre matériel se reconnaît au nom sans son matériel, sur le même muscle, hors douleur et exercice indisponible. Un seul exercice est retenu par matériel, le plus utile. | `store.js` › `variants`, `movement` | Active |
 | RG-EXE-09 | Changer le matériel d'un exercice recale ses charges dans toutes les séances types. | `store.js` › `setEquip` | Active |
@@ -140,8 +141,8 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 | RG-CHG-08 | Toute charge est calée sur la valeur autorisée la plus proche : création, programme, migration, changement de matériel. | `store.js` › `nearestWeight`, `migrate` | Active |
 | RG-CHG-09 | Passer aux haltères divise la charge par deux ; en revenir la multiplie par deux. | `store.js` › `convertWeight` | Active |
 | RG-CHG-10 | Une charge de 0 signifie poids du corps et s'affiche « PDC ». | `views/templates.js` › `charge` | Active |
-| RG-CHG-11 | Remplaçant jamais fait en séance : kettlebell à 16 kg (gros muscle) ou 12 kg (petit), poids du corps à 0, sinon charge convertie depuis l'exercice remplacé. | `store.js` › `swapExercise` | Active |
-| RG-CHG-12 | Remplaçant déjà fait en séance : il reprend sa dernière charge maximale, calée sur ses pas. | `store.js` › `swapExercise`, `pileFor` | Active |
+| RG-CHG-11 | Remplaçant jamais fait en séance : kettlebell à 16 kg (gros muscle) ou 12 kg (petit), poids du corps à 0, sinon charge convertie depuis l'exercice remplacé. Hors salle, la charge est ensuite calée sur le lieu (RG-LIE-07). | `store.js` › `swapExercise` | Active |
+| RG-CHG-12 | Remplaçant déjà fait en séance : il reprend sa dernière charge maximale, calée sur ses pas, puis sur le lieu (RG-LIE-07). | `store.js` › `swapExercise`, `pileFor` | Active |
 
 ## Performance et progression
 
@@ -151,8 +152,8 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 | RG-PER-02 | Double progression : si, à la dernière séance, toutes les séries prévues ont atteint le haut de la fourchette à la charge maximale, on propose le cran de charge suivant et le bas de la fourchette. Jamais au poids du corps. | `store.js` › `suggestion` | Active |
 | RG-PER-03 | Sinon : même charge et 1 rep de plus que le minimum réalisé, sans dépasser le haut de la fourchette. | `store.js` › `suggestion` | Active |
 | RG-PER-04 | Sans historique : la charge prévue et le bas de la fourchette, sans indication. | `store.js` › `suggestion` | Active |
-| RG-PER-05 | Un record compare le meilleur 1RM de la séance à tout ce qui précède. La première fois sur un exercice n'est pas un record, et un EMOM ou un Tabata n'en bat pas. | `store.js` › `sessionRecords` | Active |
-| RG-PER-06 | Les rounds d'EMOM et de Tabata n'entrent ni dans les courbes ni dans le 1RM de l'exercice : leurs charges sont sous-maximales. | `store.js` › `exerciseHistory` | Active |
+| RG-PER-05 | Un record compare le meilleur 1RM de la séance à tout ce qui précède. La première fois sur un exercice n'est pas un record, et ni un EMOM, ni un Tabata, ni des séries en tempo lent n'en battent. | `store.js` › `sessionRecords` | Active |
+| RG-PER-06 | Les rounds d'EMOM et de Tabata et les séries en tempo lent n'entrent ni dans les courbes ni dans le 1RM de l'exercice : leurs charges sont sous-maximales. | `store.js` › `exerciseHistory` | Active |
 | RG-PER-07 | Volume d'une série = charge réelle × reps. | `store.js` › `setVolume` | Active |
 | RG-PER-08 | Le RPE est optionnel et se note de 7 à 10. 10 − RPE donne les reps en réserve. | `views/workout.js` › `rpeField`, `rir` | Active |
 
@@ -198,16 +199,36 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 
 | ID | Règle | Source | État |
 |---|---|---|---|
-| RG-MAT-01 | La séance part du matériel de la salle. Il se change tant qu'aucune série n'est notée, avec au moins une famille cochée, pour cette séance seulement. | `store.js` › `startWorkout`, `setWorkoutGear` ; `views/workout.js` › `workoutView` | Active |
-| RG-MAT-02 | Un exercice impossible passe au même mouvement avec un autre matériel, sinon au meilleur exercice du même muscle, jamais à un exercice déjà prévu dans la séance. | `store.js` › `setWorkoutGear` | Active |
+| RG-MAT-01 | La séance part du matériel du lieu choisi. Il se change tant qu'aucune série n'est notée, avec au moins une famille cochée, pour cette séance seulement. | `store.js` › `startWorkout`, `setWorkoutPlace`, `setWorkoutGear` ; `views/workout.js` › `workoutView` | Active |
+| RG-MAT-02 | Un exercice impossible passe au même mouvement avec un autre matériel, sinon au meilleur exercice du même muscle, jamais à un exercice déjà prévu dans la séance. Détail de l'ordre : RG-LIE-11. | `store.js` › `setWorkoutGear` | Active |
 | RG-MAT-03 | Un exercice ainsi remplacé revient à celui du programme dès que son matériel est recoché. | `store.js` › `setWorkoutGear` | Active |
 | RG-MAT-04 | Un exercice déjà commencé ne bouge pas. | `store.js` › `setWorkoutGear` | Active |
-| RG-MAT-05 | Sans équivalent, l'exercice reste et l'écran le signale : à remplacer en séance, ou recocher le matériel. | `views/workout.js` › `workoutView` | Active |
-| RG-MAT-06 | Sans machines ni barres, on progresse en densité : kettlebell en AMRAP, poids du corps en EMOM, haltères en Tabata. Les autres matériels restent en séries. | `store.js` › `GEAR_FORMATS`, `outdoorGear`, `gearFormats` | Active |
+| RG-MAT-05 | Sans équivalent, l'exercice sort de cette séance (RG-LIE-13). Si plus aucun exercice ne serait possible, tous restent et l'écran le signale : à remplacer en séance, ou recocher le matériel. | `store.js` › `setWorkoutGear` ; `views/workout.js` › `workoutView` | Active |
+| RG-MAT-06 | Sans machines ni barres, on progresse en densité : kettlebell en AMRAP, poids du corps en EMOM, haltères en Tabata. Les autres matériels restent en séries, de même qu'un exercice en tempo lent. | `store.js` › `GEAR_FORMATS`, `outdoorGear`, `gearFormats` | Active |
 | RG-MAT-07 | Tous les exercices kettlebell forment un seul circuit AMRAP, à la place du premier d'entre eux, sans repos, à 10 reps par défaut. | `store.js` › `gearFormats` | Active |
 | RG-MAT-08 | Durée de l'AMRAP : environ 80 s par série prévue, entre 8 et 20 min. | `store.js` › `gearFormats` | Active |
 | RG-MAT-09 | Quand le temps est écoulé, ou à l'arrêt confirmé, les tours faits deviennent les séries de chaque exercice du circuit. | `store.js` › `endAmrap` | Active |
 | RG-MAT-10 | En salle équipée, formats et ordre reviennent à ceux du programme. | `store.js` › `restoreFormats` | Active |
+
+## Lieux de séance
+
+| ID | Règle | Source | État |
+|---|---|---|---|
+| RG-LIE-01 | Trois lieux : à la salle, chez moi, au street. Chacun a son matériel, ses charges et son matériel annexe. Le programme reste celui de la salle. | `store.js` › `PLACES`, `placeOf`, `gearOf` | Active |
+| RG-LIE-02 | Valeurs de départ : salle complète ; chez moi, haltères de 5 kg, poids du corps et chaise ; au street, poids du corps, barre de traction et barres à dips. | `store.js` › `defaultPlaces`, `migrate` | E-06 |
+| RG-LIE-03 | « Démarrer » demande le lieu, et la séance part d'un tap. Le dernier lieu passe en tête et reste mémorisé. | `views/places.js` › `startSheet` ; `store.js` › `setWorkoutPlace` | Active |
+| RG-LIE-04 | Le lieu se change tant qu'aucune série n'est notée. Modifier un lieu pendant une séance pas encore commencée l'adapte aussitôt. | `views/workout.js` › `workoutView` ; `store.js` › `setPlace` | Active |
+| RG-LIE-05 | Sur l'écran d'un lieu, rien ne change avant « Enregistrer ». Haltères ou kettlebells cochés exigent au moins une charge, ou « Toutes ». La barre peut avoir une charge maximale. | `views/places.js` › `placeView` | Active |
+| RG-LIE-06 | Ce qu'un exercice demande se déduit de son nom : banc, banc inclinable, barre de traction, barres à dips, anneaux, chaise, ou équipement de salle. Un banc inclinable vaut un banc ; une chaise ou un banc vaut un siège. Machines, poulies et Smith ne demandent rien de plus. | `store.js` › `needsOf`, `needsMet` | Active |
+| RG-LIE-07 | Charge disponible par rapport à la charge visée : convenable entre 85 % et 125 % ; trop légère mais utilisable de 50 % à 85 % ; sinon l'exercice ne se fait pas. | `store.js` › `placeLoads`, `loadFit` | Active |
+| RG-LIE-08 | Charge visée : la dernière charge maximale, sinon une charge type. Kettlebell 16 kg (gros muscle) ou 12 kg ; barre 20 kg (isolation), 40 kg (gros muscle) ou 30 kg ; autres 8 kg (isolation), 20 kg (gros muscle) ou 14 kg. | `store.js` › `wantOf`, `typicalLoad` | Active |
+| RG-LIE-09 | Charge trop légère : l'exercice reste en tempo lent, avec 15 à 20 reps, 3 s à la descente et 1 min de repos au plus. Cela ne s'applique qu'au format Séries. | `store.js` › `fitEntryLoad` ; `views/workout.js` › `workoutView` | Active |
+| RG-LIE-10 | Les séries en tempo lent comptent pour l'objectif de la semaine, pas pour la charge de référence. | `store.js` › `weeklySets`, `exerciseHistory` | E-14 |
+| RG-LIE-11 | Ordre d'adaptation : l'exercice lui-même (en tempo lent si besoin) ; le même mouvement avec un matériel à la bonne charge ; le meilleur exercice du muscle ; sinon retiré. Une charge trop légère passe loin derrière pour remplacer un polyarticulaire, et de 8 rangs pour de l'isolation. | `store.js` › `setWorkoutGear` | Active |
+| RG-LIE-12 | Hors de la salle, les exercices trop difficiles ou trop faciles (pompe à un bras, muscle-up, pompe sur les genoux…) ne sont jamais choisis d'office. | `store.js` › `NOT_AUTO` | Active |
+| RG-LIE-13 | Rien de faisable pour un exercice : il sort de cette séance, avec un message, et revient si le matériel est recoché. La séance ne se vide jamais entièrement. | `store.js` › `setWorkoutGear`, `restoreFormats` ; `views/workout.js` › `workoutView` | Active |
+| RG-LIE-14 | « Pas dans ma salle » ne vaut qu'à la salle, et l'option ne s'affiche que là. | `store.js` › `available` ; `views/workout.js` › `swapSheet` | Active |
+| RG-LIE-15 | En séance, le réglage de charge se limite aux charges du lieu. | `views/workout.js` › `weightStepper` ; `store.js` › `placeLoads` | Active |
 
 ## Séances types
 
@@ -257,7 +278,7 @@ Différences entre le code et l'intention écrite (commentaires, textes d'écran
 
 | ID | Type | Constat | Comment c'est vérifié | Règles |
 |---|---|---|---|---|
-| E-06 | Décision | Tout nouveau compte hérite du challenge corde d'Alexis, avec sa date de départ : un bêta-testeur qui arrive le 05/11/2026 démarre en S3, sans l'avoir choisi. | Exécuté | RG-COR-05 |
+| E-06 | Décision | Tout nouveau compte hérite du challenge corde d'Alexis, avec sa date de départ : un bêta-testeur qui arrive le 05/11/2026 démarre en S3, sans l'avoir choisi. Il hérite aussi de ses lieux (haltères de 5 kg à la maison), point déjà noté dans `memoire.md`. | Exécuté | RG-COR-05, RG-LIE-02 |
 | E-07 | Décision | L'écran de fin de séance dit : « Plusieurs séances « Difficile » d'affilée et le coach propose un deload ». Aucun code de l'app ne lit le ressenti, sauf pour l'afficher. Le coach est la skill externe `coach-fluide` : le bêta-testeur n'y a pas accès. | Relu | RG-SEA-25 |
 | E-08 | Décision | Les descriptions des blocs promettent plus que le code. Intensité annonce un « volume réduit » et Spécialisation « le reste en maintien », mais rien ne les applique. Changer de bloc ne modifie que le RPE cible et les programmes générés ensuite, pas les séances types en place. | Relu | RG-BLC-02 |
 | E-09 | Décision | « Objectif du moment » et « Niveau » se règlent dans les Réglages mais n'agissent sur rien. Âge et poids non plus (déjà noté dans `memoire.md`). | Relu | Hors registre : aucune règle n'en découle |
@@ -265,15 +286,16 @@ Différences entre le code et l'intention écrite (commentaires, textes d'écran
 | E-11 | Doc | Le bouton « Coller depuis Santé » n'existe plus dans le code, alors que `memoire.md` et le guide `livrables/fluide/raccourci-pas.md` l'indiquent encore : un utilisateur sans compte suit donc une procédure impossible. | Relu | RG-PAS-02 |
 | E-12 | Doc | Autres passages périmés. Glossaire : « À définir, 12-20 reps », devenu l'objectif endurance à 15-20 reps, et « Machine prise », devenu « Remplacer ». README : « Les données restent sur l'iPhone ». `store.js` › `generateProgram` : le commentaire « 1 ou 2 exercices » contredit RG-PRG-07. `compte.js` › `hasLocalData` lit encore `state.corde`, retiré. | Relu | — |
 | E-13 | Bug | Remplacer un exercice en plein AMRAP crée un exercice en séries à l'intérieur du circuit : l'exercice d'origine y reste, et le remplaçant ne suit plus le format AMRAP. Trouvé en corrigeant E-03, pas corrigé : il faut d'abord décider ce que doit faire ce geste. | Exécuté | RG-SEA-19 |
+| E-14 | Bug | Remplacer un exercice après des séries en tempo lent enlève leur marque tempo : elles entrent dans l'historique et font redescendre la charge de référence. Essai : charge prévue 16 kg, une série à 10 kg en tempo, remplacement, et l'historique indique 10 kg. Vient de la v0.8.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-LIE-10 |
 
-### Corrigés en v0.7.4
+### Corrigés en v0.8.1
 
 Les règles concernées décrivent désormais le comportement corrigé. Vérifié sous Node et dans l'app.
 
 | ID | Constat d'origine | Correction |
 |---|---|---|
 | E-01 | Une puce Points forts ou Points faibles effaçait l'objectif du muscle. | `setMatrix` garde l'objectif. |
-| E-02 | Un round d'EMOM ou de Tabata pouvait battre un record. | `sessionRecords` ignore ces formats, y compris pour les séances déjà enregistrées. |
+| E-02 | Un round d'EMOM ou de Tabata pouvait battre un record. | `sessionRecords` ignore ces formats (comme le tempo lent), y compris pour les séances déjà enregistrées. |
 | E-03 | Remplacer un EMOM ou un Tabata commencé transférait les rounds faits au remplaçant. | Les rounds restent sur l'exercice d'origine, le remplaçant reprend le reste. |
-| E-04 | « Remplacer » proposait les exercices absents, en douleur ou au matériel décoché. | Ils ne sortent plus que par une recherche ; `alternatives()` ne retombe plus sur eux. |
+| E-04 | « Remplacer » proposait les exercices absents, en douleur ou au matériel décoché. | Ils ne sortent plus que par une recherche, à la salle comme ailleurs ; `alternatives()` ne retombe plus sur eux. |
 | E-05 | Le nombre de séances allait de 1 à 7 dans Réglages et de 2 à 6 dans Ta semaine. | 2 à 6 partout, et les anciennes valeurs sont ramenées dans ces bornes. |

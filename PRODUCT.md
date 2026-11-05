@@ -24,12 +24,12 @@ Réussite : une séance se mène de bout en bout sans sortir le téléphone plus
 Deux mécanismes ensemble, qu'une app de suivi classique (Hevy, Strong) n'a pas :
 
 1. **Le volume par muscle comme boussole** : chaque muscle a une cible de séries par semaine (Maintenir 4-8, Progresser 10-16, Point faible 16-22) et un objectif (force, hypertrophie, endurance). Le programme, les séances types et le compteur hebdomadaire se règlent dessus.
-2. **L'adaptation au jour comme quotidien** : matériel disponible, machine prise, exercice absent de la salle, temps par séance, deload, plan de corde à sauter. La séance du jour s'ajuste sans toucher au programme.
+2. **L'adaptation au jour comme quotidien** : lieu de la séance, matériel et charges disponibles, machine prise, exercice absent de la salle, temps par séance, deload, plan de corde à sauter. La séance du jour s'ajuste sans toucher au programme.
 
 ## Operating Context
 
 - **En salle, téléphone en main entre deux séries** : souvent une seule main, attention partagée, musique dans les écouteurs, parfois mains moites. Le repos se chronomètre, un bip annonce la fin.
-- **Avant la séance** : choix du matériel du jour, échauffement (corde à sauter quand le plan est en cours).
+- **Avant la séance** : choix du lieu (salle, chez soi, street), matériel du jour si besoin, échauffement (corde à sauter quand le plan est en cours).
 - **Hors salle** : réglages du programme, de la semaine et des muscles ; consultation des progrès ; pas du jour envoyés par un Raccourci iOS.
 - **Rituels Fluide** : blocs de 6 semaines suivis d'une semaine de deload ; double progression (reps puis charge) ; ressenti noté en fin de séance.
 
@@ -39,7 +39,7 @@ Deux mécanismes ensemble, qu'une app de suivi classique (Hevy, Strong) n'a pas 
 - Données dans le localStorage, compte optionnel sur Supabase (e-mail et mot de passe ; Google en préparation). Export / import JSON.
 - Limites de l'app web sur iPhone : pas de vibration, bip muet en mode silencieux, liens et connexions externes qui s'ouvrent dans Safari plutôt que dans l'app.
 - Charges en kg (barre, haltères, kettlebell) et en lbs pour les piles de machines et poulies ; pas de la pile réglable par machine, poulies démultipliées ½ possibles.
-- Terminologie : voir le glossaire de `memoire.md` (Réglages Fluide, Objectif Fluide de la semaine, Bloc, Machine prise, Hors programme, Ta semaine, Points forts / faibles, Objectif longue durée).
+- Terminologie : voir le glossaire de `memoire.md` (Réglages Fluide, Objectif Fluide de la semaine, Bloc, Machine prise, Hors programme, Ta semaine, Points forts / faibles, Objectif longue durée, Lieu, Tempo lent).
 - Interface en français, code en anglais.
 - Écrans dédiés pour les saisies ; feuilles du bas seulement pour les confirmations et les choix rapides.
 
