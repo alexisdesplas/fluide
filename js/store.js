@@ -105,12 +105,61 @@ export const GEAR = {
   elastique: { label: "Élastiques", equips: ["elastique"] },
   pdc: { label: "Poids du corps", equips: ["pdc"] }
 };
-const DEFAULT_GEAR = ["machine", "barre", "halteres", "pdc"];
-export const gearOf = () => state.profile.gear || DEFAULT_GEAR;
+// Lieux de la séance : chacun a son matériel, ses charges et son matériel annexe. La salle porte le programme.
+export const PLACES = { gym: { label: "À la salle", short: "Salle" }, home: { label: "Chez moi", short: "Chez moi" }, street: { label: "Au street", short: "Street" } };
+export const EXTRAS = { bench: "Banc plat", incline: "Banc inclinable", pullup: "Barre de traction", dips: "Barres à dips", rings: "Anneaux ou sangles", chair: "Chaise solide" };
+// Valeurs de départ, données par Alexis le 05/11/2026 : salle complète, 2 haltères de 5 kg à la maison, barre et dips au street.
+// dumbbells, kettlebells : charges qu'on a (null : toute la gamme). barbellMax : charge max sur la barre (null : sans limite).
+const defaultPlaces = () => ({
+  gym: { gear: Object.keys(GEAR), dumbbells: null, kettlebells: null, barbellMax: null, extras: Object.keys(EXTRAS) },
+  home: { gear: ["halteres", "pdc"], dumbbells: [5], kettlebells: [], barbellMax: null, extras: ["chair"] },
+  street: { gear: ["pdc"], dumbbells: [], kettlebells: [], barbellMax: null, extras: ["pullup", "dips"] }
+});
+export const placeOf = key => state.profile.places[key] || state.profile.places.gym;
+export const sessionPlaceKey = () => state.active?.place || "gym";
+// Le programme se tient au matériel de la salle.
+export const gearOf = () => placeOf("gym").gear;
 // Matériel de la séance en cours (choisi avant de commencer), sinon celui de la salle.
 export const sessionGear = () => state.active?.gear || gearOf();
-// Exercice faisable : son matériel est coché et il n'est pas marqué absent.
-export const available = (e, gear = sessionGear()) => !e.absent && gear.some(g => GEAR[g].equips.includes(e.equip));
+
+// Ce qu'un exercice demande en plus de son matériel, lu dans son nom (le catalogue ne le dit pas).
+// gym : équipement qu'on ne trouve qu'à la salle (pupitre, roue abdominale, lest…).
+const NEEDS_GYM = /pupitre|support de bras|poignées|roue abdominale|chaise romaine|ghd|médecine-ball|ballon|swiss ball|sac (bulgare|de sable)|pneu|\blog\b|pierre d'atlas|harnais|cadre en bois|rouleau pour poignets|à la corde|sauts? sur boîte|boîte en pistolet|stepbox|poulie|câble|redressement assis incliné|extension du dos|extension de hanches inversée|extension inversée|hyperextension|ischio-jambiers-glutéaux|à 45 degrés|fixée au rack|développé svend/i;
+const NEEDS_WEIGHT = /lest[ée]|(avec|et) poids|avec charge|charge additionnelle/i; // au poids du corps : il faut de quoi se lester
+const NEEDS_RINGS = /anneaux|trx|sangles|(rowing|écarté|développé|extension des triceps|curl des ischio-jambiers)[^,]* en suspension|v-ups/i;
+const NEEDS_PULLUP = /tractions?\b|muscle-up|levier avant|\bdrapeau$|planche arrière|suspen|relevé de jambes à la barre|rowing inversé$|prise garhammer/i;
+const NEEDS_DIPS = /\bdips\b(?! (sur|triceps|entre))|barres parallèles/i;
+const NEEDS_INCLINE = /incliné|décliné|araignée|seal row|support (pour la )?poitrine/i;
+const NEEDS_BENCH = /banc|\bcouché(?!e)|larsen|(développé|écartés?) poliquin|développé tate|développé californien|de bas en haut|hip thrust|pull-over(?! avec haltères et jambes)/i;
+const NEEDS_SEAT_LOADED = /\bassis/i;
+const NEEDS_SEAT_BODY = /pompes? (inclinée|en déclinaison|diamant en déclinaison)|fente bulgare|squat sauté bulgare|pied surélevé|sur chaise|des chaises|montée sur boîte|sous une table/i;
+const needsCache = new Map();
+export function needsOf(e) {
+  if (needsCache.has(e.name)) return needsCache.get(e.name);
+  const n = new Set(), name = e.name, loaded = e.equip === "halteres" || e.equip === "barre";
+  if (!["machine", "poulie", "smith"].includes(e.equip)) {
+    if ((NEEDS_GYM.test(name) && !(e.equip === "barre" && /poulie|câble/i.test(name))) || (e.equip === "pdc" && NEEDS_WEIGHT.test(name))) n.add("gym");
+    if (NEEDS_RINGS.test(name)) n.add("rings");
+    else if (e.equip !== "elastique" && NEEDS_PULLUP.test(name)) n.add("pullup");
+    if (e.equip !== "elastique" && NEEDS_DIPS.test(name)) n.add("dips");
+    if (loaded && NEEDS_INCLINE.test(name) && !/élévation latérale inclinée/i.test(name)) n.add("incline");
+    else if (loaded && NEEDS_BENCH.test(name) && !/au sol/i.test(name)) n.add(/hip thrust|pull-over/i.test(name) ? "seat" : "bench");
+    else if (e.equip === "pdc" && /banc/i.test(name)) n.add(/incliné|décliné/i.test(name) ? "incline" : "bench");
+    if ((loaded && NEEDS_SEAT_LOADED.test(name)) || (e.equip === "pdc" && NEEDS_SEAT_BODY.test(name))) n.add("seat");
+  }
+  needsCache.set(e.name, n);
+  return n;
+}
+function needsMet(e, key) {
+  const x = placeOf(key).extras;
+  return [...needsOf(e)].every(n => (n === "gym" ? key === "gym"
+    : n === "bench" ? x.includes("bench") || x.includes("incline")
+    : n === "seat" ? x.includes("chair") || x.includes("bench") || x.includes("incline")
+    : x.includes(n)));
+}
+// Exercice faisable : son matériel est coché et le lieu a ce qu'il demande. « Pas dans ma salle » ne vaut qu'à la salle.
+export const available = (e, gear = sessionGear(), key = sessionPlaceKey()) =>
+  !(e.absent && key === "gym") && gear.some(g => GEAR[g].equips.includes(e.equip)) && needsMet(e, key);
 
 // Anciens noms de Fluide → noms de la base d'exercices : l'historique suit, l'id ne change pas.
 const RENAMED = {
@@ -161,6 +210,37 @@ export const toLbs = w => Math.round(w / LB);
 export const fromLbs = n => Math.round(n * LB * 10) / 10;
 // Les haltères se comptent à l'unité : la moitié de la barre, et inversement.
 const convertWeight = (from, to, w) => nearestWeight(to, to === "halteres" && from !== "halteres" ? w / 2 : from === "halteres" && to !== "halteres" ? w * 2 : w);
+// Charges qu'on a sous la main selon le lieu (null : pas de limite).
+export function placeLoads(equip, key = sessionPlaceKey()) {
+  const p = placeOf(key);
+  if (equip === "halteres") return p.dumbbells;
+  if (equip === "kettlebell") return p.kettlebells;
+  if (equip === "barre" && p.barbellMax) return SCALES.barre.filter(w => w <= p.barbellMax);
+  return null;
+}
+// Charge courante d'un exercice jamais fait (par haltère pour les haltères) : sert à juger une charge trop légère.
+const ISOLATION = /élévation|écarté|curl|extension|kickback|oiseau|rotation|haussement|flexion|inclinaison|pull-over|volant|around/i;
+function typicalLoad(e) {
+  if (e.equip === "kettlebell") return BIG.includes(e.muscle) ? 16 : 12;
+  const small = ISOLATION.test(e.name);
+  if (e.equip === "barre") return small ? 20 : BIG.includes(e.muscle) ? 40 : 30;
+  return small ? 8 : BIG.includes(e.muscle) ? 20 : 14;
+}
+// La charge visée au lieu du jour. ok : à peu près la bonne charge. light : au moins la moitié, on garde l'exercice
+// en tempo lent avec plus de reps. no : trop léger, ou seulement beaucoup trop lourd.
+export function loadFit(equip, want, key = sessionPlaceKey()) {
+  const loads = placeLoads(equip, key);
+  if (!loads) return { fit: "ok", weight: want };
+  if (!loads.length) return { fit: "no", weight: want };
+  const sorted = [...loads].sort((a, b) => a - b);
+  const lower = sorted.findLast(w => w <= want + 0.01), upper = sorted.find(w => w > want + 0.01);
+  if (lower !== undefined && lower / want >= 0.85) return { fit: "ok", weight: lower };
+  if (upper !== undefined && upper / want <= 1.25) return { fit: "ok", weight: upper };
+  if (lower !== undefined && lower / want >= 0.5) return { fit: "light", weight: lower };
+  return { fit: "no", weight: lower ?? upper };
+}
+const wantOf = e => lastPerformance(e.id)?.maxWeight || typicalLoad(e);
+export const reachable = (e, key = sessionPlaceKey()) => !placeLoads(e.equip, key) || loadFit(e.equip, wantOf(e), key).fit !== "no";
 // Matériel d'une ligne de séance : celui choisi pour la séance, sinon celui de l'exercice.
 export const equipOf = e => e.equip || exercise(e.exerciseId)?.equip || "barre";
 
@@ -189,7 +269,7 @@ function seed() {
   for (const m of MUSCLES) matrix[m].target = STATUS[matrix[m].status].def;
   return {
     version: 1,
-    profile: { goal: "Prise de muscle", level: "Intermédiaire", days: 4, split: "hautbas", stepsTarget: 8000, warmup: "Corde à sauter 3-5 min", endurance: "corde", enduranceStart: CORDE_START },
+    profile: { goal: "Prise de muscle", level: "Intermédiaire", days: 4, split: "hautbas", stepsTarget: 8000, warmup: "Corde à sauter 3-5 min", endurance: "corde", enduranceStart: CORDE_START, places: defaultPlaces(), place: "gym" },
     matrix,
     cycle: { type: "volume", start: startOfWeek(Date.now()), weeks: 6 },
     cycles: [],
@@ -225,6 +305,8 @@ function migrate(st) {
   // « À définir » (séries longues, repos court) devient l'objectif endurance du muscle.
   for (const m of st.profile.define || []) if (st.matrix[m] && !st.matrix[m].goal) st.matrix[m].goal = "endurance";
   delete st.profile.define;
+  // Lieux : la salle a tout, la maison et le street partent du matériel donné par Alexis.
+  if (!st.profile.places) { st.profile.places = defaultPlaces(); st.profile.place = "gym"; delete st.profile.gear; }
   return st;
 }
 
@@ -322,7 +404,7 @@ export const byUsefulness = (a, b) => PREF_RANK[a.pref] - PREF_RANK[b.pref] || (
 export function alternatives(exerciseId) {
   const ex = exercise(exerciseId);
   const all = state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur" && !e.mix);
-  const here = all.filter(e => available(e));
+  const here = all.filter(e => available(e) && reachable(e));
   return (here.length ? here : all).sort(byUsefulness);
 }
 
@@ -340,7 +422,7 @@ const EQUIP_WORDS = /\s+(?:avec|à|au|aux|sur)\s+(?:la\s+|le\s+|une?\s+)?(?:barr
 const movement = name => name.toLowerCase().replace(EQUIP_WORDS, "").replace(/\s+/g, " ").trim();
 export function variants(exerciseId) {
   const ex = exercise(exerciseId), key = movement(ex.name), out = { [ex.equip]: ex };
-  for (const e of state.exercises.filter(e => e.muscle === ex.muscle && e.id !== ex.id && e.pref !== "douleur" && available(e) && movement(e.name) === key).sort(byUsefulness))
+  for (const e of state.exercises.filter(e => e.muscle === ex.muscle && e.id !== ex.id && e.pref !== "douleur" && available(e) && reachable(e) && movement(e.name) === key).sort(byUsefulness))
     out[e.equip] ||= e;
   return out;
 }
@@ -355,11 +437,12 @@ export const plannedSets = () => plannedSetsOf(state.templates);
 
 // Performances d'un exercice, une ligne par séance, de la plus ancienne à la plus récente.
 // Les rounds d'EMOM et de Tabata n'y entrent pas : charges sous-maximales, elles fausseraient le 1RM.
+// Les séries en tempo lent non plus (charge trop légère pour le lieu) : la salle repart de ta vraie charge.
 export function exerciseHistory(exerciseId, before = Infinity) {
   const rows = [];
   for (const s of state.sessions) {
     if (s.startedAt >= before) continue;
-    const sets = s.entries.filter(e => e.exerciseId === exerciseId && !isInterval(e)).flatMap(e => e.sets);
+    const sets = s.entries.filter(e => e.exerciseId === exerciseId && !isInterval(e) && !e.tempo).flatMap(e => e.sets);
     if (!sets.length) continue;
     rows.push({
       sessionId: s.id, date: s.startedAt, sets,
@@ -392,7 +475,7 @@ export function suggestion(item, before) {
 export function sessionRecords(s) {
   const out = [];
   for (const e of s.entries) {
-    if (!e.sets.length) continue;
+    if (!e.sets.length || e.tempo) continue;
     const best = Math.max(...e.sets.map(x => e1rm(effWeight(x), x.reps)));
     const prev = exerciseHistory(e.exerciseId, s.startedAt);
     if (!prev.length) continue;
@@ -433,9 +516,12 @@ export function setMuscle(muscle, status, target, goal = goalOf(muscle)) {
   save();
 }
 
-export function setGear(gear) {
-  state.profile.gear = gear;
-  save();
+// Lieu modifié pendant une séance pas encore commencée : la séance s'adapte aussitôt.
+export function setPlace(key, spec) {
+  state.profile.places[key] = spec;
+  const a = state.active;
+  if (a && (a.place || "gym") === key && !a.entries.some(e => e.sets.length)) setWorkoutPlace(key);
+  else save();
 }
 
 // Exercice absent de ta salle (pas de machine à mollets…) : plus proposé nulle part, sauf si tu le cherches.
@@ -575,7 +661,7 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
   const plan = split.sessions.map(([name, ms]) => (ms.some(m => LEGS_MAIN.includes(m)) && ++legs > maxLegs
     ? [name.replace("Full body", "Haut"), ms.filter(m => !LEGS.includes(m) || m === "Abdos")] : [name, ms]));
   const freq = {}; for (const [, ms] of plan) for (const m of ms) freq[m] = (freq[m] || 0) + 1;
-  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && !e.mix && available(e, gearOf())).sort(byUsefulness));
+  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && !e.mix && available(e, gearOf(), "gym")).sort(byUsefulness));
   // Un exercice différent à chaque passage ; prefer choisit d'abord parmi ceux qui conviennent (barre pour le premier d'un gros muscle).
   const taken = new Set();
   const pick = (m, prefer = () => true) => {
@@ -790,7 +876,7 @@ export function createExercise(name, muscle, equip = "barre") {
 
 // ——— Écriture : séance en cours
 
-export function startWorkout(templateId) {
+export function startWorkout(templateId, place = state.profile.place || "gym") {
   const t = template(templateId);
   const now = Date.now();
   const pos = cyclePosition(now);
@@ -811,8 +897,9 @@ export function startWorkout(templateId) {
       };
     })
   };
-  state.active.entries.forEach((e, i) => { e.slot = i; });
-  setWorkoutGear(gearOf());
+  // baseWeight : la charge prévue au programme, avant toute adaptation au lieu.
+  state.active.entries.forEach((e, i) => { e.slot = i; e.baseWeight = e.draft.weight; });
+  setWorkoutPlace(place);
 }
 
 function intervalEntry(exerciseId, item, deload) {
@@ -893,30 +980,74 @@ export function logSet() {
   save();
 }
 
-// Matériel du jour, choisi avant la première série : chaque exercice impossible avec ce matériel passe
-// au même mouvement avec un autre matériel, sinon au meilleur exercice du même muscle. Un exercice ainsi
-// remplacé revient à celui du programme dès que son matériel est recoché. Les exercices déjà commencés ne bougent pas.
+// Lieu de la séance : son matériel devient celui du jour, et on s'en souvient pour la prochaine séance.
+export function setWorkoutPlace(key) {
+  state.active.place = key;
+  state.profile.place = key;
+  setWorkoutGear(placeOf(key).gear);
+}
+
+// Hors de la salle, jamais choisis d'office : trop difficiles, ou trop faciles pour remplacer un exercice de force.
+const NOT_AUTO = /(pompes?|traction) à un bras|pseudo-planche|équilibre|superman|sur les doigts|levier|drapeau|planche (groupée|complète|écartée|arrière|grenouille)|muscle-up|l-sit|pistolet|claquement|pliométrique|archer|posture sur la tête|marche au mur|sprint|sur les genoux|à genoux|contre le mur|touche d'épaule|planche inclinée/i;
+
+// Charge du lieu sur une ligne de séance : calée sur ce qu'on a, en tempo lent si elle est trop légère.
+function fitEntryLoad(e, want) {
+  const equip = equipOf(e);
+  if (!placeLoads(equip)) return;
+  const { fit, weight } = loadFit(equip, want);
+  if (weight !== undefined) e.draft.weight = weight;
+  if (fit !== "light" || (e.format || "series") !== "series") return;
+  e.gearFormat = { format: "series", target: e.target, draft: { ...e.draft, weight: e.baseWeight ?? want }, hint: e.hint, ...(e.group && { group: e.group }) };
+  e.tempo = true;
+  e.target = { ...e.target, repsMin: 15, repsMax: 20, rest: Math.min(e.target.rest, 60) };
+  e.draft = { ...e.draft, reps: 15, rpe: null };
+  e.hint = null;
+}
+
+// Matériel du jour, choisi avant la première série. Pour chaque exercice : il se fait (charge trop légère : tempo lent et plus de reps),
+// sinon le même mouvement avec un autre matériel, sinon le meilleur exercice du même muscle, sinon il sort de cette séance.
+// Tout revient au programme dès que le matériel est recoché. Les exercices déjà commencés ne bougent pas.
 export function setWorkoutGear(gear) {
   const a = state.active;
   a.gear = gear;
   restoreFormats(a);
+  const dropped = [];
   a.entries.forEach((e, i) => {
     if (e.sets.length) return;
     const base = exercise(e.gearSwap ? e.swappedFrom : e.exerciseId);
     if (!base || base.mix) return;
-    if (available(base)) {
-      if (e.gearSwap) { swapExercise(i, base.id); delete a.entries[i].gearSwap; }
+    const planned = e.baseWeight ?? e.draft.weight;
+    if (available(base) && loadFit(base.equip, planned || wantOf(base)).fit !== "no") {
+      if (e.gearSwap) {
+        swapExercise(i, base.id);
+        delete a.entries[i].gearSwap;
+        a.entries[i].draft.weight = planned;
+      }
+      fitEntryLoad(a.entries[i], planned || wantOf(base));
       return;
     }
-    if (available(exercise(e.exerciseId))) return; // déjà faisable (exercice du programme ou remplaçant)
+    const cur = exercise(e.exerciseId);
+    if (cur.id !== base.id && available(cur) && reachable(cur)) { fitEntryLoad(e, wantOf(cur)); return; } // le remplaçant convient encore
     // Jamais un exercice déjà prévu dans la séance (pas deux fois les élévations latérales).
     const used = new Set(a.entries.filter((_, j) => j !== i).map(x => x.exerciseId));
-    const ok = x => x.id !== base.id && available(x) && !used.has(x.id);
-    const next = Object.values(variants(base.id)).find(ok) || alternatives(base.id).find(ok);
-    if (!next || next.id === e.exerciseId) return;
+    const ok = x => x.id !== base.id && available(x) && reachable(x) && !used.has(x.id) && (sessionPlaceKey() === "gym" || !NOT_AUTO.test(x.name));
+    // Une charge trop légère passe après les exercices qui se font vraiment : loin derrière pour remplacer un polyarticulaire
+    // (un développé ne devient pas une élévation à 5 kg), à huit rangs près pour remplacer de l'isolation.
+    const penalty = ISOLATION.test(base.name) ? 8 : 1000;
+    const score = (x, k) => k + (loadFit(x.equip, wantOf(x)).fit === "light" ? penalty : 0);
+    const others = alternatives(base.id).filter(ok).map((x, k) => [x, score(x, k)]).sort((p, q) => p[1] - q[1]).map(p => p[0]);
+    const next = Object.values(variants(base.id)).filter(ok).find(x => loadFit(x.equip, wantOf(x)).fit === "ok") || others[0];
+    if (!next) { dropped.push(e); return; }
+    if (next.id === e.exerciseId) return;
     swapExercise(i, next.id);
     a.entries[i].gearSwap = true;
   });
+  // Rien de faisable pour ce muscle : retiré de cette séance. Jamais toute la séance, elle s'afficherait vide.
+  if (dropped.length && dropped.length < a.entries.length) {
+    a.dropped = dropped;
+    a.entries = a.entries.filter(e => !dropped.includes(e));
+  }
+  a.cursor = Math.min(a.cursor, a.entries.length - 1);
   gearFormats(a, gear);
   save();
 }
@@ -927,10 +1058,11 @@ export function setWorkoutGear(gear) {
 export const GEAR_FORMATS = { kettlebell: "amrap", pdc: "emom", halteres: "tabata" };
 export const outdoorGear = gear => !gear.includes("machine") && !gear.includes("barre");
 function restoreFormats(a) {
+  if (a.dropped) { a.entries.push(...a.dropped); delete a.dropped; }
   for (const e of a.entries) {
     if (!e.gearFormat) continue;
     const back = e.gearFormat;
-    for (const k of ["clock", "lastBeep", "done", "group", "gearFormat"]) delete e[k];
+    for (const k of ["clock", "lastBeep", "done", "group", "gearFormat", "tempo"]) delete e[k];
     Object.assign(e, back);
     if (!back.group) delete e.group;
   }
@@ -941,7 +1073,7 @@ function gearFormats(a, gear) {
   const backup = e => ({ format: e.format || "series", target: e.target, draft: e.draft, hint: e.hint, ...(e.group && { group: e.group }) });
   const circuit = [];
   a.entries.forEach((e, i) => {
-    if (e.sets.length || e.clock) return;
+    if (e.sets.length || e.clock || e.tempo) return; // tempo lent : déjà adapté, le Tabata n'y laisserait pas de place
     const f = GEAR_FORMATS[equipOf(e)];
     if (!f || f === e.format) return;
     const keep = backup(e);
@@ -1008,6 +1140,7 @@ export function swapExercise(index, exerciseId) {
   const a = state.active;
   let e = a.entries[index];
   const last = lastPerformance(exerciseId);
+  if (e.tempo) { e.target = e.gearFormat.target; delete e.tempo; delete e.gearFormat; }
   if (e.sets.length && !isInterval(e)) {
     const left = Math.max(1, e.target.sets - e.sets.length);
     e.target = { ...e.target, sets: e.sets.length };
@@ -1025,6 +1158,7 @@ export function swapExercise(index, exerciseId) {
   const fresh = equip === "pdc" ? 0 : equip === "kettlebell" ? (BIG.includes(exercise(exerciseId).muscle) ? 16 : 12) : convertWeight(from, equip, e.draft.weight);
   e.draft = { weight: last ? pileFor(exerciseId, equip, last.maxWeight) : fresh, reps: e.target.repsMin, rpe: null };
   e.hint = null;
+  fitEntryLoad(e, wantOf(exercise(exerciseId)));
   save();
 }
 
@@ -1143,11 +1277,11 @@ function keepInTemplate(a) {
 export function finishWorkout(feeling, note, keep) {
   const a = state.active;
   const s = {
-    id: a.id, templateId: a.templateId, name: a.name,
+    id: a.id, templateId: a.templateId, name: a.name, place: a.place || "gym",
     startedAt: a.startedAt, endedAt: Date.now(),
     cycle: a.cycle, week: a.week, deload: a.deload, feeling, note: note.trim(),
     entries: a.entries.filter(e => e.sets.length).map(e => ({
-      exerciseId: e.exerciseId, swappedFrom: e.swappedFrom, extra: e.extra, equip: e.equip, format: e.format || "series",
+      exerciseId: e.exerciseId, swappedFrom: e.swappedFrom, extra: e.extra, equip: e.equip, format: e.format || "series", ...(e.tempo && { tempo: true }),
       sets: e.sets.map(({ weight, reps, rpe, ratio }) => ({ weight, reps, rpe, ...(ratio && { ratio }) }))
     }))
   };

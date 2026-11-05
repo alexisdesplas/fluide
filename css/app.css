@@ -489,6 +489,10 @@ input.input[type="search"] { -webkit-appearance: none; appearance: none; line-he
 .done-badge svg { width: 28px; height: 28px; stroke-width: 24; }
 .wo-hero.done .display-xs { margin: 0; }
 /* Matériel du jour : grandes tuiles à cocher, puis la séance réécrite (avant → après). */
+.gear-place { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-12); }
+.gear-place .caption { flex: 1; min-width: 0; }
+.place-loads { display: flex; flex-direction: column; gap: var(--spacing-16); }
+.place-loads:empty { display: none; }
 .gear-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-8); }
 .gear-tile { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: var(--spacing-4); min-height: 80px; padding: var(--spacing-12) 40px var(--spacing-12) var(--spacing-16); text-align: left; border-radius: var(--radius-md); border: 1px solid var(--bord-discret); background: var(--fond-carte); color: var(--texte-discret); transition: background-color 160ms var(--ease-out), border-color 160ms var(--ease-out); }
 .gear-tile .fort { color: var(--texte-discret); }
