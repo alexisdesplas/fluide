@@ -1,4 +1,4 @@
-import { state, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklySets, weeklyGoal, history, template, setHabit, habit, dayKey, stepsAverage, startWorkout, STATUS, MUSCLES, CYCLES } from "../store.js";
+import { state, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklyGoal, history, template, setHabit, habit, dayKey, stepsAverage, startWorkout, STATUS, MUSCLES, CYCLES } from "../store.js";
 import { h, icon, pageHead, btn, pill, go, int, dateLong, ago, stepper, toast } from "../ui.js";
 import { account } from "../compte.js";
 
@@ -60,7 +60,7 @@ export function goalCard() {
   const g = weeklyGoal();
   const tone = g.pct >= 100 ? "succes" : g.pct >= 60 ? "accent" : null;
   const daysLeft = 7 - ((new Date().getDay() + 6) % 7) - 1;
-  return h("button", { class: "card tap", onClick: () => go("#/profil/matrice"), "aria-label": `Objectif Fluide de la semaine : ${g.pct} %` },
+  return h("button", { class: "card tap", onClick: () => go("#/progres"), "aria-label": `Objectif Fluide de la semaine : ${g.pct} %` },
     h("div", { class: "card-head" },
       h("span", { class: "overline" }, "Objectif Fluide · semaine"),
       g.pct >= 100 ? pill("Rempli", "succes") : pill(daysLeft ? `${daysLeft} jour${daysLeft > 1 ? "s" : ""} restant${daysLeft > 1 ? "s" : ""}` : "Dernier jour", tone)),
@@ -101,7 +101,6 @@ export function stepsLinkView({ n }) {
 export function todayView() {
   const pos = cyclePosition();
   const next = nextTemplate();
-  const done = weeklySets();
   const today = dayKey();
   const steps = habit(today).steps || 0;
   // Pas envoyés par le Raccourci et repris à la synchro du compte (Pas du jour automatiques).
@@ -135,10 +134,6 @@ export function todayView() {
     h("div", { class: "scroll" },
       goalCard(),
       sessionCard,
-      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Par muscle"), h("button", { class: "btn ghost xs", onClick: () => go("#/profil/matrice") }, "Réglages Fluide")),
-      h("div", { class: "card" },
-        h("p", { class: "caption", style: { margin: 0 } }, "Séries faites cette semaine. Le trait blanc est la cible : maintenir, progresser ou point faible."),
-        volumeBars(done)),
       cycleCard(),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Pas du jour"), h("span", { class: "caption num" }, avg ? `moy. 7 j : ${int(avg)}` : "")),
       h("div", { class: "card" },
