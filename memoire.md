@@ -7,6 +7,7 @@ App perso de musculation (PWA iPhone) pilotée par le **Système Fluide** (skill
 - Dépôt public : https://github.com/alexisdesplas/fluide (branche `main`), hébergement Vercel (projet `fluide` relié au dépôt) : https://alexis-fluide.vercel.app/ — chaque push déploie, incrémenter `CACHE` dans `sw.js`.
 - Figma : fichier /Perso `QZ94FGPStTONZYIJcXnyHX`, page `Fluide · App` (après `Tabatime · App`, sous l'intercalaire `── SPORT`).
 - Livrables UI : `livrables/fluide/`.
+- Règles de gestion : `regles-gestion.md`, registre numéroté et écarts avec le code.
 
 ## Design system
 - Hardwood, mode « Indigo DT » (comme les écrans Hardwood de Tabatime). Police Inter. Icônes Phosphor (Stroke, Regular).
@@ -75,6 +76,8 @@ App perso de musculation (PWA iPhone) pilotée par le **Système Fluide** (skill
 - 05/11/2026 — Réglage d'un muscle (volume, cible, objectif) passé de la feuille à un écran dédié `#/profil/matrice/:muscle`, selon la règle « saisies sur écrans dédiés » : rien ne change avant « Enregistrer », le retour annule.
 - 05/11/2026 — Onglet et écran « Progrès » renommés « Stats » (demande d'Alexis). L'adresse `#/progres` reste, elle ne se voit pas dans l'app installée.
 - 05/11/2026 — Détail du volume par muscle retiré d'Aujourd'hui, il doublait Stats : la carte Objectif Fluide y résume la semaine et mène à Stats. Séances garde le volume prévu, qui sert à ajuster les séances types.
+- 05/11/2026 — Registre des règles de gestion créé à la demande d'Alexis (`regles-gestion.md`) : 154 règles relevées dans le code en v0.7.3, identifiants stables `RG-<domaine>-<numéro>`, 12 écarts listés.
+- 05/11/2026 — v0.7.4, à la demande d'Alexis : 5 bugs du registre corrigés. Les puces Points forts / faibles gardent l'objectif du muscle ; EMOM et Tabata ne battent plus de record ; remplacer un EMOM ou un Tabata commencé laisse les rounds faits sur l'exercice d'origine ; « Remplacer » ne propose plus les exercices absents, en douleur ou au matériel décoché (une recherche les retrouve) ; 2 à 6 séances par semaine partout (choix de ces bornes parce que les programmes s'y arrêtent). Nouvel écart E-13, non corrigé : remplacer un exercice en plein AMRAP.
 
 ## Hypothèses ouvertes
 - Bip de fin de repos : muet si le bouton silencieux de l'iPhone est activé (limite de Web Audio en PWA), et pas de vibration possible sur iPhone. Si ça ne suffit pas en salle, envisager une notification.

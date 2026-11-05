@@ -24,6 +24,7 @@ Les données restent sur l'iPhone (localStorage). Pour les sauvegarder : Réglag
 - `sw.js` : cache hors connexion (changer `CACHE` à chaque mise à jour)
 - `manifest.webmanifest`, `icons/` : installation
 - `livrables/`, `memoire.md` : notes de conception
+- `regles-gestion.md` : registre des règles de gestion
 
 ## Développer
 

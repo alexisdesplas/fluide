@@ -1,4 +1,4 @@
-import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, setGear, gearOf, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GEAR, GOALS } from "../store.js";
+import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, setGear, gearOf, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GEAR, GOALS, SESSIONS_PER_WEEK } from "../store.js";
 import { h, icon, pageHead, navbar, btn, go, int, num, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
@@ -113,7 +113,7 @@ export function profileView() {
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Routine")),
       h("div", { class: "card" },
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Séances / semaine"),
-          stepper({ value: p.days, min: 1, max: 7, compact: true, label: "séances par semaine", onChange: set("days") })),
+          stepper({ value: p.days, ...SESSIONS_PER_WEEK, compact: true, label: "séances par semaine", onChange: set("days") })),
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Cible de pas / jour"),
           stepper({ value: p.stepsTarget, step: 500, min: 2000, max: 30000, compact: true, format: int, label: "pas par jour", onChange: set("stepsTarget") })),
         field("Échauffement", h("input", { class: "input", value: p.warmup, "aria-label": "Échauffement", onChange: e => { p.warmup = e.target.value; save(true); } })),
