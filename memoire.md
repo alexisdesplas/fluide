@@ -74,6 +74,7 @@ App perso de musculation (PWA iPhone) pilotée par le **Système Fluide** (skill
 - 04/11/2026 — Versions explicites (demande d'Alexis) : releases GitHub v0.1.0 à v0.7.0 créées après coup sur les commits de fusion, dans l'ordre réel de mise en ligne ; numéro affiché en bas des Réglages (`js/version.js`, lien vers la release). Cette mise en place est la v0.7.1.
 - 05/11/2026 — Réglage d'un muscle (volume, cible, objectif) passé de la feuille à un écran dédié `#/profil/matrice/:muscle`, selon la règle « saisies sur écrans dédiés » : rien ne change avant « Enregistrer », le retour annule.
 - 05/11/2026 — Onglet et écran « Progrès » renommés « Stats » (demande d'Alexis). L'adresse `#/progres` reste, elle ne se voit pas dans l'app installée.
+- 05/11/2026 — Détail du volume par muscle retiré d'Aujourd'hui, il doublait Stats : la carte Objectif Fluide y résume la semaine et mène à Stats. Séances garde le volume prévu, qui sert à ajuster les séances types.
 
 ## Hypothèses ouvertes
 - Bip de fin de repos : muet si le bouton silencieux de l'iPhone est activé (limite de Web Audio en PWA), et pas de vibration possible sur iPhone. Si ça ne suffit pas en salle, envisager une notification.
