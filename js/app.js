@@ -4,7 +4,7 @@ import { todayView, stepsLinkView } from "./views/today.js";
 import { templatesView, templateView, itemView, pickerView, programView, weekView } from "./views/templates.js";
 import { workoutView, finishView, editWorkoutView, editSetView, summaryView } from "./views/workout.js";
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
-import { profileView, matrixView, prefsView } from "./views/profile.js";
+import { profileView, matrixView, muscleView, prefsView } from "./views/profile.js";
 import { signInView, signUpView, confirmView, resetView, stepsAutoView } from "./views/compte.js";
 import { onAccount } from "./compte.js";
 
@@ -35,6 +35,7 @@ const ROUTES = [
   ["progres/:id", exerciseProgressView],
   ["profil", profileView],
   ["profil/matrice", matrixView],
+  ["profil/matrice/:muscle", muscleView],
   ["profil/exercices", prefsView]
 ];
 
@@ -52,7 +53,7 @@ function match(hash) {
 const TABS = [
   ["", "today", "Aujourd'hui"],
   ["seances", "list", "Séances"],
-  ["progres", "chart", "Progrès"],
+  ["progres", "chart", "Stats"],
   ["profil", "sliders", "Réglages"]
 ];
 

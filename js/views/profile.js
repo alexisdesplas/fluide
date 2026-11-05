@@ -130,30 +130,35 @@ export function profileView() {
   return { el, tab: "profil" };
 }
 
-// Un muscle par ligne : statut, cible et séries prévues ; le réglage s'ouvre dans une feuille (choix rapide).
-function muscleSheet(m, planned) {
-  let { status, target } = state.matrix[m];
+// Écran dédié au réglage d'un muscle : volume et objectif. Rien ne change avant « Enregistrer », le retour annule.
+// Le brouillon survit à un nouveau rendu (synchro du compte pendant le réglage).
+let muscleDraft = null;
+export function muscleView({ muscle: m }) {
+  if (!MUSCLES.includes(m)) { setTimeout(() => go("#/profil/matrice")); return { el: h("div") }; }
+  if (muscleDraft?.key !== location.hash) muscleDraft = { key: location.hash, ...state.matrix[m], goal: goalOf(m) };
+  const draft = muscleDraft;
+  const planned = plannedSets()[m] || 0;
+  const back = () => { muscleDraft = null; go("#/profil/matrice"); };
   const slot = h("div");
   const drawTarget = () => slot.replaceChildren(h("div", { class: "field-row" },
-    h("span", { class: "body-sm" }, "Cible ", h("span", { class: "discret" }, `(repère ${STATUS[status].range.join("-")})`)),
-    stepper({ value: target, min: 0, max: 30, compact: true, format: v => `${v} série${v > 1 ? "s" : ""}`, label: `séries ${m}`, onChange: v => { target = v; } })));
+    h("span", { class: "body-sm" }, "Cible ", h("span", { class: "discret" }, `(repère ${STATUS[draft.status].range.join("-")})`)),
+    stepper({ value: draft.target, min: 0, max: 30, compact: true, format: v => `${v} série${v > 1 ? "s" : ""}`, label: `séries ${m}`, onChange: v => { draft.target = v; } })));
   drawTarget();
-  let goal = goalOf(m);
-  sheet({
-    title: m, okLabel: "Enregistrer",
-    body: [
-      h("span", { class: "overline" }, "Volume"),
-      radios(Object.entries(STATUS).map(([k, v]) => [k, v.label, `${v.range.join("-")} séries par semaine`]), status, v => { status = v; target = STATUS[v].def; drawTarget(); }, `Statut ${m}`),
+  const el = h("div", { class: "screen no-tabs" },
+    navbar({ back: { label: "Réglages", onClick: back }, title: m }),
+    h("div", { class: "scroll" },
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Volume")),
+      radios(Object.entries(STATUS).map(([k, v]) => [k, v.label, `${v.range.join("-")} séries par semaine`]), draft.status, v => { draft.status = v; draft.target = STATUS[v].def; drawTarget(); }, `Statut ${m}`),
       slot,
       h("p", { class: "caption", style: { margin: 0 } }, `${planned} série${planned > 1 ? "s" : ""} prévue${planned > 1 ? "s" : ""} dans tes séances types.`),
-      h("span", { class: "overline" }, "Objectif"),
-      radios(Object.entries(GOALS).map(([k, g]) => [k, g.label, g.desc]), goal, v => { goal = v; }, `Objectif ${m}`),
-      h("p", { class: "caption", style: { margin: 0 } }, "Changer l'objectif recale les reps et le repos de ce muscle dans tes séances types.")
-    ],
-    ok: () => { setTimeout(() => setMuscle(m, status, target, goal)); }
-  });
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif")),
+      radios(Object.entries(GOALS).map(([k, g]) => [k, g.label, g.desc]), draft.goal, v => { draft.goal = v; }, `Objectif ${m}`),
+      h("p", { class: "caption", style: { margin: 0 } }, "Changer l'objectif recale les reps et le repos de ce muscle dans tes séances types."),
+      btn("Enregistrer", { variant: "primary", size: "lg", full: true, onClick: () => { setMuscle(m, draft.status, draft.target, draft.goal); back(); } })));
+  return { el };
 }
 
+// Un muscle par ligne : statut, objectif, cible et séries prévues ; le réglage s'ouvre sur son écran.
 export function matrixView() {
   const planned = plannedSets();
   const total = Object.values(state.matrix).reduce((a, m) => a + m.target, 0);
@@ -165,7 +170,7 @@ export function matrixView() {
       h("div", { class: "list" }, MUSCLES.map(m => {
         const { status, target } = state.matrix[m];
         const plan = planned[m] || 0;
-        return h("button", { class: "row", onClick: () => muscleSheet(m, plan) },
+        return h("button", { class: "row", onClick: () => go(`#/profil/matrice/${encodeURIComponent(m)}`) },
           h("div", { class: "row-main" },
             h("span", { class: "body-md fort medium" }, m),
             h("span", { class: "caption num" }, `${STATUS[status].label} · ${GOALS[goalOf(m)].label.toLowerCase()} · cible ${target} · `,
