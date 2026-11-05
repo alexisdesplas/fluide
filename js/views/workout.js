@@ -1,4 +1,4 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, STATUS, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, weeklySets, setAbsent, setStack, setWorkoutGear, sessionGear, gearOf, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, STATUS, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, weeklySets, setAbsent, setStack, setWorkoutGear, sessionGear, gearOf, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet, proposable } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, announce, beep, restBeepPlanned, dateLong, pageHead, navbar } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle, niceName, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
 
@@ -11,7 +11,7 @@ const lastLine = id => {
 };
 
 // Machine prise : le même mouvement avec un autre matériel (un vrai exercice du catalogue, son nom et sa vidéo),
-// ou un autre exercice du même muscle (recherche dans tout le catalogue), favoris d'abord.
+// ou un autre exercice du même muscle, favoris d'abord. Douleur, absents et matériel décoché ne sortent que si on les cherche.
 function swapSheet(index) {
   const e = state.active.entries[index];
   const ex = exercise(e.exerciseId);
@@ -28,6 +28,7 @@ function swapSheet(index) {
   };
   const list = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } });
   const draw = muscle => catalogue(list, query, { muscle, pickIcon: "caretRight", note: x => lastLine(x.id),
+    only: x => x.id !== ex.id && proposable(x),
     onPick: x => { closeSheet(); pickAlt(x); } });
   draw(ex.muscle);
   sheet({
@@ -59,7 +60,7 @@ function swapSheet(index) {
             h("span", { class: "caption" }, `Tabata ou EMOM de ${ex.muscle.toLowerCase()}, tes exercices sans les saisir`)),
           icon("caretRight", "chev")))),
       h("input", { class: "input", type: "search", placeholder: "Chercher un exercice", "aria-label": "Chercher un exercice", onInput: ev => { query = ev.target.value; draw(); } }),
-      !alts.length && h("p", { class: "body-sm discret", style: { margin: 0 } }, `Aucun autre exercice pour les ${ex.muscle} hors douleur : cherche dans tout le catalogue, ou attends la machine.`),
+      !alts.length && h("p", { class: "body-sm discret", style: { margin: 0 } }, `Aucun autre exercice disponible pour ${ex.muscle} : cherche-le par son nom, ou attends la machine.`),
       list,
       btn("Attendre la machine", { variant: "ghost", full: true, onClick: close })]; }
   });
