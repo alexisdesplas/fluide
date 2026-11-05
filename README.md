@@ -5,7 +5,7 @@ Carnet de musculation installable sur iPhone (PWA), piloté par le **Système Fl
 - **Aujourd'hui** : la séance du jour, l'objectif Fluide de la semaine (séries faites / cibles), le bloc en cours et le deload.
 - **Séance en salle** : séries à remplir (charge, reps, RPE), repos chronométré, EMOM et Tabata avec bip, alternative si la machine est prise, exercice hors programme depuis le catalogue, fin de séance avec ressenti et journal.
 - **Séances** : choix d'un programme (Full body, Haut / Bas, PPL, PPL × 2, Haut / Bas + PPL, un muscle par séance, personnalisé) qui génère les séances types, puis réglage de chaque exercice.
-- **Progrès** : volume par muscle, courbes par exercice, historique des séances.
+- **Stats** : volume par muscle, courbes par exercice, historique des séances.
 - **Réglages Fluide** : pour chaque muscle, Maintenir (4-8 séries / sem), Progresser (10-16) ou Point faible (16-22).
 
 ## Installer sur iPhone
