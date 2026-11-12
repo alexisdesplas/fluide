@@ -524,3 +524,6 @@ input.input[type="search"] { -webkit-appearance: none; appearance: none; line-he
 .gear-line .row-main { flex: 1; min-width: 0; }
 .gear-row .gear-from { text-decoration-color: var(--texte-discret); }
 .app-version { display: block; text-align: center; padding: var(--spacing-8) 0 var(--spacing-16); color: var(--texte-discret); text-decoration: none; }
+
+/* Reprise après une pause : ce qui change d'ici lundi. */
+.reprise-rules { margin: 0; padding-left: var(--spacing-20); display: grid; gap: var(--spacing-4); }
