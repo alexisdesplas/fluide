@@ -1,4 +1,4 @@
-import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GOALS } from "../store.js";
+import { state, save, replaceState, ENDURANCE, startOfWeek, toggleFav, cyclePosition, inReprise, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GOALS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, go, int, num, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
@@ -70,9 +70,9 @@ export function profileView() {
     pageHead("Réglages", `${p.goal} · ${p.level} · ${p.days} séances / semaine`),
     h("div", { class: "scroll" },
       cycleCard(true),
-      h("div", { style: { display: "grid", gridTemplateColumns: pos.deload || pos.over ? "1fr" : "1fr 1fr", gap: "12px" } },
+      h("div", { style: { display: "grid", gridTemplateColumns: pos.deload || pos.over || pos.reprise ? "1fr" : "1fr 1fr", gap: "12px" } },
         btn("Changer de bloc", { variant: "secondary", full: true, onClick: cycleSheet }),
-        !pos.deload && !pos.over && btn("Deload maintenant", { variant: "ghost", full: true, onClick: () => {
+        !pos.deload && !pos.over && !pos.reprise && btn("Deload maintenant", { variant: "ghost", full: true, onClick: () => {
           confirmSheet({
             title: "Passer en deload ?",
             message: "À faire si sommeil, énergie ou perfs chutent plusieurs séances de suite. Cette semaine, mêmes exercices avec moitié moins de séries ; ensuite tu choisis le bloc suivant.",
@@ -88,6 +88,12 @@ export function profileView() {
         h("button", { class: "row", onClick: () => go("#/profil/exercices") },
           h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, "Mes exercices"),
             h("span", { class: "caption" }, `${prefs.aime || 0} favoris · ${prefs.evite || 0} évités · ${prefs.douleur || 0} en douleur`)),
+          icon("caretRight", "chev")),
+        h("button", { class: "row", onClick: () => go("#/reprise") },
+          h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, "Reprise après une pause"),
+            h("span", { class: "caption" }, inReprise()
+              ? `En cours jusqu'au ${new Date(state.reprise.end - 86400000).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`
+              : "Malade, en vacances : décale le bloc et la corde")),
           icon("caretRight", "chev"))),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Mes lieux")),
       h("p", { class: "caption", style: { margin: 0 } }, "Le matériel, les charges et ce qu'il y a autour, lieu par lieu. Au démarrage d'une séance, tu dis où tu es : elle s'adapte, le programme reste celui de la salle. Un exercice absent de ta salle se retire depuis « Remplacer »."),

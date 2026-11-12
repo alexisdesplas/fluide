@@ -357,7 +357,7 @@ export function workoutView() {
     const el = h("div", { class: "screen workout big-targets" },
       h("div", { class: "wo-head" },
         h("div", { class: "wo-top" },
-          h("span", { class: "overline" }, a.name, a.deload ? " · deload" : "", " · avant de commencer"),
+          h("span", { class: "overline" }, a.name, a.reprise ? " · reprise" : a.deload ? " · deload" : "", " · avant de commencer"),
           h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
         h("div", null,
           h("h1", { class: "heading-xl" }, "Qu'as-tu sous la main ?"),
@@ -420,7 +420,7 @@ export function workoutView() {
     const ropeDay = rope && rope.kind !== "long" ? rope : null;
     const plan = state.profile.warmup || "";
     const dur = plan.match(/(\d+)(?:\s*[-–]\s*(\d+))?\s*min/);
-    const cardio = ropeDay ? `Corde à sauter · semaine ${ropeDay.week}` : plan.replace(/\d.*$/, "").trim() || "Cardio";
+    const cardio = ropeDay ? (ropeDay.kind === "reprise" ? "Corde à sauter" : `Corde à sauter · semaine ${ropeDay.week}`) : plan.replace(/\d.*$/, "").trim() || "Cardio";
     const total = ropeDay ? blocksTotal(ropeDay.blocks) : (dur ? +(dur[2] || dur[1]) : 5) * 60;
     const blocks = ropeDay && ropeDay.blocks[0] > 1 ? ropeDay.blocks : null;
     const ropeNote = rope && h("div", { class: "hint" }, icon("bolt"), h("span", { class: "body-sm" },
@@ -433,7 +433,7 @@ export function workoutView() {
       h("span", { class: "body-sm" }, "Séries d'approche sur ", h("b", { class: "fort medium" }, ex.name), ` : 2 ou 3 séries légères avant ${charge(equipOf(e), e.draft.weight)}.`));
     const head = h("div", { class: "wo-head" },
       h("div", { class: "wo-top" },
-        h("span", { class: "overline" }, a.name, a.deload ? " · deload" : "", " · avant la première série"),
+        h("span", { class: "overline" }, a.name, a.reprise ? " · reprise" : a.deload ? " · deload" : "", " · avant la première série"),
         h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
       h("div", null,
         h("h1", { class: "heading-xl" }, "Échauffement"),
@@ -505,14 +505,14 @@ export function workoutView() {
     const el = h("div", { class: "screen workout big-targets" },
       h("div", { class: "wo-head" },
         h("div", { class: "wo-top" },
-          h("span", { class: "overline" }, a.name, a.deload ? " · deload" : "", " · avant la première série"),
+          h("span", { class: "overline" }, a.name, a.reprise ? " · reprise" : a.deload ? " · deload" : "", " · avant la première série"),
           h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
         h("div", null,
           h("h1", { class: "heading-xl" }, "Échauffement"),
           h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, `${cardio}, puis mobilité`))),
       h("div", { class: "scroll wo-center" },
         h("div", { class: "wo-hero" },
-          h("div", { class: "overline" }, ropeDay ? `${cardio} · ${ropeDay.kind === "recup" ? "jour récup" : "séance facile"}${ropeDay.deload ? " · deload" : ""}` : cardio),
+          h("div", { class: "overline" }, ropeDay ? `${cardio} · ${ropeDay.kind === "recup" ? "jour récup" : ropeDay.kind === "reprise" ? "reprise" : "séance facile"}${ropeDay.deload ? " · deload" : ""}` : cardio),
           h("div", { class: "display-sm num" }, ropeDay ? `${Math.round(total / 60)} min` : dur ? dur[0].replace("-", "–") : clock(total)),
           h("p", { class: "body-md discret", style: { margin: 0 } }, ropeDay ? `${blocksLabel(ropeDay.blocks)}, puis ${mobility}.` : `Montée progressive, puis ${mobility}.`)),
         ropeNote, approach, gearLine),
@@ -750,7 +750,7 @@ export function workoutView() {
         h("h1", { class: "heading-xl wo-title" }, exerciseTitle(ex)),
         h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, subtitle)),
       h("div", { class: "wo-tools" },
-        a.deload && pill("Deload · volume ÷ 2", "attention"),
+        a.deload && pill(a.reprise ? "Reprise · volume ÷ 2, charges −10 %" : "Deload · volume ÷ 2", "attention"),
         !exDone && btn("Remplacer", { variant: "secondary", size: "sm", icon: "swap", onClick: () => swapSheet(a.cursor) }),
         hasOptions && btn("Options", { variant: "secondary", size: "sm", icon: "sliders", onClick: () => optionsSheet(a.cursor) }),
         favBtn(e, ex)),
@@ -828,7 +828,7 @@ export function summaryView({ id }) {
   const records = sessionRecords(s);
   const dur = (s.endedAt - s.startedAt) / 1000;
   const el = h("div", { class: "screen no-tabs" },
-    pageHead("Séance terminée", `${s.name} · ${dateLong(s.startedAt)} · Bloc ${CYCLES[s.cycle]?.label || ""} ${s.deload ? "deload" : `S${s.week}`}`),
+    pageHead("Séance terminée", `${s.name} · ${dateLong(s.startedAt)} · Bloc ${CYCLES[s.cycle]?.label || ""} ${s.reprise ? "reprise" : s.deload ? "deload" : `S${s.week}`}`),
     h("div", { class: "scroll" },
       h("div", { class: "stat-grid" },
         h("div", { class: "stat" }, h("span", { class: "caption" }, "Durée"), h("b", null, clock(dur))),

@@ -6,6 +6,7 @@ import { workoutView, finishView, editWorkoutView, editSetView, summaryView } fr
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
 import { profileView, matrixView, muscleView, prefsView } from "./views/profile.js";
 import { placeView } from "./views/places.js";
+import { repriseView } from "./views/reprise.js";
 import { signInView, signUpView, confirmView, resetView, stepsAutoView } from "./views/compte.js";
 import { onAccount } from "./compte.js";
 
@@ -38,7 +39,8 @@ const ROUTES = [
   ["profil/matrice", matrixView],
   ["profil/matrice/:muscle", muscleView],
   ["profil/exercices", prefsView],
-  ["profil/lieux/:place", placeView]
+  ["profil/lieux/:place", placeView],
+  ["reprise", repriseView]
 ];
 
 function match(hash) {
