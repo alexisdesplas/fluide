@@ -1,6 +1,6 @@
 # Règles de gestion — Fluide
 
-Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance) et la v0.8.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
+Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause) et la v0.9.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
 
 ## Lire ce registre
 
@@ -13,7 +13,7 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 - **Source** : le fichier et la fonction, plutôt qu'un numéro de ligne qui bougerait. Les fichiers sont dans `js/`, sauf `schema.sql` dans `supabase/`.
 - **Mise à jour** : toute PR qui ajoute, change ou retire une règle met à jour ce fichier.
 
-**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.8.1, essayées aussi dans l'app. Les règles de lieux viennent de la lecture de la v0.8.0, avec quelques scénarios exécutés (maison, exercice absent, tempo lent).
+**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.9.1, essayées aussi dans l'app. Les règles de lieux et de reprise viennent de la lecture des v0.8.0 et v0.9.0, avec quelques scénarios exécutés.
 
 ## Décompte
 
@@ -29,10 +29,11 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 | Séance en cours | SEA | 33 |
 | Matériel du jour | MAT | 10 |
 | Lieux de séance | LIE | 15 |
+| Reprise après une pause | RPR | 10 |
 | Séances types | TPL | 8 |
 | Pas du jour | PAS | 8 |
 | Compte et données | CPT | 9 |
-| **Total** | | **169** |
+| **Total** | | **179** |
 
 Dont 3 sans accès (RG-SEA-28 à 30).
 
@@ -61,12 +62,12 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 
 | ID | Règle | Source | État |
 |---|---|---|---|
-| RG-BLC-01 | Un bloc dure N semaines (de 2 à 10, 6 par défaut) puis 1 semaine de deload. Il commence le lundi de la semaine où il est lancé. | `store.js` › `cyclePosition`, `startCycle` ; `views/profile.js` › `cycleSheet` | Active |
+| RG-BLC-01 | Un bloc dure N semaines (de 2 à 10, 6 par défaut) puis 1 semaine de deload. Il commence le lundi de la semaine où il est lancé ; une reprise après une pause le décale (RG-RPR-07). | `store.js` › `cyclePosition`, `startCycle` ; `views/profile.js` › `cycleSheet` | Active |
 | RG-BLC-02 | Trois types de bloc, avec leur RPE cible : Volume 7, Intensité 8,5, Spécialisation 8. | `store.js` › `CYCLES` | E-08 |
 | RG-BLC-03 | En deload, les séries prévues sont divisées par deux, arrondies au supérieur, avec 1 au minimum. | `store.js` › `startWorkout` | Active |
 | RG-BLC-04 | En deload, les rounds d'EMOM et de Tabata sont divisés par deux, arrondis au supérieur, avec 2 au minimum. | `store.js` › `intervalEntry` | Active |
-| RG-BLC-05 | En deload, le RPE cible passe à 6 et aucune indication de progression n'est donnée. | `views/workout.js` › `workoutView` ; `store.js` › `startWorkout` | Active |
-| RG-BLC-06 | Le deload peut être avancé à la semaine en cours, après confirmation, sauf si le bloc est déjà en deload ou terminé. | `store.js` › `deloadNow` ; `views/profile.js` › `profileView` | Active |
+| RG-BLC-05 | En deload comme en reprise, le RPE cible passe à 6 et aucune indication de progression n'est donnée. | `views/workout.js` › `workoutView` ; `store.js` › `startWorkout` | Active |
+| RG-BLC-06 | Le deload peut être avancé à la semaine en cours, après confirmation, sauf si le bloc est déjà en deload, terminé ou en reprise. | `store.js` › `deloadNow` ; `views/profile.js` › `profileView` | Active |
 | RG-BLC-07 | Après la semaine de deload, le bloc est « terminé » et un bilan est demandé. Aucun nouveau bloc ne démarre tout seul. | `store.js` › `cyclePosition` ; `views/today.js` › `cycleCard` | Active |
 | RG-BLC-08 | Lancer un nouveau bloc archive le précédent avec la semaine atteinte. Le type suivant est présélectionné : Volume, puis Intensité, puis Spécialisation, puis Volume. | `store.js` › `startCycle` ; `views/profile.js` › `cycleSheet` | Active |
 | RG-BLC-09 | Une séance garde le bloc, la semaine et l'état de deload du moment où elle a démarré. | `store.js` › `startWorkout`, `finishWorkout` | Active |
@@ -153,7 +154,7 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 | RG-PER-03 | Sinon : même charge et 1 rep de plus que le minimum réalisé, sans dépasser le haut de la fourchette. | `store.js` › `suggestion` | Active |
 | RG-PER-04 | Sans historique : la charge prévue et le bas de la fourchette, sans indication. | `store.js` › `suggestion` | Active |
 | RG-PER-05 | Un record compare le meilleur 1RM de la séance à tout ce qui précède. La première fois sur un exercice n'est pas un record, et ni un EMOM, ni un Tabata, ni des séries en tempo lent n'en battent. | `store.js` › `sessionRecords` | Active |
-| RG-PER-06 | Les rounds d'EMOM et de Tabata et les séries en tempo lent n'entrent ni dans les courbes ni dans le 1RM de l'exercice : leurs charges sont sous-maximales. | `store.js` › `exerciseHistory` | Active |
+| RG-PER-06 | Les rounds d'EMOM et de Tabata, les séries en tempo lent et les séances de reprise n'entrent ni dans les courbes ni dans le 1RM de l'exercice : leurs charges sont sous-maximales. | `store.js` › `exerciseHistory` | Active |
 | RG-PER-07 | Volume d'une série = charge réelle × reps. | `store.js` › `setVolume` | Active |
 | RG-PER-08 | Le RPE est optionnel et se note de 7 à 10. 10 − RPE donne les reps en réserve. | `views/workout.js` › `rpeField`, `rir` | Active |
 
@@ -230,6 +231,21 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 | RG-LIE-14 | « Pas dans ma salle » ne vaut qu'à la salle, et l'option ne s'affiche que là. | `store.js` › `available` ; `views/workout.js` › `swapSheet` | Active |
 | RG-LIE-15 | En séance, le réglage de charge se limite aux charges du lieu. | `views/workout.js` › `weightStepper` ; `store.js` › `placeLoads` | Active |
 
+## Reprise après une pause
+
+| ID | Règle | Source | État |
+|---|---|---|---|
+| RG-RPR-01 | Sans séance depuis 7 jours, Aujourd'hui propose de préparer la reprise, sauf pendant une séance, pendant une reprise ou si une reprise a déjà été lancée depuis la dernière séance. La reprise s'ouvre aussi depuis Réglages. | `views/reprise.js` › `pauseCard` ; `store.js` › `PAUSE_DAYS` | Active |
+| RG-RPR-02 | La reprise court jusqu'au lundi suivant s'il reste au moins 3 jours dans la semaine (départ du lundi au vendredi), sinon jusqu'au lundi d'après. | `store.js` › `repriseEnd` | Active |
+| RG-RPR-03 | Séances de reprise : moitié moins de séries (1 au minimum, 2 rounds au minimum en EMOM et Tabata), charges −10 % calées sur le matériel en format Séries, RPE 6, sans indication de progression. | `store.js` › `startWorkout`, `REPRISE_LOAD` | Active |
+| RG-RPR-04 | Les séances de reprise ne servent pas de charge de référence : la suite repart des charges d'avant la pause. | `store.js` › `exerciseHistory` | Active |
+| RG-RPR-05 | Pendant la reprise, la corde passe au format récup (5 × 1 min, 30 s de repos) tous les jours, sans jour long. | `store.js` › `enduranceToday` | Active |
+| RG-RPR-06 | La semaine de reprise ne compte pas dans le bloc : elle n'est ni un deload ni la fin du bloc. | `store.js` › `cyclePosition` | Active |
+| RG-RPR-07 | Le lundi suivant, le bloc reprend à la semaine qui suit celle de la dernière séance (comptée faite), bornée entre S1 et le deload, et réglable. Les semaines manquées repoussent la fin du bloc, qui garde son vrai départ. | `store.js` › `repriseDefaults`, `startReprise`, `cyclePosition` ; `views/reprise.js` › `repriseView` | Active |
+| RG-RPR-08 | Le plan corde refait la semaine interrompue, réglable. L'objectif 1 h est repoussé d'autant, et son retard s'affiche. | `store.js` › `repriseDefaults`, `startReprise`, `enduranceGoalWeek` ; `views/reprise.js` › `repriseView` | Active |
+| RG-RPR-09 | Arrêter la reprise demande une confirmation. Les séances redeviennent normales aussitôt, et le bloc comme la corde gardent leur décalage. | `store.js` › `endReprise` ; `views/reprise.js` › `repriseView` | Active |
+| RG-RPR-10 | L'objectif de la semaine n'est réduit ni pendant la reprise ni pendant le deload, alors que les séances y ont moitié moins de séries. | `store.js` › `weeklyGoal` | E-15 |
+
 ## Séances types
 
 | ID | Règle | Source | État |
@@ -287,8 +303,9 @@ Différences entre le code et l'intention écrite (commentaires, textes d'écran
 | E-12 | Doc | Autres passages périmés. Glossaire : « À définir, 12-20 reps », devenu l'objectif endurance à 15-20 reps, et « Machine prise », devenu « Remplacer ». README : « Les données restent sur l'iPhone ». `store.js` › `generateProgram` : le commentaire « 1 ou 2 exercices » contredit RG-PRG-07. `compte.js` › `hasLocalData` lit encore `state.corde`, retiré. | Relu | — |
 | E-13 | Bug | Remplacer un exercice en plein AMRAP crée un exercice en séries à l'intérieur du circuit : l'exercice d'origine y reste, et le remplaçant ne suit plus le format AMRAP. Trouvé en corrigeant E-03, pas corrigé : il faut d'abord décider ce que doit faire ce geste. | Exécuté | RG-SEA-19 |
 | E-14 | Bug | Remplacer un exercice après des séries en tempo lent enlève leur marque tempo : elles entrent dans l'historique et font redescendre la charge de référence. Essai : charge prévue 16 kg, une série à 10 kg en tempo, remplacement, et l'historique indique 10 kg. Vient de la v0.8.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-LIE-10 |
+| E-15 | Décision | Pendant une reprise ou un deload, les séances ont moitié moins de séries mais l'objectif de la semaine garde sa cible pleine : il ne peut pas être atteint. Déjà noté « à décider » dans `memoire.md`. | Relu | RG-RPR-10 |
 
-### Corrigés en v0.8.1
+### Corrigés en v0.9.1
 
 Les règles concernées décrivent désormais le comportement corrigé. Vérifié sous Node et dans l'app.
 

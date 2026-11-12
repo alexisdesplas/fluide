@@ -25,7 +25,7 @@ export function progressView() {
     [1, 2].every(w => (weeklySets(Date.now() - w * WEEK)[m] || 0) < target * 0.8) && state.sessions.some(s => s.startedAt < startOfWeek(Date.now()) - WEEK)).map(([m]) => m);
 
   const el = h("div", { class: "screen" },
-    pageHead("Stats", `Bloc ${CYCLES[state.cycle.type].label} · ${pos.deload ? "deload" : `semaine ${Math.min(pos.week, state.cycle.weeks)} / ${state.cycle.weeks}`}`),
+    pageHead("Stats", `Bloc ${CYCLES[state.cycle.type].label} · ${pos.reprise ? "reprise" : pos.deload ? "deload" : `semaine ${Math.min(pos.week, state.cycle.weeks)} / ${state.cycle.weeks}`}`),
     h("div", { class: "scroll" },
       segmented([[0, "Cette semaine"], [1, "Semaine dernière"]], weekOffset, v => { weekOffset = v; dispatchEvent(new HashChangeEvent("hashchange")); }),
       h("div", { class: "stat-grid" },
@@ -115,7 +115,7 @@ export function sessionView({ id }) {
         h("div", { class: "stat" }, h("span", { class: "caption" }, "Séries"), h("b", null, sessionSets(s))),
         h("div", { class: "stat" }, h("span", { class: "caption" }, "Volume"), h("b", null, `${int(sessionVolume(s))} kg`))),
       h("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
-        pill(`Bloc ${CYCLES[s.cycle]?.label || "—"} · ${s.deload ? "deload" : `S${s.week}`}`, "accent"),
+        pill(`Bloc ${CYCLES[s.cycle]?.label || "—"} · ${s.reprise ? "reprise" : s.deload ? "deload" : `S${s.week}`}`, "accent"),
         s.feeling && pill(...FEELING[s.feeling])),
       h("div", { class: "list" }, s.entries.map(e => {
         const rec = records.find(r => r.exerciseId === e.exerciseId);
