@@ -256,6 +256,10 @@ export const uid = () => Math.random().toString(36).slice(2, 10);
 export const dayKey = (t = Date.now()) => new Date(t).toLocaleDateString("sv-SE"); // AAAA-MM-JJ, heure locale
 export const startOfDay = t => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
 export const startOfWeek = t => { const d = new Date(startOfDay(t)); return d.getTime() - ((d.getDay() + 6) % 7) * DAY; };
+// n semaines plus tard, à la même heure locale (un lundi reste un lundi au changement d'heure).
+export const addWeeks = (t, n) => { const d = new Date(t); d.setDate(d.getDate() + 7 * n); return d.getTime(); };
+// Semaines entre deux lundis : arrondi, l'écart fait une heure de plus ou de moins au changement d'heure.
+const weeksBetween = (a, b) => Math.round((startOfWeek(b) - startOfWeek(a)) / (7 * DAY));
 
 function seed() {
   const exercises = CATALOGUE.map(fromCatalogue);
@@ -342,12 +346,15 @@ export const template = id => state.templates.find(p => p.id === id) || drafts.f
 export const session = id => state.sessions.find(s => s.id === id);
 
 // Où on en est dans le bloc : semaines 1 à N, puis une semaine de deload.
+// Pendant une reprise après une pause, la semaine ne compte pas dans le bloc : il repart le lundi qui la suit.
 export function cyclePosition(t = Date.now()) {
   const c = state.cycle;
-  const week = Math.floor((startOfWeek(t) - startOfWeek(c.start)) / (7 * DAY)) + 1;
-  const deload = week === c.weeks + 1;
-  const over = week > c.weeks + 1;
-  return { week, weeks: c.weeks, deload, over, label: CYCLES[c.type].label };
+  const reprise = inReprise(t);
+  // shift : semaines de pause ajoutées au bloc ; start reste le vrai départ (le bilan compte ses séances depuis là).
+  const week = weeksBetween(addWeeks(c.start, c.shift || 0), t) + 1;
+  const deload = !reprise && week === c.weeks + 1;
+  const over = !reprise && week > c.weeks + 1;
+  return { week, weeks: c.weeks, deload, over, reprise, label: CYCLES[c.type].label };
 }
 
 // 1RM estimé (Epley) : une série de 1 rep vaut sa charge.
@@ -438,10 +445,11 @@ export const plannedSets = () => plannedSetsOf(state.templates);
 // Performances d'un exercice, une ligne par séance, de la plus ancienne à la plus récente.
 // Les rounds d'EMOM et de Tabata n'y entrent pas : charges sous-maximales, elles fausseraient le 1RM.
 // Les séries en tempo lent non plus (charge trop légère pour le lieu) : la salle repart de ta vraie charge.
+// Les séances de reprise non plus (charges allégées après une pause) : la suite repart de la charge d'avant.
 export function exerciseHistory(exerciseId, before = Infinity) {
   const rows = [];
   for (const s of state.sessions) {
-    if (s.startedAt >= before) continue;
+    if (s.startedAt >= before || s.reprise) continue;
     const sets = s.entries.filter(e => e.exerciseId === exerciseId && !isInterval(e) && !e.tempo).flatMap(e => e.sets);
     if (!sets.length) continue;
     rows.push({
@@ -556,7 +564,7 @@ export function startCycle(type, weeks = 6) {
 
 // Avance le deload à cette semaine quand le ressenti chute avant la fin du bloc.
 export function deloadNow() {
-  state.cycle.start = startOfWeek(Date.now()) - state.cycle.weeks * 7 * DAY;
+  state.cycle.start = addWeeks(startOfWeek(Date.now()), -state.cycle.weeks - (state.cycle.shift || 0));
   save();
 }
 
@@ -628,21 +636,66 @@ export const blocksTotal = ([n, work, rest]) => n * work + (n - 1) * rest;
 export function enduranceWeek(t = Date.now()) {
   const p = state.profile, e = ENDURANCE[p.endurance];
   if (!e?.weeks) return null;
-  const w = p.enduranceStart == null ? 1 : Math.floor((startOfWeek(t) - startOfWeek(p.enduranceStart)) / (7 * DAY)) + 1;
+  const w = p.enduranceStart == null ? 1 : weeksBetween(p.enduranceStart, t) + 1;
   return Math.min(e.weeks.length, Math.max(1, w));
 }
 export function setEnduranceWeek(week) {
-  state.profile.enduranceStart = startOfWeek(Date.now()) - (week - 1) * 7 * DAY;
+  state.profile.enduranceStart = addWeeks(startOfWeek(Date.now()), 1 - week);
   save(true);
 }
 
 // Séance d'endurance du jour : facile, longue ou récup selon la semaine type du programme en place.
+// En reprise : le format récup tous les jours, sans jour long.
 export function enduranceToday(t = Date.now()) {
   const p = state.profile, e = ENDURANCE[p.endurance];
   if (!e?.weeks) return null;
+  if (inReprise(t)) return { week: state.reprise.ropeWeek, kind: "reprise", deload: false, blocks: e.recup };
   const week = enduranceWeek(t), plan = e.weeks[week - 1];
   const kind = weekPlan(state.templates, p.endurance)[(new Date(t).getDay() + 6) % 7].endurance;
   return { week, kind, deload: plan.deload, blocks: kind === "long" ? plan.long : kind === "recup" ? e.recup : plan.easy };
+}
+
+// ——— Reprise après une pause (maladie, vacances) : une semaine allégée, puis le bloc et le plan d'endurance
+// reprennent le lundi suivant, là où on s'était arrêté. Les semaines manquées décalent la fin du bloc et l'objectif.
+export const PAUSE_DAYS = 7; // sans séance depuis une semaine : Aujourd'hui propose la reprise
+export const REPRISE_LOAD = 0.9; // charges −10 % pendant la reprise
+export const inReprise = (t = Date.now()) => !!state.reprise && t >= state.reprise.start && t < state.reprise.end;
+
+// Lundi où le plan reprend : la semaine en cours sert de reprise s'il en reste au moins 3 jours (départ du lundi au vendredi),
+// sinon la reprise court aussi sur la semaine suivante.
+export function repriseEnd(t = Date.now()) {
+  const left = 7 - (new Date(t).getDay() + 6) % 7;
+  return addWeeks(startOfWeek(t), left >= 3 ? 1 : 2);
+}
+
+// Semaines proposées au retour : le bloc passe à la semaine qui suit celle de la dernière séance (elle est comptée faite) ;
+// le plan d'endurance refait la semaine interrompue, le souffle part plus vite que le muscle.
+export function repriseDefaults(t = Date.now()) {
+  const last = history()[0]?.startedAt ?? null;
+  const ref = last ?? t, c = state.cycle;
+  const blocWeek = Math.min(c.weeks + 1, Math.max(1, cyclePosition(ref).week + (last ? 1 : 0)));
+  const ropeWeek = enduranceWeek(ref);
+  return { last, end: repriseEnd(t), blocWeek, ropeWeek };
+}
+
+// Semaine où l'objectif d'endurance tombe si le plan reprend en semaine `week` au lundi `resumeAt`.
+export function enduranceGoalWeek(week, resumeAt) {
+  const e = ENDURANCE[state.profile.endurance];
+  return e?.weeks ? addWeeks(resumeAt, e.weeks.length - week) : null;
+}
+
+export function startReprise({ blocWeek, ropeWeek }, t = Date.now()) {
+  const end = repriseEnd(t);
+  state.cycle.shift = weeksBetween(state.cycle.start, addWeeks(end, 1 - blocWeek));
+  if (ENDURANCE[state.profile.endurance]?.weeks && ropeWeek) state.profile.enduranceStart = addWeeks(end, 1 - ropeWeek);
+  state.reprise = { start: startOfDay(t), end, blocWeek, ropeWeek: ropeWeek || null, last: history()[0]?.startedAt ?? null };
+  save();
+}
+
+// Reprise arrêtée avant la fin : séances normales dès maintenant, le bloc et l'endurance gardent leur décalage.
+export function endReprise(t = Date.now()) {
+  if (state.reprise) state.reprise.end = Math.min(state.reprise.end, t);
+  save();
 }
 
 const musclesOf = t => new Set(t.items.map(it => exercise(it.exerciseId)?.muscle));
@@ -882,17 +935,19 @@ export function startWorkout(templateId, place = state.profile.place || "gym") {
   const pos = cyclePosition(now);
   state.active = {
     id: uid(), templateId, name: t.name, startedAt: now,
-    cycle: state.cycle.type, week: pos.week, deload: pos.deload,
+    cycle: state.cycle.type, week: pos.week, deload: pos.deload || pos.reprise, reprise: pos.reprise,
     warmupDone: false, warm: null, cursor: 0, restEndsAt: null, restTotal: 0,
     entries: t.items.map(item => {
-      if (isInterval(item)) return { ...intervalEntry(item.exerciseId, item, pos.deload), itemId: item.id };
+      const light = pos.deload || pos.reprise;
+      if (isInterval(item)) return { ...intervalEntry(item.exerciseId, item, light), itemId: item.id };
       const s = suggestion(item, now);
-      // Deload : on garde le mouvement, on divise le volume par deux.
-      const sets = pos.deload ? Math.max(1, Math.ceil(item.sets / 2)) : item.sets;
+      // Deload et reprise : on garde le mouvement, on divise le volume par deux. Reprise : charges −10 % en plus.
+      const sets = light ? Math.max(1, Math.ceil(item.sets / 2)) : item.sets;
+      const weight = pos.reprise ? s.weight * REPRISE_LOAD : s.weight;
       return {
         exerciseId: item.exerciseId, format: "series", itemId: item.id, startSets: sets, group: item.group,
         target: { sets, repsMin: item.repsMin, repsMax: item.repsMax, rest: item.rest },
-        draft: { weight: nearestWeight(exercise(item.exerciseId).equip, s.weight, exercise(item.exerciseId).stack), reps: s.reps, rpe: null }, hint: pos.deload ? null : s.hint,
+        draft: { weight: nearestWeight(exercise(item.exerciseId).equip, weight, exercise(item.exerciseId).stack), reps: s.reps, rpe: null }, hint: light ? null : s.hint,
         sets: []
       };
     })
@@ -1279,7 +1334,7 @@ export function finishWorkout(feeling, note, keep) {
   const s = {
     id: a.id, templateId: a.templateId, name: a.name, place: a.place || "gym",
     startedAt: a.startedAt, endedAt: Date.now(),
-    cycle: a.cycle, week: a.week, deload: a.deload, feeling, note: note.trim(),
+    cycle: a.cycle, week: a.week, deload: a.deload, ...(a.reprise && { reprise: true }), feeling, note: note.trim(),
     entries: a.entries.filter(e => e.sets.length).map(e => ({
       exerciseId: e.exerciseId, swappedFrom: e.swappedFrom, extra: e.extra, equip: e.equip, format: e.format || "series", ...(e.tempo && { tempo: true }),
       sets: e.sets.map(({ weight, reps, rpe, ratio }) => ({ weight, reps, rpe, ...(ratio && { ratio }) }))

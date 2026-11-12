@@ -2,12 +2,14 @@ import { state, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, 
 import { h, icon, pageHead, btn, pill, go, int, dateLong, ago, stepper, toast } from "../ui.js";
 import { account } from "../compte.js";
 import { startSheet } from "./places.js";
+import { pauseCard } from "./reprise.js";
 
 export { estimate };
 
 // Échauffement du jour : la séance corde du plan (sauf le jour long, fait à part), sinon celui des réglages.
 const warmupLine = () => {
   const r = enduranceToday();
+  if (r?.kind === "reprise") return `corde de reprise, ${blocksLabel(r.blocks)}`;
   return r && r.kind !== "long" ? `corde S${r.week}, ${blocksLabel(r.blocks)}` : state.profile.warmup;
 };
 
@@ -26,6 +28,17 @@ export function cycleCard(compact) {
     return h("i", { class: cls });
   });
   const left = c.weeks - pos.week + 1;
+  // Reprise après une pause : la semaine est hors bloc, il repart lundi à la semaine choisie.
+  if (pos.reprise) {
+    const r = state.reprise;
+    return h("button", { class: "card tap", onClick: () => go("#/reprise"), "aria-label": "Semaine de reprise : voir le détail" },
+      h("div", { class: "card-head" },
+        h("div", null, h("div", { class: "overline" }, `Bloc ${CYCLES[c.type].label}`), h("div", { class: "display-xs" }, "Semaine de reprise")),
+        pill("Reprise", "attention")),
+      h("div", { class: "segments", "aria-hidden": "true" }, segs),
+      !compact && h("p", { class: "body-sm discret", style: { margin: 0 } },
+        `Moitié moins de séries, charges −10 %, 3 reps en réserve. Le bloc repart lundi en ${r.blocWeek === c.weeks + 1 ? "deload" : `S${r.blocWeek}`}.`));
+  }
   return h("div", { class: "card" },
     h("div", { class: "card-head" },
       h("div", null,
@@ -122,8 +135,8 @@ export function todayView() {
             h("div", null, h("div", { class: "overline" }, "Prochaine séance"), h("div", { class: "display-xs" }, next.name)),
             h("span", { class: "caption num" }, `~${estimate(next)} min`)),
           h("p", { class: "body-sm", style: { margin: 0 } },
-            next.items.length, next.items.length > 1 ? " exercices · " : " exercice · ", next.items.reduce((a, i) => a + (pos.deload ? Math.ceil(itemSets(i) / 2) : itemSets(i)), 0), " séries",
-            pos.deload ? " (deload)" : ""),
+            next.items.length, next.items.length > 1 ? " exercices · " : " exercice · ", next.items.reduce((a, i) => a + (pos.deload || pos.reprise ? Math.ceil(itemSets(i) / 2) : itemSets(i)), 0), " séries",
+            pos.deload ? " (deload)" : pos.reprise ? " (reprise)" : ""),
           h("div", { class: "hint" }, icon("bolt"), h("span", { class: "body-sm" }, "Échauffement : ", h("b", { class: "fort medium" }, warmupLine()), ", puis séries d'approche sur le premier exercice.")),
           btn(`Démarrer ${next.name}`, { variant: "primary", size: "lg", full: true, onClick: () => startSheet(next.id) }),
           btn("Choisir une autre séance", { variant: "ghost", full: true, onClick: () => go("#/seances") }))
@@ -133,6 +146,7 @@ export function todayView() {
   const el = h("div", { class: "screen" },
     pageHead("Aujourd'hui", `${dateLong(Date.now())}${lastSession ? ` · dernière séance ${ago(lastSession.startedAt)}` : ""}`),
     h("div", { class: "scroll" },
+      pauseCard(),
       goalCard(),
       sessionCard,
       cycleCard(),
