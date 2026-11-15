@@ -1,6 +1,6 @@
 # Règles de gestion — Fluide
 
-Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause), la v0.10.0 (refonte en 3 onglets) et la v0.10.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
+Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause), la v0.10.0 (refonte en 3 onglets), la v0.10.1 et la v0.10.2. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
 
 ## Lire ce registre
 
@@ -14,7 +14,7 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 - **Source** : le fichier et la fonction, plutôt qu'un numéro de ligne qui bougerait. Les fichiers sont dans `js/`, sauf `schema.sql` dans `supabase/`.
 - **Mise à jour** : toute PR qui ajoute, change ou retire une règle met à jour ce fichier.
 
-**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.10.1, essayées aussi dans l'app. Les règles de lieux, de reprise et de la refonte viennent de la lecture des v0.8.0, v0.9.0 et v0.10.0, avec quelques scénarios exécutés.
+**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.10.2, essayées aussi dans l'app. Les règles de lieux, de reprise et de la refonte viennent de la lecture des v0.8.0, v0.9.0 et v0.10.0, avec quelques scénarios exécutés.
 
 ## Décompte
 
@@ -306,7 +306,7 @@ Différences entre le code et l'intention écrite (commentaires, textes d'écran
 | E-14 | Bug | Remplacer un exercice après des séries en tempo lent enlève leur marque tempo : elles entrent dans l'historique et font redescendre la charge de référence. Essai : charge prévue 16 kg, une série à 10 kg en tempo, remplacement, et l'historique indique 10 kg. Vient de la v0.8.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-LIE-10 |
 | E-15 | Décision | Pendant une reprise ou un deload, les séances ont moitié moins de séries mais l'objectif de la semaine garde sa cible pleine : il ne peut pas être atteint. Déjà noté « à décider » dans `memoire.md`. | Relu | RG-RPR-10 |
 
-### Corrigés en v0.10.1
+### Corrigés en v0.10.2
 
 Les règles concernées décrivent désormais le comportement corrigé. Vérifié sous Node et dans l'app.
 
