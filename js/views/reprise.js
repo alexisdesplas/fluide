@@ -14,9 +14,9 @@ export function pauseCard() {
   if (!last || state.active || inReprise() || (state.reprise && state.reprise.start > last.startedAt)) return null;
   const d = daysSince(last.startedAt);
   if (d < PAUSE_DAYS) return null;
-  return h("div", { class: "card" },
+  return h("div", { class: "card orange" },
     h("div", { class: "card-head" },
-      h("div", null, h("div", { class: "overline" }, "Pause"), h("div", { class: "display-xs num" }, `${d} jours sans séance`)),
+      h("div", null, h("div", { class: "overline" }, "Pause"), h("div", { class: "display-xs num orange" }, `${d} jours sans séance`)),
       pill("Reprise", "attention")),
     h("p", { class: "body-sm", style: { margin: 0 } }, "Malade, en vacances ? On décale ton bloc et ta corde, et la semaine reprend en douceur."),
     btn("Préparer la reprise", { variant: "primary", full: true, icon: "trend", onClick: () => go("#/reprise") }));
@@ -29,10 +29,10 @@ export function repriseView() {
 
   if (inReprise()) {
     const r = state.reprise;
-    const el = h("div", { class: "screen no-tabs" },
+    const el = h("div", { class: "screen no-tabs orange" },
       navbar({ back, title: "Reprise", subtitle: "Après une pause" }),
       h("div", { class: "scroll" },
-        h("div", { class: "card" },
+        h("div", { class: "card orange" },
           h("div", { class: "overline" }, "En cours"),
           h("div", { class: "display-xs" }, `Jusqu'à ${dateLong(r.end - DAY)}`),
           rules(e)),
@@ -64,7 +64,7 @@ export function repriseView() {
   showRope();
   const pos = cyclePosition();
 
-  const el = h("div", { class: "screen no-tabs" },
+  const el = h("div", { class: "screen no-tabs orange" },
     navbar({ back, title: "Reprise", subtitle: "Après une pause" }),
     h("div", { class: "scroll" },
       h("div", { class: "card" },
@@ -74,13 +74,13 @@ export function repriseView() {
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, `D'ici lundi ${dayMonth(d.end)}`)),
       h("div", { class: "card" }, rules(e)),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, `Lundi ${dayMonth(d.end)}`)),
-      h("div", { class: "card" },
+      h("div", { class: "card violet" },
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, `Bloc ${CYCLES[c.type].label}`),
           stepper({ value: blocWeek, min: 1, max: c.weeks + 1, compact: true, format: v => weekLabel(v, c.weeks), label: "semaine du bloc", onChange: v => { blocWeek = v; } })),
         h("p", { class: "caption", style: { margin: 0 } }, d.last
           ? `Ta dernière séance était en ${weekLabel(Math.max(1, cyclePosition(d.last).week), c.weeks)} : elle compte, le bloc passe à la suivante.`
           : `Le bloc en est à ${pos.deload ? "sa semaine de deload" : `S${Math.max(1, pos.week)}`}.`)),
-      e && h("div", { class: "card" },
+      e && h("div", { class: "card orange" },
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, e.short),
           stepper({ value: ropeWeek, min: 1, max: e.weeks.length, compact: true, format: v => `S${v}`, label: "semaine du plan", onChange: v => { ropeWeek = v; showRope(); } })),
         ropeLine,
