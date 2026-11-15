@@ -17,7 +17,7 @@ export function h(tag, props, ...children) {
   return el;
 }
 
-// Icônes au tracé Phosphor Regular (grille 256, trait 16).
+// Icônes au tracé Phosphor (grille 256, trait 20 : plus épais, pour tenir à côté des titres en condensée grasse).
 const PATHS = {
   caretLeft: "M160 208 80 128l80-80",
   caretRight: "M96 48l80 80-80 80",
@@ -51,11 +51,16 @@ const PATHS = {
   userCircle: "M128 232a104 104 0 1 0 0-208 104 104 0 0 0 0 208zM128 152a40 40 0 1 0 0-80 40 40 0 0 0 0 80zM62 206c14-30 38-46 66-46s52 16 66 46",
   userCirclePlus: "M224 128a96 96 0 1 1-96-96M200 24v48M176 48h48M128 152a40 40 0 1 0 0-80 40 40 0 0 0 0 80zM62 206c14-30 38-46 66-46s52 16 66 46",
   clipboard: "M88 40H56v176h144V40h-32M96 24h64v32H96z",
-  play: "M128 224a96 96 0 1 0 0-192 96 96 0 0 0 0 192zM112 96l48 32-48 32z"
+  play: "M88 56l112 72-112 72z",
+  restart: "M200 72a88 88 0 1 0 16 56M208 24v56h-56",
+  skip: "M72 48l96 80-96 80zM200 48v160",
+  pause: "M96 48v160M160 48v160",
+  calendar: "M40 48h176v168H40zM176 24v48M80 24v48M40 88h176",
+  pin: "M128 232s72-64 72-128a72 72 0 0 0-144 0c0 64 72 128 72 128zM128 128a24 24 0 1 0 0-48 24 24 0 0 0 0 48z"
 };
 
 export function icon(name, cls) {
-  const svg = h("svg", { viewBox: "0 0 256 256", fill: "none", stroke: "currentColor", "stroke-width": 16, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", class: cls });
+  const svg = h("svg", { viewBox: "0 0 256 256", fill: "none", stroke: "currentColor", "stroke-width": 20, "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", class: cls });
   svg.append(h("path", { svg: true, d: PATHS[name] }));
   return svg;
 }
@@ -87,7 +92,7 @@ export const dateShort = t => new Date(t).toLocaleDateString("fr-FR", { day: "nu
 
 export const go = hash => { location.hash = hash; };
 
-// Mobile Navigation Bar (Hardwood) : retour 112 px à gauche, titre centré, action texte à droite.
+// En-tête d'écran secondaire : retour rond et son libellé, action à droite, puis le titre en grand (mis en page par le CSS).
 export function navbar({ back, title, subtitle, action }) {
   return h("header", { class: "navbar" },
     h("div", { class: "navbar-inner" },
@@ -99,9 +104,10 @@ export function navbar({ back, title, subtitle, action }) {
         action && h("button", { class: `navbar-action${action.danger ? " danger" : ""}`, onClick: action.onClick, disabled: action.disabled }, action.label))));
 }
 
+// Titre d'écran racine. Le sous-titre s'affiche au-dessus du titre (ordre inversé par le CSS).
 export function pageHead(title, subtitle, end) {
   return h("div", { class: "page-head" },
-    h("div", null, h("h1", { class: "heading-xl" }, title), subtitle && h("p", { class: "body-md discret num" }, subtitle)),
+    h("div", null, h("h1", { class: "heading-xl" }, title), subtitle && h("p", { class: "discret num" }, subtitle)),
     end || null);
 }
 
@@ -238,6 +244,41 @@ export function announce(text) {
   setTimeout(() => { live.textContent = text; }, 50);
 }
 
+// Compte à rebours en règle graduée : le temps en grand, un trait par seconde (5 s au-delà d'une minute,
+// 30 s au-delà de dix), un curseur qui recule vers 0:00. La couleur dit la phase : bleu repos, orange effort, vert fini.
+export function ruler(hue = "bleu") {
+  const phase = h("div", { class: "ruler-phase" }), time = h("div", { class: "ruler-time num" }), sub = h("div", { class: "ruler-sub num" });
+  const off = h("div", { class: "ruler-ticks" }), on = h("div", { class: "ruler-ticks on" });
+  const scale = h("div", { class: "ruler-scale", "aria-hidden": "true" }, off, on, h("i", { class: "ruler-cursor" }));
+  const labels = h("div", { class: "ruler-labels num", "aria-hidden": "true" });
+  const el = h("div", { class: `ruler ${hue}` }, phase, time, scale, labels, sub);
+  let drawn = null;
+  const draw = total => {
+    drawn = total;
+    const per = total <= 60 ? 1 : total <= 600 ? 5 : 30, major = total <= 30 ? 10 : total <= 60 ? 15 : total <= 600 ? 30 : 300;
+    const ticks = [];
+    for (let t = 0; t <= total + 0.001; t += per) ticks.push(h("i", { class: t % major === 0 ? "major" : per === 1 && t % 5 === 0 ? "mid" : "", style: { left: `${(t / total) * 100}%` } }));
+    off.replaceChildren(...ticks);
+    on.replaceChildren(...ticks.map(t => t.cloneNode()));
+    const n = total % 4 === 0 && (total / 4) % 5 === 0 ? 4 : total % 2 === 0 ? 2 : 1;
+    labels.replaceChildren(...Array.from({ length: n + 1 }, (_, i) => h("span", null, clock((total / n) * i))));
+  };
+  return {
+    el,
+    update({ left, total, label, note, hue: next, paused }) {
+      total = Math.max(1, Math.round(total));
+      if (total !== drawn) draw(total);
+      const text = clock(Math.ceil(left));
+      time.textContent = text;
+      time.classList.toggle("long", text.length > 4);
+      scale.style.setProperty("--p", `${Math.max(0, Math.min(1, left / total)) * 100}%`);
+      if (label != null) phase.textContent = label;
+      sub.textContent = note || "";
+      el.className = `ruler ${next || hue}${paused ? " paused" : ""}`;
+    }
+  };
+}
+
 // Courbe : points {x: temps, y}, axe des y resserré sur les données.
 export function lineChart(points, { format = num } = {}) {
   const W = 340, H = 160, pl = 36, pr = 8, pt = 12, pb = 22;
@@ -259,7 +300,7 @@ export function lineChart(points, { format = num } = {}) {
   if (points.length > 1) {
     svg.append(S("path", { class: "area", d: `${d} L${X(x1)} ${H - pb} L${X(x0)} ${H - pb} Z` }), S("path", { class: "line", d }));
   }
-  for (const p of points) svg.append(S("circle", { class: "pt", cx: X(p.x), cy: Y(p.y), r: 3 }));
+  points.forEach((p, i) => svg.append(S("circle", { class: "pt", cx: X(p.x), cy: Y(p.y), r: i === points.length - 1 ? 6 : 4 })));
   svg.append(S("text", { x: pl, y: H - 4 }, dateShort(x0)));
   if (points.length > 1) svg.append(S("text", { x: W - pr, y: H - 4, "text-anchor": "end" }, dateShort(x1)));
   svg.setAttribute("aria-label", `Courbe de ${format(points[0].y)} à ${format(points.at(-1).y)}`);
@@ -267,7 +308,7 @@ export function lineChart(points, { format = num } = {}) {
 }
 
 export function spark(values) {
-  const svg = h("svg", { class: "spark", viewBox: "0 0 64 24", "aria-hidden": "true" });
+  const svg = h("svg", { class: "spark", viewBox: "0 0 64 24", preserveAspectRatio: "none", "aria-hidden": "true" });
   if (values.length < 2) return svg;
   const lo = Math.min(...values), hi = Math.max(...values), r = hi - lo || 1;
   const d = values.map((v, i) => `${i ? "L" : "M"}${(i / (values.length - 1)) * 62 + 1} ${22 - ((v - lo) / r) * 20}`).join(" ");

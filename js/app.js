@@ -4,8 +4,8 @@ import { todayView, stepsLinkView } from "./views/today.js";
 import { templatesView, templateView, itemView, pickerView, programView, weekView } from "./views/templates.js";
 import { workoutView, finishView, editWorkoutView, editSetView, summaryView } from "./views/workout.js";
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
-import { profileView, matrixView, muscleView, prefsView } from "./views/profile.js";
-import { placeView } from "./views/places.js";
+import { profileView, matrixView, muscleView, prefsView, blocView, youView, dataView } from "./views/profile.js";
+import { placeView, placesView } from "./views/places.js";
 import { repriseView } from "./views/reprise.js";
 import { signInView, signUpView, confirmView, resetView, stepsAutoView } from "./views/compte.js";
 import { onAccount } from "./compte.js";
@@ -39,6 +39,10 @@ const ROUTES = [
   ["profil/matrice", matrixView],
   ["profil/matrice/:muscle", muscleView],
   ["profil/exercices", prefsView],
+  ["profil/bloc", blocView],
+  ["profil/toi", youView],
+  ["profil/donnees", dataView],
+  ["profil/lieux", placesView],
   ["profil/lieux/:place", placeView],
   ["reprise", repriseView]
 ];
@@ -54,21 +58,24 @@ function match(hash) {
   return { view: todayView, params: {} };
 }
 
+// Trois onglets, en icône seule : Progrès, Aujourd'hui au centre (l'app s'ouvre dessus), Réglages.
+// Les séances types vivent dans Réglages : leurs écrans gardent l'onglet Réglages allumé.
 const TABS = [
-  ["", "today", "Aujourd'hui"],
-  ["seances", "list", "Séances"],
-  ["progres", "chart", "Stats"],
+  ["progres", "chart", "Progrès"],
+  ["", "barbell", "Aujourd'hui"],
   ["profil", "sliders", "Réglages"]
 ];
+const tabOf = t => (t === "seances" ? "profil" : t);
 
 function tabbar(current) {
   const a = state.active;
+  current = tabOf(current);
   return h("div", { class: "tabbar" },
     a && current !== "" && h("div", { class: "tabbar-active" },
       h("button", { class: "btn primary full", onClick: () => go("#/seance") },
         icon("timer"), "Reprendre ", a.name, " · ", h("span", { class: "num", "data-tick": "elapsed" }, clock((Date.now() - a.startedAt) / 1000)))),
     h("nav", { "aria-label": "Navigation principale" },
-      TABS.map(([route, ic, label]) => h("button", { class: "tab", "aria-current": current === route ? "page" : null, onClick: () => go(`#/${route}`) }, icon(ic), label))));
+      TABS.map(([route, ic, label]) => h("button", { class: `tab${route === "" ? " main" : ""}`, "aria-label": label, title: label, "aria-current": current === route ? "page" : null, onClick: () => go(`#/${route}`) }, icon(ic)))));
 }
 
 const root = document.getElementById("app");
@@ -98,7 +105,7 @@ function tick() {
 addEventListener("hashchange", render);
 subscribe(() => { if (!document.querySelector("dialog[open]")) render(); });
 // État du compte (synchro, déconnexion) : on redessine les Réglages, jamais une saisie en cours.
-onAccount(() => { if (location.hash === "#/profil" && !document.querySelector("dialog[open]")) render(); });
+onAccount(() => { if (["#/profil", "#/profil/donnees"].includes(location.hash) && !document.querySelector("dialog[open]")) render(); });
 addEventListener("pointerdown", unlockAudio);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { unlockAudio(); tick(); } });
 setInterval(tick, 250);

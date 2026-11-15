@@ -1,7 +1,6 @@
-import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek } from "../store.js";
-import { h, icon, pageHead, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, sheet, confirmSheet, toast, num } from "../ui.js";
+import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, startWorkout } from "../store.js";
+import { h, icon, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
-import { startSheet } from "./places.js";
 
 export const prefPill = pref =>
   pref === "aime" ? pill("Favori", "accent") : pref === "evite" ? pill("Je n'aime pas") : pref === "douleur" ? pill("Douleur", "danger") : null;
@@ -117,15 +116,15 @@ export function templatesView() {
   editing = null;
   const n = state.templates.length;
   const el = h("div", { class: "screen" },
-    pageHead("Séances", `${n} séance${n > 1 ? "s" : ""} type${n > 1 ? "s" : ""} · ${state.profile.days} jours / semaine`,
-      h("button", { class: "icon-round", "aria-label": "Nouvelle séance", onClick: () => nameSheet({ title: "Nouvelle séance", okLabel: "Créer la séance",
-        onOk: v => { const t = createTemplate(v); setTimeout(() => go(`#/seances/${t.id}`)); } }) }, icon("plus"))),
+    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Programme", subtitle: `${n} séance${n > 1 ? "s" : ""} type${n > 1 ? "s" : ""} · Fluide prend chaque jour la moins récente`,
+      action: { label: "Nouvelle", onClick: () => nameSheet({ title: "Nouvelle séance", okLabel: "Créer la séance",
+        onOk: v => { const t = createTemplate(v); setTimeout(() => go(`#/seances/${t.id}`)); } }) } }),
     h("div", { class: "scroll" },
-      n > 0 && h("button", { class: "card tap", onClick: () => go("#/seances/programme") },
+      n > 0 && h("button", { class: "card tap violet", onClick: () => go("#/seances/programme") },
         h("div", { class: "card-head" },
-          h("div", null, h("div", { class: "overline" }, "Programme"), h("div", { class: "display-xs" }, SPLITS[state.profile.split || "perso"].label),
+          h("div", null, h("div", { class: "overline" }, "Programme"), h("div", { class: "display-xs violet" }, SPLITS[state.profile.split || "perso"].label),
             state.profile.minutes != null && h("div", { class: "caption num", style: { marginTop: "4px" } }, weekLine(state.profile))),
-          h("span", { class: "btn ghost sm" }, "Changer"))),
+          h("span", { class: "btn secondary sm" }, "Changer"))),
       n ? state.templates.map(t => {
         const last = history().find(s => s.templateId === t.id);
         const muscles = [...new Set(t.items.map(i => exercise(i.exerciseId)?.muscle))].join(" · ");
@@ -133,13 +132,13 @@ export function templatesView() {
           h("div", { class: "card-head" }, h("span", { class: "display-xs" }, t.name), icon("caretRight", "chev discret")),
           h("span", { class: "body-sm num" }, `${t.items.length} exercice${t.items.length > 1 ? "s" : ""} · ${t.items.reduce((a, i) => a + itemSets(i), 0)} séries · ~${estimate(t)} min`),
           h("span", { class: "caption" }, muscles || "Aucun exercice", last ? ` — faite ${ago(last.startedAt)}` : muscles ? " — jamais faite" : ""));
-      }) : h("div", { class: "card empty" },
+      }) : h("div", { class: "empty" },
         h("p", { class: "body-md fort medium", style: { margin: 0 } }, "Aucune séance type"),
         h("p", { class: "body-sm discret", style: { margin: 0 } }, "Choisis un programme (full body, haut / bas, push / pull / legs…) ou crée tes séances toi-même."),
         btn("Choisir un programme", { variant: "primary", size: "lg", full: true, onClick: () => go("#/seances/programme") })),
       n > 0 && h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Volume prévu par semaine")),
-      n > 0 && h("div", { class: "card" },
-        h("p", { class: "caption", style: { margin: 0 } }, "Si tu fais chaque séance une fois. Le trait blanc est la cible de ta matrice : ajuste les séries pour tomber dessus."),
+      n > 0 && h("div", { class: "card rose" },
+        h("p", { class: "caption", style: { margin: 0 } }, "Si tu fais chaque séance une fois. Le trait blanc est la cible de chaque muscle : ajuste les séries pour tomber dessus."),
         volumeBars(plannedSets()))));
   return { el, tab: "seances" };
 }
@@ -176,7 +175,7 @@ export function templateView({ id }) {
         h("p", { class: "body-sm discret", style: { margin: 0 } }, "Commence par un ou deux polyarticulaires lourds, puis l'isolation."));
 
   const el = h("div", { class: "screen" },
-    navbar({ back: { label: draft ? "Programme" : "Séances", onClick: leave }, title: t.name, subtitle: `${t.items.length} exercice${t.items.length > 1 ? "s" : ""} · ~${estimate(t)} min${draft ? " · aperçu" : ""}`,
+    navbar({ back: { label: draft ? "Programme recommandé" : "Programme", onClick: leave }, title: t.name, subtitle: `${t.items.length} exercice${t.items.length > 1 ? "s" : ""} · ~${estimate(t)} min${draft ? " · aperçu" : ""}`,
       action: { label: edit ? "OK" : "Modifier", onClick: toggle } }),
     h("div", { class: "scroll" }, edit
       ? [
@@ -197,7 +196,7 @@ export function templateView({ id }) {
           draft
             ? btn("Revenir au programme", { variant: "primary", size: "lg", full: true, onClick: leave })
             : btn(`Démarrer ${t.name}`, { variant: "primary", size: "lg", full: true, disabled: !t.items.length || !!state.active,
-                onClick: () => startSheet(t.id) }),
+                onClick: () => { startWorkout(t.id); go("#/seance"); } }),
           !draft && state.active && h("p", { class: "caption", style: { margin: 0, textAlign: "center" } },
             `Une séance est déjà en cours (${state.active?.name}). Termine-la ou reprends-la d'abord.`)
         ]));
@@ -387,7 +386,7 @@ export function programView() {
       : `Demande ${SPLITS[o.key].days} séances, tu en as ${p.days}`)),
     card("perso", null));
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Séances", onClick: leave }, title: "Programme", subtitle: "Réglé sur ta semaine" }),
+    navbar({ back: { label: "Programme", onClick: leave }, title: "Programme recommandé", subtitle: "Réglé sur ta semaine" }),
     h("div", { class: "scroll" },
       h("button", { class: "card tap", onClick: () => go("#/seances/programme/semaine") },
         h("div", { class: "card-head" },
@@ -437,7 +436,7 @@ export function weekView() {
   const set = k => v => { p[k] = v; save(true); };
   const goals = [[null, "Aucun", "Muscu seule : le programme ne regarde que tes réglages Fluide."],
     ...Object.entries(ENDURANCE).map(([k, e]) => [k, e.label, `${e.desc} Le programme garde ton jour long loin des séances jambes et ajoute les montées sur pointes de ton plan.`])];
-  const goalCards = h("div", { class: "radio-cards", role: "radiogroup", "aria-label": "Objectif longue durée" },
+  const goalCards = h("div", { class: "radio-cards", role: "radiogroup", "aria-label": "Objectif additionnel" },
     goals.map(([k, label, desc]) => h("button", { type: "button", class: "radio-card", role: "radio", "aria-checked": String(k === p.endurance), onClick: () => {
       p.endurance = k;
       if (k && p.enduranceStart == null) p.enduranceStart = startOfWeek(Date.now());
@@ -447,13 +446,13 @@ export function weekView() {
       h("span", { class: "radio-text" }, h("span", { class: "body-md fort semibold" }, label), h("span", { class: "caption" }, desc)))));
   const field = (label, control, help) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), control, help && h("p", { class: "caption", style: { margin: 0 } }, help));
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Programme", onClick: done }, title: "Ta semaine", subtitle: "Séances, temps, objectif", action: { label: "OK", onClick: done } }),
+    navbar({ back: { label: "Retour", onClick: () => { options = null; save(); window.history.back(); } }, title: "Ta semaine", subtitle: "Séances, temps, objectif additionnel, points forts et faibles" }),
     h("div", { class: "scroll" },
       h("div", { class: "card" },
         field("Séances de muscu par semaine", stepper({ value: p.days, min: 2, max: 6, unit: "séances", label: "séances par semaine", onChange: set("days") })),
         field("Temps par séance", stepper({ value: p.minutes, values: SESSION_MINUTES, min: SESSION_MINUTES[0], max: SESSION_MINUTES.at(-1), format: v => `${v} min`, label: "minutes par séance", onChange: set("minutes") }),
           "Échauffement compris. Une séance trop longue perd d'abord du repos, puis des séries sur les muscles à maintenir.")),
-      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif longue durée")),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif additionnel")),
       h("p", { class: "caption", style: { margin: 0 } }, "Un sport que tu prépares à côté de la muscu. Il compte dans la récupération des jambes."),
       goalCards,
       ENDURANCE[p.endurance]?.weeks && (() => {
