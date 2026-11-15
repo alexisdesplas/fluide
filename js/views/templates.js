@@ -1,5 +1,5 @@
 import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, startWorkout, SESSIONS_PER_WEEK } from "../store.js";
-import { h, icon, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, sheet, confirmSheet, toast, num } from "../ui.js";
+import { h, icon, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
 export const prefPill = pref =>
@@ -159,7 +159,7 @@ export function templateView({ id }) {
   const rows = t.items.flatMap((it, i) => {
     const ex = exercise(it.exerciseId);
     const g = groupTag(t.items, i);
-    const main = [h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, ex.name),
+    const main = [h("span", { class: "num-lead", "aria-hidden": "true" }, i + 1), h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, niceName(ex.name)),
       h("span", { class: "caption num" }, g ? `${g.label} ${g.tag} · ` : "", itemLine(it, g && !g.last))), prefPill(ex.pref)];
     const cls = `row${g ? " grouped" : ""}`;
     return edit
@@ -171,7 +171,7 @@ export function templateView({ id }) {
       : h("button", { class: cls, onClick: () => go(`#/seances/${t.id}/${it.id}`) }, ...main, icon("caretRight", "chev"));
   });
   const list = t.items.length ? h("div", { class: "list" }, rows)
-    : h("div", { class: "card empty" }, h("p", { class: "body-md fort medium", style: { margin: 0 } }, "Aucun exercice"),
+    : h("div", { class: "empty" }, icon("barbell"), h("h2", { class: "display-xs" }, "Aucun exercice"),
         h("p", { class: "body-sm discret", style: { margin: 0 } }, "Commence par un ou deux polyarticulaires lourds, puis l'isolation."));
 
   const el = h("div", { class: "screen" },
@@ -214,16 +214,14 @@ export function itemView({ id, item }) {
   const done = () => { save(); go(`#/seances/${t.id}`); };
   const set = k => v => { it[k] = v; if (k === "repsMin" && it.repsMax < v) it.repsMax = v; if (k === "repsMax" && it.repsMin > v) it.repsMin = v; save(true); };
   const field = (label, s) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), s);
-  const weight = label => field(label, chargeStepper({ equip: ex.equip, ex, value: it.weight, note: "0 = poids du corps", onChange: set("weight") }));
+  const weight = label => h("div", { class: "field charge" }, h("span", { class: "caption medium" }, label), chargeStepper({ equip: ex.equip, ex, value: it.weight, note: "0 = poids du corps", onChange: set("weight") }));
 
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: t.name, onClick: done }, title: ex.name, subtitle: ex.muscle, action: { label: "OK", onClick: done } }),
+    navbar({ back: { label: t.name, onClick: done }, title: niceName(ex.name), subtitle: `${ex.muscle} · ${EQUIPS[ex.equip] || ""}`, action: { label: "OK", onClick: done } }),
     h("div", { class: "scroll" },
-      radios([
-        ["series", FORMATS.series, "La charge monte quand le haut de la fourchette est atteint partout."],
-        ["emom", FORMATS.emom, "Un round au début de chaque intervalle, le reste sert de repos. 3 rounds comptent 1 série."],
-        ["tabata", FORMATS.tabata, "Effort puis repos au chrono. 8 rounds comptent 2 séries."]
-      ], it.format || "series", v => { setItemFormat(it, v); dispatchEvent(new HashChangeEvent("hashchange")); }, "Format"),
+      h("div", { class: "field" }, h("span", { class: "caption medium" }, "Format"),
+        segmented(Object.entries(FORMATS), it.format || "series", v => { setItemFormat(it, v); dispatchEvent(new HashChangeEvent("hashchange")); }),
+        h("span", { class: "caption" }, { series: "La charge monte quand le haut de la fourchette est atteint partout.", emom: "Un round au début de chaque intervalle, le reste sert de repos. 3 rounds comptent 1 série.", tabata: "Effort puis repos au chrono. 8 rounds comptent 2 séries." }[it.format || "series"])),
       it.format !== "emom" && it.format !== "tabata" && last && h("div", { class: "hint" }, icon("trend"),
         h("span", { class: "body-sm" }, "La dernière fois ", h("b", { class: "fort medium num" }, setsLine(ex.equip, last.sets)), ` (${ago(last.date)}). `,
           sug.hint === "charge" ? `Haut de fourchette atteint : vise ${charge(ex.equip, sug.weight)}.` : `Vise ${sug.reps} reps à ${charge(ex.equip, sug.weight)}.`)),
@@ -305,7 +303,8 @@ export function pickerView({ id, item }) {
 const previewRow = (t, it, i) => {
   const g = groupTag(t.items, i), ex = exercise(it.exerciseId);
   return h("div", { class: `row${g ? " grouped" : ""}` },
-    h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, ex.name),
+    h("span", { class: "num-lead", "aria-hidden": "true" }, i + 1),
+    h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, niceName(ex.name)),
       h("span", { class: "caption num" }, g ? `${g.label} ${g.tag} · ` : "", itemLine(it, g && !g.last))),
     prefPill(ex.pref));
 };
@@ -375,7 +374,7 @@ export function programView() {
   const card = (k, meta) => h("button", { type: "button", class: "radio-card", role: "radio", "aria-checked": String(k === chosen), onClick: () => pick(k) },
     h("span", { class: "radio-dot", "aria-hidden": "true" }),
     h("span", { class: "radio-text" },
-      h("span", { class: "card-head" }, h("span", { class: "body-md fort semibold" }, SPLITS[k].label), k === reco && pill("Recommandé", "accent")),
+      h("span", { class: "card-head" }, h("span", { class: "body-md fort semibold" }, SPLITS[k].label), k === reco && pill("Recommandé", "tag")),
       meta && h("span", { class: "caption num" }, meta),
       h("span", { class: "caption" }, SPLITS[k].desc)));
   // Seuls les programmes qui tiennent dans ta semaine sont proposés (à défaut, le moins exigeant).
@@ -385,38 +384,38 @@ export function programView() {
       ? `${SPLITS[o.key].days} séances · ${o.freq ? `chaque muscle ${times(o)} fois` : "des muscles sautent"} · ${o.coverage} % de la cible`
       : `Demande ${SPLITS[o.key].days} séances, tu en as ${p.days}`)),
     card("perso", null));
-  const el = h("div", { class: "screen no-tabs" },
+  const el = h("div", { class: "screen no-tabs violet" },
     navbar({ back: { label: "Programme", onClick: leave }, title: "Programme recommandé", subtitle: "Réglé sur ta semaine" }),
     h("div", { class: "scroll" },
-      h("button", { class: "card tap", onClick: () => go("#/seances/programme/semaine") },
+      h("button", { class: "card tap violet", onClick: () => go("#/seances/programme/semaine") },
         h("div", { class: "card-head" },
-          h("div", null, h("div", { class: "overline" }, "Ta semaine"), h("div", { class: "body-md fort medium num" }, weekLine(p))),
-          h("span", { class: "btn ghost sm" }, "Modifier"))),
+          h("div", null, h("div", { class: "overline" }, "Ta semaine"), h("div", { class: "display-xs violet num" }, weekLine(p))),
+          h("span", { class: "btn secondary sm" }, "Modifier"))),
       h("p", { class: "caption", style: { margin: 0 } }, "Le programme crée tes séances types : les séries de chaque muscle visent sa cible (maintenir, progresser, point faible), tes favoris passent en premier, jamais un exercice en douleur."),
       cards,
       chosen !== "perso" && [
         h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, chosen === reco ? "Pourquoi ce programme" : "Ce que ça donne")),
-        h("div", { class: "card" }, reasons(opt, p, week).map(([ic, text]) =>
+        h("div", { class: "card violet" }, reasons(opt, p, week).map(([ic, text]) =>
           h("div", { class: `hint${ic === "warning" ? " attention" : ""}` }, icon(ic), h("span", { class: "body-sm" }, text)))),
         h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Ta semaine type")),
         h("div", { class: "list" }, week.map(d => h("div", { class: "row" },
           h("div", { class: "row-main" },
-            h("span", { class: "body-md fort medium" }, d.day),
+            h("span", { class: `week-day${d.session ? "" : " off"}` }, d.day),
             h("span", { class: "caption" }, [d.session || "Pas de muscu",
               d.endurance === "facile" && (d.session ? "corde facile en échauffement" : "corde facile"),
               d.endurance === "recup" && (d.session ? "corde récup en échauffement" : "corde récup")].filter(Boolean).join(" · "))),
-          d.endurance === "long" && pill("Corde · jour long", "accent")))),
+          d.endurance === "long" && pill("Jour long", "tag orange")))),
         h("p", { class: "caption", style: { margin: 0 } }, p.endurance ? `Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant le jour long de corde loin des jambes. Les jours de muscu, la séance corde du jour (facile ou récup) sert d'échauffement.` : "Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant un jour de repos entre deux grosses séances."),
         h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Aperçu"), h("span", { class: "caption" }, `${preview.length} séances`)),
         h("p", { class: "caption", style: { margin: 0 } }, "Modifie chaque séance avant de valider : exercices, séries, ordre, supersets. Changer de programme repart de zéro."),
         preview.map(t => h("div", { class: "card" },
           h("div", { class: "card-head" },
-            h("div", null, h("span", { class: "heading-md" }, t.name), h("span", { class: "caption num", style: { display: "block" } }, `${t.items.length} exercice${t.items.length > 1 ? "s" : ""} · ~${estimate(t)} min`)),
+            h("div", null, h("span", { class: "heading-md violet" }, t.name), h("span", { class: "caption num", style: { display: "block" } }, `${t.items.length} exercice${t.items.length > 1 ? "s" : ""} · ~${estimate(t)} min`)),
             btn("Modifier", { variant: "secondary", size: "sm", icon: "pencil", onClick: () => go(`#/seances/${t.id}`) })),
           estimate(t) > p.minutes && h("div", { class: "hint attention" }, icon("warning"), h("span", { class: "body-sm" }, `Dépasse tes ${p.minutes} min : passe à un programme avec plus de séances, ou baisse une cible dans tes réglages Fluide.`)),
           h("div", { class: "list" }, t.items.map((it, i) => previewRow(t, it, i))))),
         h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Séries par semaine")),
-        h("div", { class: "card" }, h("p", { class: "caption", style: { margin: 0 } }, "Si tu fais chaque séance une fois. Le trait blanc est la cible de tes réglages Fluide."), volumeBars(plannedSetsOf(preview)))
+        h("div", { class: "card rose" }, h("p", { class: "caption", style: { margin: 0 } }, "Si tu fais chaque séance une fois. Le trait blanc est la cible de chaque muscle."), volumeBars(plannedSetsOf(preview)))
       ],
       btn(chosen === "perso" ? "Créer mes séances moi-même" : "Utiliser ce programme", { variant: "primary", size: "lg", full: true, onClick: use })));
   return { el };
@@ -424,7 +423,7 @@ export function programView() {
 
 // Points forts (maintien) et points faibles (priorité) : ils écrivent directement les réglages Fluide.
 // Retirer un muscle d'une des deux listes le remet en progresser. « À définir » change le format des séries, pas le volume.
-const strengthChips = status => h("div", { class: "chips" }, MUSCLES.map(m => h("button", { type: "button", class: "chip", "aria-pressed": String(state.matrix[m].status === status),
+const strengthChips = status => h("div", { class: `chips ${status === "faible" ? "rose" : "vert"}` }, MUSCLES.map(m => h("button", { type: "button", class: "chip", "aria-pressed": String(state.matrix[m].status === status),
   onClick: () => { options = null; setMatrix(m, state.matrix[m].status === status ? "focus" : status); } }, m)));
 
 // Ta semaine : séances de muscu dispo, temps par séance, objectif longue durée, points forts et faibles. Le programme se règle dessus.
@@ -445,14 +444,14 @@ export function weekView() {
       h("span", { class: "radio-dot", "aria-hidden": "true" }),
       h("span", { class: "radio-text" }, h("span", { class: "body-md fort semibold" }, label), h("span", { class: "caption" }, desc)))));
   const field = (label, control, help) => h("div", { class: "field" }, h("span", { class: "caption medium" }, label), control, help && h("p", { class: "caption", style: { margin: 0 } }, help));
-  const el = h("div", { class: "screen no-tabs" },
+  const el = h("div", { class: "screen no-tabs violet" },
     navbar({ back: { label: "Retour", onClick: () => { options = null; save(); window.history.back(); } }, title: "Ta semaine", subtitle: "Séances, temps, objectif additionnel, points forts et faibles" }),
     h("div", { class: "scroll" },
       h("div", { class: "card" },
         field("Séances de muscu par semaine", stepper({ value: p.days, ...SESSIONS_PER_WEEK, unit: "séances", label: "séances par semaine", onChange: set("days") })),
         field("Temps par séance", stepper({ value: p.minutes, values: SESSION_MINUTES, min: SESSION_MINUTES[0], max: SESSION_MINUTES.at(-1), format: v => `${v} min`, label: "minutes par séance", onChange: set("minutes") }),
           "Échauffement compris. Une séance trop longue perd d'abord du repos, puis des séries sur les muscles à maintenir.")),
-      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif additionnel")),
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md orange" }, "Objectif additionnel")),
       h("p", { class: "caption", style: { margin: 0 } }, "Un sport que tu prépares à côté de la muscu. Il compte dans la récupération des jambes."),
       goalCards,
       ENDURANCE[p.endurance]?.weeks && (() => {

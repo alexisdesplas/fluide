@@ -184,8 +184,8 @@ export function muscleView({ muscle: m }) {
     h("span", { class: "body-sm" }, "Cible ", h("span", { class: "discret" }, `(repère ${STATUS[draft.status].range.join("-")})`)),
     stepper({ value: draft.target, min: 0, max: 30, compact: true, format: v => `${v} série${v > 1 ? "s" : ""}`, label: `séries ${m}`, onChange: v => { draft.target = v; } })));
   drawTarget();
-  const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Objectif par muscle", onClick: back }, title: m }),
+  const el = h("div", { class: "screen no-tabs rose" },
+    navbar({ back: { label: "Objectif par muscle", onClick: back }, title: m, subtitle: `${planned} série${planned > 1 ? "s" : ""} prévue${planned > 1 ? "s" : ""} dans tes séances types` }),
     h("div", { class: "scroll" },
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Volume")),
       radios(Object.entries(STATUS).map(([k, v]) => [k, v.label, `${v.range.join("-")} séries par semaine`]), draft.status, v => { draft.status = v; draft.target = STATUS[v].def; drawTarget(); }, `Statut ${m}`),
