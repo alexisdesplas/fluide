@@ -1,7 +1,7 @@
 // Lieux de séance : la salle, chez soi, le street. Chacun a son matériel, ses charges et son matériel annexe.
-// Le choix se fait d'un tap au démarrage (feuille), la description sur un écran dédié dans Réglages.
-import { state, GEAR, PLACES, EXTRAS, placeOf, setPlace, startWorkout } from "../store.js";
-import { h, icon, btn, go, num, stepper, navbar, sheet, toast } from "../ui.js";
+// Le lieu se choisit sur Aujourd'hui, la description sur un écran dédié dans Réglages › Équipement.
+import { state, GEAR, PLACES, EXTRAS, placeOf, setPlace } from "../store.js";
+import { h, icon, btn, go, num, stepper, navbar, toast } from "../ui.js";
 
 // Paires d'haltères et kettlebells qu'on peut cocher. « Toutes » : toute la gamme, comme en salle.
 const DUMBBELL_LOADS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40];
@@ -27,47 +27,31 @@ export function placeSummary(key) {
   return [...parts, ...extras].map((t, i) => (i ? t[0].toLowerCase() + t.slice(1) : t)).join(", ");
 }
 
-// « Où aujourd'hui ? » : un tap et la séance démarre, adaptée au lieu. Le dernier lieu passe en tête.
-export function startSheet(templateId) {
-  const last = state.profile.place || "gym";
-  const order = [last, ...Object.keys(PLACES).filter(k => k !== last)];
-  sheet({
-    title: "Où aujourd'hui ?",
-    body: close => [
-      h("div", { class: "list" }, order.map(k => h("button", { type: "button", class: "row", onClick: () => {
-        close();
-        startWorkout(templateId, k);
-        go("#/seance");
-      } },
-        h("div", { class: "row-main" },
-          h("span", { class: "body-md fort medium" }, PLACES[k].label),
-          h("span", { class: "caption" }, placeSummary(k))),
-        icon("caretRight", "chev")))),
-      h("p", { class: "caption", style: { margin: 0 } }, "La séance s'adapte à ce que tu as sur place. Le programme ne change pas.")
-    ]
-  });
+// Équipement : les trois lieux, chacun avec ce qu'on y trouve ; une tuile ouvre l'écran du lieu.
+export function placesView() {
+  const el = h("div", { class: "screen" },
+    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Équipement", subtitle: "La séance s'adapte à ce que tu as sur place." }),
+    h("div", { class: "scroll" },
+      h("div", { class: "list" }, Object.keys(PLACES).map(k =>
+        h("button", { class: "row place-tile", onClick: () => go(`#/profil/lieux/${k}`) },
+          h("div", { class: "row-main" }, h("span", { class: "name-xl" }, PLACES[k].short), h("span", { class: "body-sm" }, placeSummary(k))),
+          icon("caretRight", "chev")))),
+      h("div", { class: "hint" }, icon("pin"), h("span", { class: "body-sm" }, "Le dernier lieu choisi est proposé d'office sur Aujourd'hui. Le programme reste celui de la salle."))));
+  return { el, tab: "profil" };
 }
-
-// Les trois lieux, en lignes qui ouvrent leur écran (Réglages).
-export const placeRows = () => h("div", { class: "list" }, Object.keys(PLACES).map(k =>
-  h("button", { class: "row", onClick: () => go(`#/profil/lieux/${k}`) },
-    h("div", { class: "row-main" },
-      h("span", { class: "body-md fort medium" }, PLACES[k].label),
-      h("span", { class: "caption" }, placeSummary(k))),
-    icon("caretRight", "chev"))));
 
 // Écran dédié d'un lieu. Rien ne change avant « Enregistrer », le retour annule.
 // Le brouillon survit à un nouveau rendu (synchro du compte pendant le réglage).
 let placeDraft = null;
 export function placeView({ place: key }) {
-  if (!PLACES[key]) { setTimeout(() => go("#/profil")); return { el: h("div") }; }
+  if (!PLACES[key]) { setTimeout(() => go("#/profil/lieux")); return { el: h("div") }; }
   if (placeDraft?.key !== location.hash) {
     const p = placeOf(key);
     placeDraft = { key: location.hash, ...p, gear: [...p.gear], extras: [...p.extras], dumbbells: p.dumbbells && [...p.dumbbells], kettlebells: p.kettlebells && [...p.kettlebells] };
   }
   const d = placeDraft;
   // Retour à la séance si on vient de « Modifier » avant de commencer.
-  const from = state.active ? { label: "Séance", href: "#/seance" } : { label: "Réglages", href: "#/profil" };
+  const from = state.active ? { label: "Séance", href: "#/seance" } : { label: "Équipement", href: "#/profil/lieux" };
   const back = () => { placeDraft = null; go(from.href); };
   const toggleIn = (list, v) => (list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
   const chip = (label, on, onClick) => h("button", { type: "button", class: "chip", "aria-pressed": String(on), onClick }, label);
