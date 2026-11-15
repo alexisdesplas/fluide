@@ -1,10 +1,10 @@
 import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, STATUS, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, weeklySets, setAbsent, setStack, setWorkoutGear, setWorkoutPlace, sessionGear, sessionPlaceKey, placeOf, placeLoads, reachable, PLACES, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet, proposable } from "../store.js";
-import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, announce, beep, restBeepPlanned, dateLong, pageHead, navbar } from "../ui.js";
+import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, announce, beep, restBeepPlanned, dateLong, pageHead, navbar, ruler } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle, niceName, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
 import { placeSummary } from "./places.js";
 
-// Anneau de Tabatime : 312 px, trait de 34 px.
-const R = 139, C = 2 * Math.PI * R;
+// Bouton rond en icône seule (recommencer, passer, arrêter), toujours nommé pour VoiceOver.
+const roundBtn = (ic, label, onClick) => h("button", { type: "button", class: "btn secondary lg square", "aria-label": label, title: label, onClick }, icon(ic));
 
 const lastLine = id => {
   const last = lastPerformance(id);
@@ -443,31 +443,26 @@ export function workoutView() {
 
     if (w) {
       const done = w.done;
-      const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
-      const time = h("div", { class: "display-lg num" });
-      const label = h("div", { class: "overline" }, done ? "Terminé" : cardio);
-      const sub = h("span", { class: "body-sm discret" }, done ? "Cardio bouclé" : w.paused ? "En pause" : `Sur ${clock(w.total)}`);
-      // Séance en blocs : l'anneau suit le bloc en cours (effort en orange, repos en vert).
+      const rl = ruler("orange");
+      // Séance en blocs : la règle suit le bloc en cours (effort en orange, repos en bleu), la frise compte les efforts.
       const phase = () => {
         if (!w.blocks) return null;
         const [n, work, rest] = w.blocks, cyc = work + rest, el = ((w.paused || Date.now()) - w.start) / 1000;
         const round = Math.min(n, Math.floor(el / cyc) + 1), inCycle = el - (round - 1) * cyc, effort = inCycle < work;
         return { round, n, effort, left: effort ? work - inCycle : cyc - inCycle, len: effort ? work : rest, key: `${round}-${effort}` };
       };
-      let lastKey = phase()?.key;
+      const frise = w.blocks && h("div", { class: "segments lg", "aria-hidden": "true" }, Array.from({ length: w.blocks[0] }, () => h("i")));
+      let lastKey = phase()?.key, lastLabel = null;
       const update = () => {
         const l = done ? 0 : left(), ph = !done && phase();
-        time.textContent = clock(Math.ceil(ph ? ph.left : l));
-        ring.setAttribute("stroke-dashoffset", String(done ? 0 : C * (1 - (ph ? ph.left / ph.len : l / w.total))));
-        if (!ph) return;
-        if (label.textContent && label.textContent !== (ph.effort ? `Effort ${ph.round} / ${ph.n}` : "Repos")) announce(ph.effort ? `Effort ${ph.round} sur ${ph.n}.` : "Repos.");
-        label.textContent = ph.effort ? `Effort ${ph.round} / ${ph.n}` : "Repos";
-        sub.textContent = w.paused ? "En pause" : `Reste ${clock(Math.ceil(l))} au total`;
-        ringBox.classList.toggle("chauffe", ph.effort);
+        const label = done ? "Terminé" : ph ? (ph.effort ? `Effort ${ph.round} / ${ph.n}` : "Repos") : cardio;
+        if (ph && lastLabel && lastLabel !== label) announce(ph.effort ? `Effort ${ph.round} sur ${ph.n}.` : "Repos.");
+        lastLabel = label;
+        rl.update({ left: ph ? ph.left : l, total: ph ? ph.len : w.total, label, paused: !!w.paused, hue: done ? "vert" : ph && !ph.effort ? "bleu" : "orange",
+          note: done ? "Cardio bouclé" : w.paused ? "En pause" : ph ? `Reste ${clock(Math.ceil(l))} au total` : `Sur ${clock(w.total)}` });
+        if (frise && ph) [...frise.children].forEach((seg, k) => { seg.className = k + 1 < ph.round || (k + 1 === ph.round && !ph.effort) ? "on" : k + 1 === ph.round ? "cur" : ""; });
+        if (frise) frise.className = `segments lg ${ph && !ph.effort ? "bleu" : "orange"}`;
       };
-      const ringBox = h("div", { class: `ring ${done ? "repos" : "chauffe"}${w.paused ? " paused" : ""}` },
-        h("svg", { viewBox: "0 0 312 312", width: 312, height: 312, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
-        h("div", { class: "ring-center" }, label, time, sub));
       update();
       // Recommencer efface le chrono : on le confirme dès qu'il a tourné un peu.
       const restart = () => (w.total - left() < 30 ? (a.warm = null, save()) : confirmSheet({
@@ -476,19 +471,19 @@ export function workoutView() {
       }));
       const toggle = () => { if (w.paused) { w.start += Date.now() - w.paused; w.paused = null; } else w.paused = Date.now(); save(); };
       const el = h("div", { class: "screen workout" }, head,
-        h("div", { class: "scroll wo-center" },
-          h("div", { class: "wo-hero" },
-            ringBox,
-            h("p", { class: "body-md discret", style: { margin: 0 } }, "Ensuite : ", h("b", { class: "fort medium" }, mobility))),
+        h("div", { class: "scroll" },
+          frise,
+          h("div", { class: "wo-hero" }, rl.el),
+          h("div", { class: "hint" }, icon("caretRight"), h("span", { class: "body-sm" }, "Ensuite : ", h("b", { class: "fort medium" }, mobility), ".")),
           approach),
         done
           ? h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr 1.4fr" } },
               btn("Refaire", { variant: "secondary", size: "lg", onClick: () => { a.warm = null; save(); } }),
               btn("Commencer la séance", { variant: "primary", size: "lg", onClick: begin }), foot)
-          : h("div", { class: "wo-commands" },
-              btn("Recommencer", { variant: "secondary", size: "lg", onClick: restart }),
+          : h("div", { class: "wo-commands nav" },
+              roundBtn("restart", "Recommencer l'échauffement", restart),
               btn(w.paused ? "Reprendre" : "Pause", { variant: "primary", size: "lg", onClick: toggle }),
-              btn("Passer", { variant: "secondary", size: "lg", onClick: begin }), foot));
+              roundBtn("skip", "Passer l'échauffement", begin), foot));
       el.classList.add("big-targets");
       return {
         el,
@@ -510,15 +505,15 @@ export function workoutView() {
         h("div", null,
           h("h1", { class: "heading-xl" }, "Échauffement"),
           h("p", { class: "body-md discret", style: { margin: "4px 0 0" } }, `${cardio}, puis mobilité`))),
-      h("div", { class: "scroll wo-center" },
-        h("div", { class: "wo-hero" },
+      h("div", { class: "scroll" },
+        h("div", { class: "card orange", style: { gap: 0 } },
           h("div", { class: "overline" }, ropeDay ? `${cardio} · ${ropeDay.kind === "recup" ? "jour récup" : ropeDay.kind === "reprise" ? "reprise" : "séance facile"}${ropeDay.deload ? " · deload" : ""}` : cardio),
-          h("div", { class: "display-sm num" }, ropeDay ? `${Math.round(total / 60)} min` : dur ? dur[0].replace("-", "–") : clock(total)),
-          h("p", { class: "body-md discret", style: { margin: 0 } }, ropeDay ? `${blocksLabel(ropeDay.blocks)}, puis ${mobility}.` : `Montée progressive, puis ${mobility}.`)),
+          h("div", { class: "display-lg num orange" }, ropeDay ? `${Math.round(total / 60)} min` : dur ? dur[0].replace("-", "–") : clock(total)),
+          h("p", { class: "body-md fort", style: { margin: 0 } }, ropeDay ? `${blocksLabel(ropeDay.blocks)}, puis ${mobility}.` : `Montée progressive, puis ${mobility}.`)),
         ropeNote, approach, gearLine),
-      h("div", { class: "wo-commands", style: { gridTemplateColumns: "1fr 1.4fr" } },
-        btn("Passer", { variant: "secondary", size: "lg", onClick: begin }),
-        btn("C'est parti", { variant: "primary", size: "lg", icon: "timer", onClick: () => { a.warm = { start: Date.now(), paused: null, total, blocks }; save(); } }),
+      h("div", { class: "wo-commands", style: { gridTemplateColumns: "auto 1fr" } },
+        btn("Passer", { variant: "ghost", size: "lg", onClick: begin }),
+        btn("C'est parti", { variant: "primary", size: "lg", onClick: () => { a.warm = { start: Date.now(), paused: null, total, blocks }; save(); } }),
         foot));
     return { el };
   }
@@ -535,22 +530,16 @@ export function workoutView() {
   const col = (...kids) => h("div", { class: "wo-stack" }, ...kids);
   let hero, restBtn, bottom;
 
-  // Série validée : message avec Annuler (la série sort, le repos qu'elle a lancé aussi).
+  // Série validée : pas de message par-dessus l'écran (retour d'Alexis du 15/11). Une série notée par erreur
+  // se corrige ou se retire en touchant sa ligne dans la liste des séries.
   const done = () => {
-    const i = a.cursor, x = a.entries[i];
     a.goAt = null;
     lockUntil = Date.now() + 700;
     logSet();
-    const k = x.sets.length - 1, s = x.sets[k];
-    const what = isAmrap(x) ? `${exercise(x.exerciseId).name} : tour ${k + 1}` : `${interval ? "Round" : "Série"} ${k + 1}`;
-    toast(`${what} noté${isAmrap(x) || interval ? "" : "e"} · ${charge(equipOf(x), s.weight)} × ${s.reps}`, {
-      label: "Annuler", onClick: () => { if (!state.active?.entries[i]?.sets[k]) return; state.active.cursor = i; deleteSet(i, k); toast("Annulé"); }
-    });
   };
 
   if (resting) {
-    const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
-    const time = h("div", { class: "display-lg num" });
+    const rl = ruler("bleu");
     // Bouton principal pendant le repos : sa jauge se vide avec le temps restant, comme l'anneau ; un tap lance la suite sans attendre.
     const nextLabel = exDone ? "Fin du repos" : `Lancer la série ${e.sets.length + 1}`;
     const fill = h("span", { class: "rest-fill", "aria-hidden": "true" }), btnTime = h("span", { class: "num" });
@@ -558,8 +547,7 @@ export function workoutView() {
       fill, h("span", { class: "rest-label" }, nextLabel), btnTime);
     const update = () => {
       const left = Math.max(0, (a.restEndsAt - Date.now()) / 1000);
-      time.textContent = clock(Math.ceil(left));
-      ring.setAttribute("stroke-dashoffset", String(C * (1 - left / a.restTotal)));
+      rl.update({ left, total: a.restTotal, label: "Repos" });
       btnTime.textContent = clock(Math.ceil(left));
       fill.style.transform = `scaleX(${Math.min(1, left / a.restTotal)})`;
       restBtn.setAttribute("aria-label", `${nextLabel} maintenant, repos restant ${clock(Math.ceil(left))}`);
@@ -569,10 +557,7 @@ export function workoutView() {
     // Le repos est le moment où l'on charge la barre : la série suivante se prépare ici.
     const nextEx = exDone && !isLast ? exercise(a.entries[a.cursor + 1].exerciseId) : null;
     hero = col(
-      h("div", { class: "wo-hero rest" },
-        h("div", { class: "ring sm repos" },
-          h("svg", { viewBox: "0 0 312 312", "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
-          h("div", { class: "ring-center" }, h("div", { class: "overline" }, "Repos"), time))),
+      h("div", { class: "wo-hero rest" }, rl.el),
       exDone
         ? nextEx && h("div", { class: "hint" }, icon("caretRight"), h("span", { class: "body-sm" }, "Ensuite : ", h("b", { class: "fort medium" }, niceName(nextEx.name)), "."))
         : h("div", { class: "card next-set" },
@@ -580,7 +565,8 @@ export function workoutView() {
             weightStepper(e), repsStepper("Reps")));
     hero.update = update;
     // Ajuster le repos au pouce, de part et d'autre du bouton principal.
-    bottom = [btn("−15 s", { variant: "secondary", size: "lg", onClick: () => shift(-15) }), restBtn, btn("+15 s", { variant: "secondary", size: "lg", onClick: () => shift(15) })];
+    bottom = [h("button", { type: "button", class: "btn secondary lg", "aria-label": "15 secondes de repos en moins", onClick: () => shift(-15) }, "−15"), restBtn,
+      h("button", { type: "button", class: "btn secondary lg", "aria-label": "15 secondes de repos en plus", onClick: () => shift(15) }, "+15")];
   } else if (interval && !exDone) {
     const st = intervalState(e);
     if (!st) {
@@ -592,18 +578,16 @@ export function workoutView() {
         ...draftSteppers(e.format === "emom" ? "Reps par round" : "Reps du round"));
     } else {
       const kind = e.format === "emom" ? "emom" : st.phase;
-      const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
-      const time = h("div", { class: "display-lg num" }), over = h("div", { class: "overline" }), sub = h("span", { class: "body-sm discret num" });
-      const wrap = h("div", { class: `ring ${kind}` },
-        h("svg", { viewBox: "0 0 312 312", width: 312, height: 312, "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
-        h("div", { class: "ring-center" }, over, time, sub));
+      const rl = ruler(kind === "repos" ? "bleu" : "orange");
+      const frise = h("div", { class: "segments lg", "aria-hidden": "true" }, Array.from({ length: e.target.rounds }, () => h("i")));
       const update = () => {
         const x = intervalState(e); if (!x) return;
-        wrap.className = `ring ${e.format === "emom" ? "emom" : x.phase}`;
-        over.textContent = e.format === "emom" ? `Round ${Math.min(x.round, e.target.rounds)} / ${e.target.rounds}` : `${x.phase === "effort" ? "Effort" : "Repos"} · round ${Math.min(x.round, e.target.rounds)} / ${e.target.rounds}`;
-        time.textContent = clock(Math.ceil(x.left));
-        sub.textContent = `${e.sets.length} round${e.sets.length > 1 ? "s" : ""} noté${e.sets.length > 1 ? "s" : ""}`;
-        ring.setAttribute("stroke-dashoffset", String(C * (1 - x.left / x.total)));
+        const round = Math.min(x.round, e.target.rounds), rest = e.format !== "emom" && x.phase !== "effort";
+        rl.update({ left: x.left, total: x.total, hue: rest ? "bleu" : "orange",
+          label: e.format === "emom" ? `Minute ${round} / ${e.target.rounds}` : `${rest ? "Repos" : "Effort"} · round ${round} / ${e.target.rounds}`,
+          note: `${e.sets.length} round${e.sets.length > 1 ? "s" : ""} noté${e.sets.length > 1 ? "s" : ""}` });
+        [...frise.children].forEach((seg, k) => { seg.className = k + 1 < round || (k + 1 === round && rest) ? "on" : k + 1 === round ? "cur" : ""; });
+        frise.className = `segments lg ${rest ? "bleu" : "orange"}`;
       };
       update();
       const stop = () => confirmSheet({
@@ -611,10 +595,10 @@ export function workoutView() {
         message: `${e.sets.length} round${e.sets.length > 1 ? "s" : ""} noté${e.sets.length > 1 ? "s" : ""} : ${e.sets.length > 1 ? "ils restent" : "il reste"}. Le chrono repart de zéro si tu le relances.`,
         confirmLabel: "Arrêter le chrono", cancelLabel: "Continuer", onConfirm: () => stopClock(a.cursor)
       });
-      hero = col(
-        h("div", { class: `wo-hero ${kind}` }, wrap,
-          btn("Arrêter le chrono", { variant: "ghost", size: "sm", onClick: stop })),
-        ...draftSteppers("Reps du round"));
+      hero = col(frise,
+        h("div", { class: `wo-hero ${kind}` }, rl.el),
+        ...draftSteppers("Reps du round"),
+        btn("Arrêter le chrono", { variant: "ghost", full: true, onClick: stop }));
       hero.update = update;
     }
   } else if (amrap && !exDone) {
@@ -637,13 +621,8 @@ export function workoutView() {
           h("span", { class: "body-sm discret" }, "Enchaîne les exercices sans repos, autant de tours que possible. Règle la charge et les reps de chacun avant de lancer.")),
         circuit, ...draftSteppers("Reps"));
     } else {
-      const ring = h("circle", { svg: true, class: "prog", cx: 156, cy: 156, r: R, "stroke-dasharray": C });
-      const time = h("div", { class: "display-lg num" });
-      const update = () => {
-        const left = amrapLeft(lead);
-        time.textContent = clock(Math.ceil(left));
-        ring.setAttribute("stroke-dashoffset", String(C * (1 - left / lead.target.time)));
-      };
+      const rl = ruler("orange");
+      const update = () => rl.update({ left: amrapLeft(lead), total: lead.target.time, label: `Effort · tour ${round}`, note: "sans repos, autant de tours que possible" });
       update();
       const stop = () => confirmSheet({
         title: "Arrêter l'AMRAP ?",
@@ -651,12 +630,9 @@ export function workoutView() {
         confirmLabel: "Arrêter l'AMRAP", cancelLabel: "Continuer le circuit", onConfirm: () => endAmrap(a.cursor)
       });
       hero = col(
-        h("div", { class: "wo-hero" },
-          h("div", { class: "ring sm amrap" },
-            h("svg", { viewBox: "0 0 312 312", "aria-hidden": "true" }, h("circle", { svg: true, class: "track", cx: 156, cy: 156, r: R }), ring),
-            h("div", { class: "ring-center" }, h("div", { class: "overline" }, `Tour ${round}`), time)),
-          btn("Arrêter l'AMRAP", { variant: "ghost", size: "sm", onClick: stop })),
-        circuit, ...draftSteppers("Reps"));
+        h("div", { class: "wo-hero" }, rl.el),
+        circuit, ...draftSteppers("Reps"),
+        btn("Arrêter l'AMRAP", { variant: "ghost", full: true, onClick: stop }));
       hero.update = update;
     }
   } else if (exDone) {

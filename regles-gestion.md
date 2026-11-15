@@ -1,6 +1,6 @@
 # Règles de gestion — Fluide
 
-Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause) et la v0.9.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
+Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause), la v0.10.0 (refonte en 3 onglets) et la v0.10.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
 
 ## Lire ce registre
 
@@ -8,12 +8,13 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 - **Identifiant** : `RG-<domaine>-<numéro>`. Il ne change jamais. Une règle retirée garde son numéro, marqué « Retirée » ; une nouvelle règle prend le numéro suivant de son domaine.
 - **État** :
   - **Active** : la règle s'applique.
+  - **Retirée** : la règle ne s'applique plus ; la version qui l'a retirée est indiquée.
   - **Sans accès** : le code existe, mais aucun écran n'y mène.
   - **E-xx** : la règle s'applique, avec un écart décrit plus bas.
 - **Source** : le fichier et la fonction, plutôt qu'un numéro de ligne qui bougerait. Les fichiers sont dans `js/`, sauf `schema.sql` dans `supabase/`.
 - **Mise à jour** : toute PR qui ajoute, change ou retire une règle met à jour ce fichier.
 
-**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.9.1, essayées aussi dans l'app. Les règles de lieux et de reprise viennent de la lecture des v0.8.0 et v0.9.0, avec quelques scénarios exécutés.
+**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.10.1, essayées aussi dans l'app. Les règles de lieux, de reprise et de la refonte viennent de la lecture des v0.8.0, v0.9.0 et v0.10.0, avec quelques scénarios exécutés.
 
 ## Décompte
 
@@ -35,7 +36,7 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 | Compte et données | CPT | 9 |
 | **Total** | | **179** |
 
-Dont 3 sans accès (RG-SEA-28 à 30).
+Dont 3 sans accès (RG-SEA-28 à 30) et 1 retirée (RG-SEA-08, en v0.10.0).
 
 ## Volume et objectif Fluide
 
@@ -55,7 +56,7 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 | RG-VOL-12 | Un EMOM compte 1 série par tranche de 3 rounds entamée : 3 rounds = 1 série, 10 rounds = 4 séries. | `store.js` › `roundsToSets` | Active |
 | RG-VOL-13 | En AMRAP, un tour vaut une série pour le muscle de chaque exercice du circuit. | `store.js` › `entrySets`, `endAmrap` | Active |
 | RG-VOL-14 | Seules les séries validées comptent : les séries prévues mais non faites ne comptent pas. Une séance supprimée sort de l'objectif. | `views/workout.js` › `finishView` ; `store.js` › `deleteSession` | Active |
-| RG-VOL-15 | Stats alerte sur un muscle hors Maintenir, à cible non nulle, resté sous 80 % de sa cible les 2 semaines pleines précédentes, s'il existe au moins une séance d'avant la semaine dernière. | `views/progress.js` › `progressView` | Active |
+| RG-VOL-15 | Progrès alerte sur un muscle hors Maintenir, à cible non nulle, resté sous 80 % de sa cible les 2 semaines pleines précédentes, s'il existe au moins une séance d'avant la semaine dernière. | `views/progress.js` › `progressView` | Active |
 | RG-VOL-16 | Le volume prévu suppose chaque séance type faite une fois par semaine. Dans Réglages Fluide, un écart de plus de 2 séries avec la cible est signalé. | `store.js` › `plannedSetsOf` ; `views/profile.js` › `matrixView` | Active |
 
 ## Blocs et deload
@@ -76,7 +77,7 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 
 | ID | Règle | Source | État |
 |---|---|---|---|
-| RG-PRG-01 | De 2 à 6 séances de muscu par semaine, dans Ta semaine comme dans Réglages ; une ancienne valeur hors bornes y est ramenée. De 30 à 90 min par séance, par pas de 15 min, échauffement compris (60 min par défaut). | `store.js` › `SESSIONS_PER_WEEK`, `SESSION_MINUTES`, `migrate` ; `views/templates.js` › `weekView` ; `views/profile.js` › `profileView` | Active |
+| RG-PRG-01 | De 2 à 6 séances de muscu par semaine, réglées dans Ta semaine ; une ancienne valeur hors bornes y est ramenée. De 30 à 90 min par séance, par pas de 15 min, échauffement compris (60 min par défaut). | `store.js` › `SESSIONS_PER_WEEK`, `SESSION_MINUTES`, `migrate` ; `views/templates.js` › `weekView` | Active |
 | RG-PRG-02 | Sept programmes sont générés, plus un mode personnalisé sans génération. Nombre de séances demandées : Full body × 2 : 2 ; Full body : 3 ; Push / Pull / Legs : 3 ; Haut / Bas : 4 ; Haut / Bas + PPL : 5 ; Un muscle par séance : 5 ; PPL × 2 : 6. | `store.js` › `SPLITS` | Active |
 | RG-PRG-03 | Un programme tient s'il demande au plus les séances disponibles. Seuls ceux-là sont listés, avec le personnalisé. Si aucun ne tient, seul le premier du classement est montré, avec son alerte. | `store.js` › `recommend` ; `views/templates.js` › `programView` | Active |
 | RG-PRG-04 | Classement : d'abord ceux qui tiennent. Score = % de la cible couverte, +15 si chaque muscle revient au moins 2 fois, +10 si le nombre de séances est exact, −20 par muscle passé sous son plancher. À égalité, le plus proche des séances disponibles. | `store.js` › `recommend` | Active |
@@ -164,12 +165,12 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 |---|---|---|---|
 | RG-SEA-01 | Une seule séance à la fois : tant qu'une séance est en cours, on ne peut qu'y revenir. | `views/templates.js` › `templateView` ; `views/today.js` › `todayView` | Active |
 | RG-SEA-02 | Une séance type sans exercice ne se démarre pas. | `views/templates.js` › `templateView` ; `views/today.js` › `nextTemplate` | Active |
-| RG-SEA-03 | Prochaine séance proposée : la séance type non vide faite le moins récemment. | `views/today.js` › `nextTemplate` | Active |
+| RG-SEA-03 | Séance du jour proposée : la séance type non vide faite le moins récemment. « Changer » en prend une autre pour la journée, sans toucher au programme. | `views/today.js` › `nextTemplate`, `changeSheet`, `todayView` | Active |
 | RG-SEA-04 | Une série validée lance le repos, sauf la dernière du dernier exercice. | `store.js` › `logSet` | Active |
 | RG-SEA-05 | Le repos s'ajuste de −15 s ou +15 s, et un tap lance la suite sans attendre. | `views/workout.js` › `workoutView` | Active |
 | RG-SEA-06 | Fin de repos : bip et « À toi », avec le temps écoulé depuis la fin, jusqu'à la prochaine action. | `views/workout.js` › `workoutView` | Active |
 | RG-SEA-07 | Après une action, le bouton principal est verrouillé 700 ms : un double tap ne note pas une série de plus. | `views/workout.js` › `guard`, `setCursor`, `done` | Active |
-| RG-SEA-08 | « Annuler » reste disponible 5 s après chaque série. La série sort ; si c'était la dernière notée, son repos s'arrête. | `views/workout.js` › `done` ; `store.js` › `deleteSet` ; `ui.js` › `toast` | Active |
+| RG-SEA-08 | « Annuler » restait disponible 5 s après chaque série. Retiré : une série notée par erreur se corrige ou se retire en touchant sa ligne (RG-SEA-09). | `views/workout.js` › `done` | Retirée en v0.10.0 |
 | RG-SEA-09 | Toute série validée de la séance en cours se corrige (charge, reps, RPE) ou se retire, sur un écran dédié. Rien ne change avant « Enregistrer ». | `views/workout.js` › `editSetView` ; `store.js` › `editSet`, `deleteSet` | Active |
 | RG-SEA-10 | Superset ou triset : 2 ou 3 exercices en séries qui se suivent. EMOM et Tabata ne se lient pas. | `store.js` › `GROUP_MAX`, `canLink` | Active |
 | RG-SEA-11 | Pas de repos entre les exercices d'un groupe ; le repos du dernier tombe après le tour. | `store.js` › `logSet`, `restAfter` | Active |
@@ -217,7 +218,7 @@ Dont 3 sans accès (RG-SEA-28 à 30).
 |---|---|---|---|
 | RG-LIE-01 | Trois lieux : à la salle, chez moi, au street. Chacun a son matériel, ses charges et son matériel annexe. Le programme reste celui de la salle. | `store.js` › `PLACES`, `placeOf`, `gearOf` | Active |
 | RG-LIE-02 | Valeurs de départ : salle complète ; chez moi, haltères de 5 kg, poids du corps et chaise ; au street, poids du corps, barre de traction et barres à dips. | `store.js` › `defaultPlaces`, `migrate` | E-06 |
-| RG-LIE-03 | « Démarrer » demande le lieu, et la séance part d'un tap. Le dernier lieu passe en tête et reste mémorisé. | `views/places.js` › `startSheet` ; `store.js` › `setWorkoutPlace` | Active |
+| RG-LIE-03 | Le lieu se choisit sur Aujourd'hui, le dernier utilisé par défaut ; « Démarrer » lance la séance adaptée à ce lieu, qui est mémorisé. | `views/today.js` › `todayView` ; `store.js` › `startWorkout`, `setWorkoutPlace` | Active |
 | RG-LIE-04 | Le lieu se change tant qu'aucune série n'est notée. Modifier un lieu pendant une séance pas encore commencée l'adapte aussitôt. | `views/workout.js` › `workoutView` ; `store.js` › `setPlace` | Active |
 | RG-LIE-05 | Sur l'écran d'un lieu, rien ne change avant « Enregistrer ». Haltères ou kettlebells cochés exigent au moins une charge, ou « Toutes ». La barre peut avoir une charge maximale. | `views/places.js` › `placeView` | Active |
 | RG-LIE-06 | Ce qu'un exercice demande se déduit de son nom : banc, banc inclinable, barre de traction, barres à dips, anneaux, chaise, ou équipement de salle. Un banc inclinable vaut un banc ; une chaise ou un banc vaut un siège. Machines, poulies et Smith ne demandent rien de plus. | `store.js` › `needsOf`, `needsMet` | Active |
@@ -305,7 +306,7 @@ Différences entre le code et l'intention écrite (commentaires, textes d'écran
 | E-14 | Bug | Remplacer un exercice après des séries en tempo lent enlève leur marque tempo : elles entrent dans l'historique et font redescendre la charge de référence. Essai : charge prévue 16 kg, une série à 10 kg en tempo, remplacement, et l'historique indique 10 kg. Vient de la v0.8.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-LIE-10 |
 | E-15 | Décision | Pendant une reprise ou un deload, les séances ont moitié moins de séries mais l'objectif de la semaine garde sa cible pleine : il ne peut pas être atteint. Déjà noté « à décider » dans `memoire.md`. | Relu | RG-RPR-10 |
 
-### Corrigés en v0.9.1
+### Corrigés en v0.10.1
 
 Les règles concernées décrivent désormais le comportement corrigé. Vérifié sous Node et dans l'app.
 
@@ -315,4 +316,4 @@ Les règles concernées décrivent désormais le comportement corrigé. Vérifi�
 | E-02 | Un round d'EMOM ou de Tabata pouvait battre un record. | `sessionRecords` ignore ces formats (comme le tempo lent), y compris pour les séances déjà enregistrées. |
 | E-03 | Remplacer un EMOM ou un Tabata commencé transférait les rounds faits au remplaçant. | Les rounds restent sur l'exercice d'origine, le remplaçant reprend le reste. |
 | E-04 | « Remplacer » proposait les exercices absents, en douleur ou au matériel décoché. | Ils ne sortent plus que par une recherche, à la salle comme ailleurs ; `alternatives()` ne retombe plus sur eux. |
-| E-05 | Le nombre de séances allait de 1 à 7 dans Réglages et de 2 à 6 dans Ta semaine. | 2 à 6 partout, et les anciennes valeurs sont ramenées dans ces bornes. |
+| E-05 | Le nombre de séances allait de 1 à 7 dans Réglages et de 2 à 6 dans Ta semaine. | Bornes 2 à 6 partagées et anciennes valeurs ramenées dans ces bornes. La v0.10.0 a de son côté retiré le réglage de Réglages. |
