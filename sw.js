@@ -1,4 +1,4 @@
-const CACHE = "fluide-v40";
+const CACHE = "fluide-v41";
 const ASSETS = [
   "./",
   "./index.html",
@@ -36,7 +36,7 @@ self.addEventListener("activate", e => {
   );
 });
 
-// Réseau d'abord (pour les mises à jour), cache si hors ligne. La police Inter est mise en cache au passage.
+// Réseau d'abord (pour les mises à jour), cache si hors ligne. Les polices Barlow sont mises en cache au passage.
 self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
