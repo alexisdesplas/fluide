@@ -88,8 +88,8 @@ export function placeView({ place: key }) {
     setPlace(key, spec);
     back();
   };
-  const el = h("div", { class: "screen no-tabs big-targets" },
-    navbar({ back: { label: from.label, onClick: back }, title: PLACES[key].label }),
+  const el = h("div", { class: "screen no-tabs big-targets bleu" },
+    navbar({ back: { label: from.label, onClick: back }, title: PLACES[key].short }),
     h("div", { class: "scroll" },
       section("Matériel", key === "gym" ? "Le programme se tient à ce matériel." : "Ce que tu as sur place : la séance ne propose que ça.", gearChips, loadsSlot),
       section("Autour", "Un développé couché demande un banc, une traction une barre : sans eux, l'exercice n'est pas proposé.",

@@ -32,7 +32,9 @@ function field(label, input, help) {
   return el;
 }
 const tile = (name, lg) => h("span", { class: `tile${lg ? " lg" : ""}`, "aria-hidden": "true" }, icon(name));
-const head = (ic, title, text) => h("div", { class: "acct-head" }, tile(ic, true), h("h2", { class: "heading-xl" }, title), text && h("p", { class: "body-md discret", style: { margin: 0 } }, text));
+const head = (ic, title, text) => text && h("p", { class: "body-md", style: { margin: 0 } }, text);
+// Grand titre d'écran, « Fluide » en violet (la méthode).
+const fluide = text => text.split(/(Fluide)/).map(x => (x === "Fluide" ? h("span", { class: "violet" }, x) : x));
 const bascule = (question, link, href) => h("div", { class: "bascule" }, h("button", { type: "button", onClick: () => go(href) }, `${question} `, h("b", null, link)));
 const busy = (b, label) => { b.disabled = Boolean(label); b.lastChild.textContent = label || b.dataset.label; };
 const submitBtn = label => { const b = btn(label, { variant: "primary", size: "lg", full: true, type: "submit" }); b.dataset.label = label; return b; };
@@ -73,14 +75,14 @@ export function signInView() {
   // Retour du lien de validation : l'adresse est bonne, il ne reste qu'à se connecter.
   const validated = confirmed() && h("div", { class: "hint" }, icon("check"), h("span", { class: "body-sm" }, "Adresse validée : connecte-toi avec ton mot de passe."));
   if (validated) clearConfirmed();
-  form.append(btn("Mot de passe oublié ?", { variant: "ghost", full: true, onClick: async () => {
+  form.append(btn("Mot de passe oublié ?", { variant: "secondary", full: true, onClick: async () => {
     const mail = email.value.trim().toLowerCase();
     if (!EMAIL.test(mail)) return fEmail.setError("Écris d'abord ton adresse e-mail, le lien y sera envoyé.");
     fEmail.setError(null);
     try { await sendReset(mail); toast("E-mail envoyé : suis le lien reçu"); } catch (e) { fail(why(e)); }
   } }));
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Se connecter" }),
+    navbar({ back: { label: "Compte et données", href: "#/profil/donnees" }, title: fluide("Ton compte Fluide") }),
     h("div", { class: "scroll" }, head("cloudCheck", "Ton compte Fluide", "Séances, programme, corde, réglages : tout est gardé sur ton compte et revient sur un autre téléphone ou après une réinstallation."),
       validated, form, bascule("Pas encore de compte ?", "Créer mon compte", "#/compte/creer")));
   return { el };
@@ -91,7 +93,7 @@ export function signUpView() {
   if (signedIn()) { setTimeout(() => go("#/profil")); return { el: h("div") }; }
   const { form } = authForm({ newPassword: true, label: "Créer mon compte", help: "8 caractères au moins. L'iPhone peut en proposer un et le garder dans ton trousseau.", onSubmit: signUp });
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Créer mon compte" }),
+    navbar({ back: { label: "Se connecter", href: "#/compte" }, title: "Créer ton compte" }),
     h("div", { class: "scroll" }, head("userCirclePlus", "Créer ton compte", "Garde tes séances, ton programme et ta corde sur ton compte, et retrouve-les sur un autre téléphone."),
       form, bascule("Déjà un compte ?", "Me connecter", "#/compte")));
   return { el };
@@ -101,7 +103,7 @@ export function signUpView() {
 export function confirmView() {
   if (signedIn()) { setTimeout(() => go("#/profil")); return { el: h("div") }; }
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Compte", href: "#/compte" }, title: "Compte créé" }),
+    navbar({ back: { label: "Créer ton compte", href: "#/compte/creer" }, title: "Adresse à valider" }),
     h("div", { class: "scroll" },
       head("cloudCheck", "Ton adresse va être validée", `Un e-mail est parti à ${account().email || "ton adresse"} : suis le lien pour valider ton compte. L'administrateur peut aussi le valider rapidement. Ensuite, connecte-toi avec ton mot de passe.`),
       btn("Me connecter", { variant: "primary", size: "lg", full: true, onClick: () => go("#/compte") })));
@@ -121,7 +123,7 @@ export function resetView() {
     try { await landed(await setNewPassword(password.value)); toast("Mot de passe changé"); } catch (e) { f.setError(why(e).msg); busy(submit); }
   } }, f, submit);
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Compte", href: "#/compte" }, title: "Mot de passe" }),
+    navbar({ back: { label: "Se connecter", href: "#/compte" }, title: "Nouveau mot de passe" }),
     h("div", { class: "scroll" }, head("cloudCheck", "Choisis un nouveau mot de passe", "Tu viens du lien reçu par e-mail. Une fois enregistré, tu es connecté."), form));
   setTimeout(() => password.focus(), 50);
   return { el };
@@ -205,11 +207,11 @@ export function stepsAutoView() {
        btn("Copier la clé", { variant: "primary", size: "lg", full: true, icon: "clipboard", onClick: copy })]
     : h("p", { class: "caption", style: { margin: 0 } }, "La clé a été créée sur un autre appareil et n'est montrée qu'une fois. Remplace-la pour la copier ici."));
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Pas automatiques" }),
+    navbar({ back: { label: "Compte et données", href: "#/profil/donnees" }, title: "Pas automatiques" }),
     h("div", { class: "scroll" },
       h("p", { class: "body-sm discret", style: { margin: 0 } },
         "Le Raccourci iOS « Pas du jour » lit tes pas dans Santé et les envoie à ton compte avec cette clé, sans rien ouvrir. Fluide les reprend à l'ouverture. La clé ne sert qu'à écrire tes pas : garde-la pour toi."),
-      h("div", { class: "card" }, status, keyBlock,
+      h("div", { class: "card violet" }, status, keyBlock,
         m.stepsLast && h("span", { class: "caption num" }, `Derniers pas reçus : ${int(m.stepsLast.steps)}, ${time(m.stepsLast.at)}.`)),
       keyInfo === null && btn("Créer ma clé Raccourci", { variant: "primary", size: "lg", full: true, onClick: create }),
       keyInfo && btn("Remplacer la clé", { variant: "secondary", full: true, onClick: () => confirmSheet({
