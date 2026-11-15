@@ -714,8 +714,19 @@ dialog.sheet { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 .plan-row .lead svg { width: 20px; height: 20px; color: var(--orange); stroke-width: 20; vertical-align: -3px; }
 .plan-row .lead.vert, .plan-row .lead.vert svg { color: var(--vert); }
 .plan-row .name { font: 500 16px/20px var(--font); color: var(--texte-fort); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cta-bar { padding: var(--spacing-8) var(--spacing-20) calc(92px + var(--safe-bottom)); display: flex; flex-direction: column; gap: var(--spacing-8); background: var(--fond-page); }
-.screen.has-cta .scroll { padding-bottom: var(--spacing-16); }
+/* Le bouton flotte au-dessus du contenu, qui défile dessous et s'efface en fondu ; le rond d'Aujourd'hui (76 px)
+   dépasse de la barre d'onglets et mord le bas du bouton, avec son liseré noir. */
+.screen.has-cta { position: relative; }
+.cta-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+  padding: var(--spacing-32) var(--spacing-20) calc(76px + var(--safe-bottom));
+  display: flex; flex-direction: column; gap: var(--spacing-8);
+  background: linear-gradient(to bottom, rgba(10, 10, 10, 0), var(--fond-page) var(--spacing-32));
+  pointer-events: none;
+}
+.cta-bar > * { pointer-events: auto; }
+.screen.has-cta .scroll { padding-bottom: calc(76px + 64px + var(--spacing-32) + var(--spacing-16) + var(--safe-bottom)); }
+.screen.has-cta .scroll:has(+ .cta-bar > :nth-child(2)) { padding-bottom: calc(76px + 128px + var(--spacing-32) + var(--spacing-16) + var(--safe-bottom)); }
 
 /* ——— Progrès */
 .big-pct { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--spacing-12); }
