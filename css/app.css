@@ -748,3 +748,47 @@ dialog.sheet { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 .row .valeur.orange { color: var(--orange); } .row .valeur.violet { color: var(--violet); } .row .valeur.vert { color: var(--vert); } .row .valeur.bleu { color: var(--bleu); }
 .place-tile { background: var(--bleu-doux); }
 .place-tile .name-xl { color: var(--bleu); font-size: 28px; line-height: 28px; }
+
+/* ═══════════ DA pop, écrans secondaires (v0.10.1) ═══════════ */
+/* Choix en carte : le nom de l'option en condensée capitale, comme un titre. */
+.radio-card .radio-text > .body-md:first-child, .radio-card .radio-text > .card-head > .body-md:first-child {
+  font: 800 italic 22px/24px var(--display); text-transform: uppercase; color: var(--texte-fort);
+}
+.radio-card .radio-text > .card-head { align-items: flex-start; }
+.radio-card .radio-text .caption.num { color: var(--texte-base); }
+/* Étiquette pleine (Recommandé…) : la couleur du sens en aplat, texte noir. */
+.pill.tag { background: var(--violet); color: var(--texte-inverse); font: 800 italic 14px/16px var(--display); text-transform: uppercase; letter-spacing: .02em; height: 22px; padding: 0 8px; border-radius: 10px; }
+.pill.tag.orange { background: var(--orange); } .pill.tag.vert { background: var(--vert); }
+/* Écran d'une couleur : ses chiffres et ses puces choisies prennent cette couleur. */
+.screen.violet .stepper input, .screen.violet .stepper.compact .value { color: var(--violet); }
+.screen.violet .chips.vert .chip[aria-pressed="true"] { background: var(--vert); }
+.screen.violet .chips.rose .chip[aria-pressed="true"] { background: var(--rose); }
+.screen.violet .section-title .heading-md.orange { color: var(--orange); }
+.card.violet .hint, .card.rose .hint { background: none; padding: 0; }
+.card.violet .hint svg { color: var(--violet); }
+.card .list > .row, .card > .row { background: var(--fond-discret); }
+/* Numéro d'exercice d'une séance type, en jaune comme sur Aujourd'hui. */
+.num-lead { width: 28px; flex: none; text-align: center; font: 800 italic 28px/28px var(--display); color: var(--jaune); }
+.week-day { font: 800 italic 20px/24px var(--display); text-transform: uppercase; color: var(--texte-fort); }
+.week-day.off { color: var(--texte-discret); }
+/* Choix en ligne (radios) : même titre condensé que les cartes. */
+.radio-row .row-main > :first-child, .radio-row[aria-checked="true"] .row-main > :first-child { font: 800 italic 20px/24px var(--display); text-transform: uppercase; }
+.radio-row[aria-checked="true"] { box-shadow: inset 0 0 0 2px var(--texte-fort); }
+.segmented.sm button { padding: 0 4px; font-size: 15px; }
+/* Charge : toujours en jaune. Muscles : en rose. */
+.field.charge .stepper input { color: var(--jaune); }
+.screen.rose .stepper input, .screen.rose .stepper.compact .value { color: var(--rose); }
+.screen.rose .navbar-title h1 { color: var(--rose); }
+.screen.bleu .navbar-title h1 { color: var(--bleu); }
+.screen.bleu .chip[aria-pressed="true"] { background: var(--bleu); }
+.screen.bleu .stepper.compact .value { color: var(--bleu); }
+.screen.orange .navbar-title h1 { color: var(--orange); }
+.card.violet .stepper.compact .value, .card.violet .stepper input { color: var(--violet); }
+.card.orange .stepper.compact .value, .card.orange .stepper input { color: var(--orange); }
+.card.orange .stepper button, .card.violet .stepper button, .card.rose .stepper button { background: rgba(255, 255, 255, .08); }
+.card .field-row > .body-md.fort { font-weight: 600; }
+/* Correction d'une série : la charge en jaune, comme en séance. */
+.big-targets > .scroll > .stepper:not(.compact) input { color: var(--jaune); }
+.navbar-title h1 span { font: inherit; color: inherit; }
+.navbar-title h1 span.violet { color: var(--violet); }
+.card.tap.violet .display-xs { font-size: 22px; line-height: 24px; }
