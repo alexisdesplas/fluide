@@ -1,4 +1,4 @@
-import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, startWorkout } from "../store.js";
+import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, startWorkout, parseTemplates, addTemplates } from "../store.js";
 import { h, icon, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
@@ -136,11 +136,61 @@ export function templatesView() {
         h("p", { class: "body-md fort medium", style: { margin: 0 } }, "Aucune séance type"),
         h("p", { class: "body-sm discret", style: { margin: 0 } }, "Choisis un programme (full body, haut / bas, push / pull / legs…) ou crée tes séances toi-même."),
         btn("Choisir un programme", { variant: "primary", size: "lg", full: true, onClick: () => go("#/seances/programme") })),
+      btn("Coller des séances du coach", { variant: "secondary", size: "lg", full: true, icon: "clipboard", onClick: () => go("#/seances/coller") }),
       n > 0 && h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Volume prévu par semaine")),
       n > 0 && h("div", { class: "card rose" },
         h("p", { class: "caption", style: { margin: 0 } }, "Si tu fais chaque séance une fois. Le trait blanc est la cible de chaque muscle : ajuste les séries pour tomber dessus."),
         volumeBars(plannedSets()))));
   return { el, tab: "seances" };
+}
+
+// Séances préparées par le coach : on colle le texte, on voit les séances, rien n'est ajouté avant « Ajouter ».
+let pasted = null; // { text, templates?, error? }
+
+export function importView() {
+  const back = () => { pasted = null; go("#/seances"); };
+  const read = text => {
+    pasted = { text, ...(text.trim() ? parseTemplates(text) : {}) };
+    draw();
+  };
+  const paste = async () => {
+    try { read(await navigator.clipboard.readText()); }
+    catch { toast("Accès au presse-papiers refusé : colle le texte dans le champ."); }
+  };
+  const body = h("div", { class: "scroll" });
+  const draw = () => {
+    const p = pasted || { text: "" };
+    const list = p.templates || [];
+    const total = list.length;
+    body.replaceChildren(...[
+      h("p", { class: "body-sm discret", style: { margin: 0 } }, "Copie le bloc de texte que le coach t'a préparé, puis colle-le ici. Chaque séance rejoint ton programme ; tu peux la modifier ou la supprimer ensuite."),
+      btn("Coller", { variant: total ? "secondary" : "primary", size: "lg", full: true, icon: "clipboard", onClick: paste }),
+      h("label", { class: "field" }, h("span", { class: "caption medium" }, "Texte du coach"),
+        h("textarea", { class: `input${p.error ? " error" : ""}`, placeholder: "{ \"type\": \"fluide-templates\", … }", autocapitalize: "off", "aria-invalid": p.error ? "true" : null,
+          onChange: e => read(e.target.value) }, p.text)),
+      p.error && h("p", { class: "caption", role: "alert", style: { margin: 0, color: "var(--etat-danger)" } }, p.error),
+      ...list.flatMap(t => {
+        const sets = t.items.reduce((a, i) => a + itemSets(i), 0);
+        return [
+          h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, t.name),
+            h("span", { class: "caption num" }, `${t.items.length} exercices · ${sets} séries · ~${estimate(t)} min`)),
+          h("div", { class: "list" }, t.items.map((it, i) => {
+            const g = groupTag(t.items, i);
+            return h("div", { class: `row${g ? " grouped" : ""}` },
+              h("span", { class: "num-lead", "aria-hidden": "true" }, i + 1),
+              h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, niceName(exercise(it.exerciseId).name)),
+                h("span", { class: "caption num" }, g ? `${g.label} ${g.tag} · ` : "", itemLine(it, g && !g.last))));
+          }))];
+      }),
+      total > 0 && btn(`Ajouter ${total > 1 ? `les ${total} séances` : "la séance"}`, { variant: "primary", size: "lg", full: true,
+        onClick: () => { addTemplates(list); toast(total > 1 ? `${total} séances ajoutées` : "Séance ajoutée"); back(); } })
+    ].filter(Boolean));
+  };
+  draw();
+  const el = h("div", { class: "screen no-tabs" },
+    navbar({ back: { label: "Programme", onClick: back }, title: "Coller des séances", subtitle: "préparées par le coach" }),
+    body);
+  return { el };
 }
 
 // Mode « Modifier » : nom, ordre des exercices (↑ ↓) et suppression. Hors de ce mode, une ligne s'ouvre au toucher.
