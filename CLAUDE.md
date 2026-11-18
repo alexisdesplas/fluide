@@ -3,6 +3,7 @@
 Carnet de musculation en PWA pour l'iPhone d'Alexis, piloté par le Système Fluide (skill `coach-fluide`). Pas de build, pas de dépendances : HTML/CSS/JS en modules ES.
 
 - Lire `memoire.md` d'abord : glossaire métier, décisions, hypothèses ouvertes.
+- `regles-gestion.md` : registre numéroté des règles de gestion et des écarts avec le code. Toute PR qui ajoute, change ou retire une règle le met à jour.
 - Figma : fichier /Perso `QZ94FGPStTONZYIJcXnyHX`, pages `Fluide · App` et `Fluide · User flow`. Le code est aligné sur ces écrans.
 - Dépôt public : https://github.com/alexisdesplas/fluide (branche `main`, versionning). Hébergement Vercel, projet `fluide` relié au dépôt : chaque push sur `main` déploie https://alexis-fluide.vercel.app/ (`vercel.json` met les en-têtes no-cache, `.vercelignore` exclut les notes).
 - À chaque mise à jour, incrémenter `CACHE` dans `sw.js` et y lister tout nouveau fichier.
