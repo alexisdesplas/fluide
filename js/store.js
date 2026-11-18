@@ -896,6 +896,56 @@ export function setItemFormat(item, format) {
   save(true);
 }
 
+// ——— Séances préparées par le coach (skill coach-fluide) : un texte JSON copié, puis collé dans Réglages › Programme.
+// { "type": "fluide-templates", "version": 1, "templates": [{ "name": "Haut", "items": [
+//   { "exercise": "Développé couché avec barre", "sets": 4, "reps": [6, 8], "rest": 90, "group": "A", "weight": 60 } ] }] }
+// exercise : nom exact du catalogue (casse libre). group : même lettre sur des exercices qui se suivent = superset.
+// weight (kg, facultatif) : sinon la dernière charge faite, celle d'une séance type, ou une charge courante.
+export const IMPORT_TYPE = "fluide-templates";
+const clampInt = (v, min, max, def) => (Number.isFinite(+v) ? Math.min(max, Math.max(min, Math.round(+v))) : def);
+
+// Renvoie { templates } prêtes à ajouter, ou { error } avec la raison à afficher.
+export function parseTemplates(text) {
+  const s = String(text ?? ""), a = s.indexOf("{"), b = s.lastIndexOf("}");
+  if (a < 0 || b < a) return { error: "Aucune séance dans ce texte. Copie tout le bloc préparé par le coach." };
+  let data;
+  try { data = JSON.parse(s.slice(a, b + 1)); } catch { return { error: "Le texte est incomplet : recopie tout le bloc, accolades comprises." }; }
+  if (data?.type !== IMPORT_TYPE || !Array.isArray(data.templates) || !data.templates.length) return { error: "Ce texte n'est pas une séance Fluide." };
+  const find = name => {
+    const n = String(name ?? "").trim().toLowerCase();
+    return state.exercises.find(e => !e.mix && e.name.toLowerCase() === n);
+  };
+  const missing = [];
+  const templates = data.templates.map((t, ti) => {
+    const groups = {};
+    const items = (Array.isArray(t.items) ? t.items : []).map(it => {
+      const ex = find(it.exercise);
+      if (!ex) { missing.push(String(it.exercise ?? "?")); return null; }
+      const [lo, hi] = Array.isArray(it.reps) ? it.reps : [it.reps, it.reps];
+      const repsMin = clampInt(lo, 1, 50, 8), repsMax = Math.max(repsMin, clampInt(hi, 1, 50, repsMin));
+      const last = lastPerformance(ex.id);
+      const known = state.templates.flatMap(x => x.items).find(x => x.exerciseId === ex.id && typeof x.weight === "number");
+      const weight = Number.isFinite(+it.weight) && it.weight !== null ? nearestWeight(ex.equip, +it.weight, ex.stack)
+        : last ? pileFor(ex.id, ex.equip, last.maxWeight)
+        : known ? known.weight : nearestWeight(ex.equip, typicalLoad(ex), ex.stack);
+      const item = { id: uid(), exerciseId: ex.id, format: "series", sets: clampInt(it.sets, 1, 10, 3), repsMin, repsMax, weight, rest: clampInt(it.rest, 0, 600, 90) };
+      if (it.group) item.group = groups[it.group] ||= uid();
+      return item;
+    }).filter(Boolean);
+    // Un groupe qui ne tient pas (exercice seul, ou séparé par un autre) est délié.
+    items.forEach((x, k) => { if (x.group && !groupOf(items, k)) delete x.group; });
+    return { id: uid(), name: String(t.name ?? "").trim().slice(0, 40) || `Séance ${ti + 1}`, items };
+  });
+  if (missing.length) return { error: `Pas dans le catalogue : ${missing.join(", ")}.` };
+  if (templates.some(t => !t.items.length)) return { error: "Une des séances n'a aucun exercice." };
+  return { templates };
+}
+
+export function addTemplates(list) {
+  state.templates.push(...list);
+  save();
+}
+
 export function removeItem(templateId, itemId) {
   const p = template(templateId);
   p.items = p.items.filter(x => x.id !== itemId);
