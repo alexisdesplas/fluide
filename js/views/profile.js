@@ -130,28 +130,42 @@ export function blocView() {
 }
 
 // Toi : objectif du moment, niveau, mesures, routine.
+// Écran « Toi » : saisie sur écran dédié, rien ne change avant « Enregistrer », le retour annule.
+const PROFILE_KEYS = ["goal", "level", "age", "bodyWeight", "stepsTarget", "warmup"];
+let youDraft = null;
+
 export function youView() {
   const p = state.profile;
-  const set = k => v => { p[k] = v; save(true); };
-  const el = h("div", { class: "screen" },
-    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Toi", subtitle: "Fluide s'en sert pour régler les reps et le volume." }),
+  youDraft ||= { ...Object.fromEntries(PROFILE_KEYS.map(k => [k, p[k]])), age: p.age ?? 30, bodyWeight: p.bodyWeight ?? 75 };
+  const d = youDraft;
+  const set = k => v => { d[k] = v; };
+  const back = () => { youDraft = null; go("#/profil"); };
+  const el = h("div", { class: "screen no-tabs" },
+    navbar({ back: { label: "Réglages", onClick: back }, title: "Toi", subtitle: "Fluide s'en sert pour régler les reps et le volume." }),
     h("div", { class: "scroll" },
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif du moment")),
-      radios(["Prise de muscle", "Force", "Sèche"].map(v => [v, v]), p.goal, v => { p.goal = v; save(); }, "Objectif du moment"),
+      radios(["Prise de muscle", "Force", "Sèche"].map(v => [v, v]), d.goal, set("goal"), "Objectif du moment"),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Niveau")),
-      radios(["Débutant", "Intermédiaire", "Avancé"].map(v => [v, v]), p.level, v => { p.level = v; save(); }, "Niveau"),
+      radios(["Débutant", "Intermédiaire", "Avancé"].map(v => [v, v]), d.level, set("level"), "Niveau"),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Mesures")),
       h("div", { class: "card" },
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Âge"),
-          stepper({ value: p.age ?? 30, min: 14, max: 90, compact: true, format: v => `${v} ans`, label: "âge", onChange: set("age") })),
+          stepper({ value: d.age, min: 14, max: 90, compact: true, format: v => `${v} ans`, label: "âge", onChange: set("age") })),
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Poids"),
-          stepper({ value: p.bodyWeight ?? 75, step: 0.5, min: 35, max: 200, compact: true, format: v => `${num(v)} kg`, label: "poids", onChange: set("bodyWeight") })),
+          stepper({ value: d.bodyWeight, step: 0.5, min: 35, max: 200, compact: true, format: v => `${num(v)} kg`, label: "poids", onChange: set("bodyWeight") })),
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Cible de pas par jour"),
-          stepper({ value: p.stepsTarget, step: 500, min: 2000, max: 30000, compact: true, format: int, label: "pas par jour", onChange: set("stepsTarget") }))),
+          stepper({ value: d.stepsTarget, step: 500, min: 2000, max: 30000, compact: true, format: int, label: "pas par jour", onChange: set("stepsTarget") }))),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Échauffement")),
-      h("input", { class: "input", value: p.warmup, "aria-label": "Échauffement", onChange: e => { p.warmup = e.target.value; save(true); } }),
-      ENDURANCE[p.endurance] && h("p", { class: "caption", style: { margin: 0 } }, `Avec ton plan ${ENDURANCE[p.endurance].short.toLowerCase()}, l'échauffement devient la séance corde du jour. Celui-ci sert les jours où le plan prévoit le jour long, à faire à part.`)));
-  return { el, tab: "profil" };
+      h("input", { class: "input", value: d.warmup, "aria-label": "Échauffement", onInput: e => { d.warmup = e.target.value; } }),
+      ENDURANCE[p.endurance] && h("p", { class: "caption", style: { margin: 0 } }, `Avec ton plan ${ENDURANCE[p.endurance].short.toLowerCase()}, l'échauffement devient la séance corde du jour. Celui-ci sert les jours où le plan prévoit le jour long, à faire à part.`),
+      btn("Enregistrer", { variant: "primary", size: "lg", full: true, onClick: () => {
+        Object.assign(p, d, { warmup: (d.warmup || "").trim() || p.warmup });
+        youDraft = null;
+        save();
+        toast("Profil enregistré");
+        go("#/profil");
+      } })));
+  return { el };
 }
 
 // Compte et données : le compte (optionnel), la sauvegarde par fichier, la version installée.
