@@ -1,4 +1,4 @@
-const CACHE = "fluide-v42";
+const CACHE = "fluide-v44";
 const ASSETS = [
   "./",
   "./index.html",
