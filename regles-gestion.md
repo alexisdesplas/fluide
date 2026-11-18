@@ -1,6 +1,6 @@
 # Règles de gestion — Fluide
 
-Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause), la v0.10.0 (refonte en 3 onglets), la v0.11.0 (séances collées du coach) et la v0.11.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
+Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause), la v0.10.0 (refonte en 3 onglets), la v0.11.0 (séances collées du coach), la v0.12.0 (supersets en séance) et la v0.12.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
 
 ## Lire ce registre
 
@@ -14,7 +14,7 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 - **Source** : le fichier et la fonction, plutôt qu'un numéro de ligne qui bougerait. Les fichiers sont dans `js/`, sauf `schema.sql` dans `supabase/`.
 - **Mise à jour** : toute PR qui ajoute, change ou retire une règle met à jour ce fichier.
 
-**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.11.1, essayées aussi dans l'app. Les règles de lieux, de reprise, de la refonte et des séances collées viennent de la lecture des v0.8.0 à v0.11.0, avec quelques scénarios exécutés.
+**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.12.1, essayées aussi dans l'app. Les règles de lieux, de reprise, de la refonte et des séances collées viennent de la lecture des v0.8.0 à v0.12.0, avec quelques scénarios exécutés.
 
 ## Décompte
 
@@ -27,16 +27,16 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 | Exercices et catalogue | EXE | 9 |
 | Charges | CHG | 12 |
 | Performance et progression | PER | 8 |
-| Séance en cours | SEA | 33 |
+| Séance en cours | SEA | 35 |
 | Matériel du jour | MAT | 10 |
 | Lieux de séance | LIE | 15 |
 | Reprise après une pause | RPR | 10 |
 | Séances types | TPL | 13 |
 | Pas du jour | PAS | 8 |
-| Compte et données | CPT | 9 |
-| **Total** | | **184** |
+| Compte et données | CPT | 10 |
+| **Total** | | **187** |
 
-Dont 3 sans accès (RG-SEA-28 à 30) et 1 retirée (RG-SEA-08, en v0.10.0).
+Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 
 ## Volume et objectif Fluide
 
@@ -192,10 +192,12 @@ Dont 3 sans accès (RG-SEA-28 à 30) et 1 retirée (RG-SEA-08, en v0.10.0).
 | RG-SEA-27 | Une séance enregistrée peut être supprimée après confirmation : elle disparaît de l'historique, des courbes et de l'objectif. | `views/workout.js` › `summaryView` ; `views/progress.js` › `sessionView` ; `store.js` › `deleteSession` | Active |
 | RG-SEA-28 | Modifier la séance en cours : séries de 1 à 12 sans passer sous les séries faites (rounds jusqu'à 60), ordre, liens, retrait confirmé si des séries sont faites, au moins un exercice gardé. | `views/workout.js` › `editWorkoutView` ; `store.js` › `setEntrySets`, `moveEntry`, `removeEntry` | Sans accès (E-10) |
 | RG-SEA-29 | Exercice hors programme : tout le catalogue, en Séries, EMOM ou Tabata, ajouté après l'exercice en cours et jamais au milieu d'un superset. | `views/workout.js` › `extraSheet` ; `store.js` › `addExtra` | Sans accès (E-10) |
-| RG-SEA-30 | En fin de séance modifiée, les changements peuvent être reportés dans la séance type. Une machine prise reste une exception. | `views/workout.js` › `finishView` ; `store.js` › `keepInTemplate` | Sans accès (E-10) |
+| RG-SEA-30 | En fin de séance modifiée, les changements peuvent être reportés dans la séance type. Une machine prise reste une exception. Depuis la v0.12.0, un superset décidé en séance y donne accès. | `views/workout.js` › `finishView` ; `store.js` › `keepInTemplate` | Active |
 | RG-SEA-31 | Durée de l'échauffement hors corde : la borne haute lue dans le réglage (« 3-5 min » donne 5 min), 5 min si rien n'est lisible. | `views/workout.js` › `workoutView` | Active |
 | RG-SEA-32 | La mobilité dépend du premier exercice : hanches et chevilles pour Quadris, Ischios, Fessiers et Mollets, sinon épaules et coudes. 2 ou 3 séries d'approche sont indiquées. | `views/workout.js` › `workoutView` | Active |
 | RG-SEA-33 | Recommencer l'échauffement demande une confirmation après 30 s de chrono. | `views/workout.js` › `workoutView` | Active |
+| RG-SEA-34 | En séance, Options › Superset lie l'exercice en cours, s'il lui reste des séries, au suivant ou à un autre exercice de la séance encore ouvert (en séries, pas en EMOM, Tabata ou AMRAP). L'autre quitte sa place et son groupe pour venir juste après, dans la limite de 3 exercices par groupe. Cela vaut pour cette séance, sauf report en fin de séance (RG-SEA-30). | `store.js` › `supersetCandidates`, `supersetWith` ; `views/workout.js` › `supersetSheet` | Active |
+| RG-SEA-35 | Sortir d'un superset en séance place l'exercice juste après ce qui reste du groupe, avec son propre repos. | `store.js` › `leaveSuperset` | Active |
 
 ## Matériel du jour
 
@@ -291,6 +293,7 @@ Dont 3 sans accès (RG-SEA-28 à 30) et 1 retirée (RG-SEA-08, en v0.10.0).
 | RG-CPT-07 | Une session refusée par le compte déconnecte sans toucher aux données du téléphone. | `compte.js` › `token` | Active |
 | RG-CPT-08 | Se déconnecter laisse les données sur le téléphone et sur le compte. Ce qui change ensuite ne part plus. | `compte.js` › `signOut` ; `views/compte.js` | Active |
 | RG-CPT-09 | Un import doit contenir exercices, séances types et séances. Il demande une confirmation et remplace toutes les données ; un fichier illisible ne change rien. | `views/profile.js` › `upload` ; `store.js` › `replaceState` | Active |
+| RG-CPT-10 | Sur l'écran Toi (objectif, niveau, âge, poids, cible de pas, échauffement), rien ne change avant « Enregistrer » et le retour annule. Un échauffement laissé vide garde l'ancien. | `views/profile.js` › `youView` | Active |
 
 ## Écarts
 
@@ -304,7 +307,7 @@ Différences entre le code et l'intention écrite (commentaires, textes d'écran
 | E-07 | Décision | L'écran de fin de séance dit : « Plusieurs séances « Difficile » d'affilée et le coach propose un deload ». Aucun code de l'app ne lit le ressenti, sauf pour l'afficher. Le coach est la skill externe `coach-fluide` : le bêta-testeur n'y a pas accès. | Relu | RG-SEA-25 |
 | E-08 | Décision | Les descriptions des blocs promettent plus que le code. Intensité annonce un « volume réduit » et Spécialisation « le reste en maintien », mais rien ne les applique. Changer de bloc ne modifie que le RPE cible et les programmes générés ensuite, pas les séances types en place. | Relu | RG-BLC-02 |
 | E-09 | Décision | « Objectif du moment » et « Niveau » se règlent dans les Réglages mais n'agissent sur rien. Âge et poids non plus (déjà noté dans `memoire.md`). | Relu | Hors registre : aucune règle n'en découle |
-| E-10 | Décision | Hors programme et Modifier la séance n'ont plus d'accès depuis le 31/10 (décision confirmée le 04/11), mais le code reste, et le README comme le glossaire décrivent encore Hors programme. À retirer, ou à rouvrir. | Relu | RG-SEA-28 à 30 |
+| E-10 | Décision | Hors programme et Modifier la séance n'ont plus d'accès depuis le 31/10 (décision confirmée le 04/11), mais le code reste, et le README comme le glossaire décrivent encore Hors programme. À retirer, ou à rouvrir. Le report en fin de séance est redevenu accessible avec les supersets en séance de la v0.12.0. | Relu | RG-SEA-28 et 29 |
 | E-11 | Doc | Le bouton « Coller depuis Santé » n'existe plus dans le code, alors que `memoire.md` et le guide `livrables/fluide/raccourci-pas.md` l'indiquent encore : un utilisateur sans compte suit donc une procédure impossible. | Relu | RG-PAS-02 |
 | E-12 | Doc | Autres passages périmés. Glossaire : « À définir, 12-20 reps », devenu l'objectif endurance à 15-20 reps, et « Machine prise », devenu « Remplacer ». README : « Les données restent sur l'iPhone ». `store.js` › `generateProgram` : le commentaire « 1 ou 2 exercices » contredit RG-PRG-07. `compte.js` › `hasLocalData` lit encore `state.corde`, retiré. | Relu | — |
 | E-13 | Bug | Remplacer un exercice en plein AMRAP crée un exercice en séries à l'intérieur du circuit : l'exercice d'origine y reste, et le remplaçant ne suit plus le format AMRAP. Trouvé en corrigeant E-03, pas corrigé : il faut d'abord décider ce que doit faire ce geste. | Exécuté | RG-SEA-19 |
@@ -312,7 +315,7 @@ Différences entre le code et l'intention écrite (commentaires, textes d'écran
 | E-15 | Décision | Pendant une reprise ou un deload, les séances ont moitié moins de séries mais l'objectif de la semaine garde sa cible pleine : il ne peut pas être atteint. Déjà noté « à décider » dans `memoire.md`. | Relu | RG-RPR-10 |
 | E-16 | Bug | Les séances collées (v0.11.0) acceptent un superset de 4 exercices ou plus, et un repos de 0 s, alors qu'ailleurs un groupe compte 3 exercices au plus (RG-SEA-10) et un repos 15 s au moins (RG-TPL-03). Essai : 4 exercices du même groupe et un repos de 0 s, tous acceptés. Vient de la v0.11.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-TPL-11, RG-TPL-13 |
 
-### Corrigés en v0.11.1
+### Corrigés en v0.12.1
 
 Les règles concernées décrivent désormais le comportement corrigé. Vérifié sous Node et dans l'app.
 

@@ -1,4 +1,4 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, STATUS, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, weeklySets, setAbsent, setStack, setWorkoutGear, setWorkoutPlace, sessionGear, sessionPlaceKey, placeOf, placeLoads, reachable, PLACES, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet, proposable } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, STATUS, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, weeklySets, setAbsent, setStack, setWorkoutGear, setWorkoutPlace, sessionGear, sessionPlaceKey, placeOf, placeLoads, reachable, PLACES, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet, supersetCandidates, supersetWith, leaveSuperset, proposable } from "../store.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, announce, beep, restBeepPlanned, dateLong, pageHead, navbar, ruler } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle, niceName, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
 import { placeSummary } from "./places.js";
@@ -117,6 +117,40 @@ const rpeField = (value, onChange) => h("div", { class: "field rpe" },
 
 // Options de l'exercice en cours, rarement utiles en pleine série : format (avant la première série) et pile de la machine.
 const canFormat = e => !isAmrap(e) && !e.sets.length && !e.clock;
+// Superset en séance : avec l'exercice suivant, ou un autre de la séance qui vient se placer juste après (demande d'Alexis, 18/11).
+const canSuperset = index => !!groupOf(state.active.entries, index) || supersetCandidates(index).length > 0;
+const groupLabel = index => { const g = groupTag(state.active.entries, index); return g ? `${g.label} ${g.tag}` : "Seul"; };
+function supersetSheet(index) {
+  const list = state.active.entries, e = list[index], ex = exercise(e.exerciseId), g = groupOf(list, index);
+  const end = g ? g.members.at(-1) : index;
+  const pick = (i, close) => {
+    const other = exercise(list[i].exerciseId);
+    close();
+    supersetWith(index, i);
+    const size = groupOf(state.active.entries, state.active.entries.indexOf(e))?.members.length || 2;
+    toast(`${niceName(other.name)} ${size > 2 ? "rejoint le triset" : "en superset"}, sans repos entre les deux`);
+  };
+  const row = (i, close) => {
+    const x = list[i], xe = exercise(x.exerciseId), left = x.target.sets - x.sets.length, og = groupTag(list, i);
+    return h("button", { type: "button", class: "row", onClick: () => pick(i, close) },
+      h("div", { class: "row-main" },
+        h("span", { class: "body-md fort medium" }, niceName(xe.name)),
+        h("span", { class: "caption" }, [i === end + 1 ? "exercice suivant" : null, xe.muscle, `${left} série${left > 1 ? "s" : ""} à faire`, og && `quitte le ${og.label.toLowerCase()} ${og.tag.replace(/\d+$/, "")}`].filter(Boolean).join(" · "))),
+      icon("link", "chev"));
+  };
+  const cands = supersetCandidates(index);
+  sheet({
+    title: g ? (g.members.length >= 3 ? "Triset" : "Superset") : "Superset",
+    body: close => [
+      h("p", { class: "body-sm discret", style: { margin: 0 } }, g
+        ? `${niceName(ex.name)} est en ${groupLabel(index).toLowerCase()}. Pour cette séance seulement.`
+        : `Avec quel exercice enchaîner ${niceName(ex.name)} ? Il vient se placer juste après, pour cette séance seulement.`),
+      cands.length > 0 && h("div", { class: "list" }, cands.map(i => row(i, close))),
+      g && btn(`Sortir du ${g.members.length >= 3 ? "triset" : "superset"}`, { variant: "secondary", full: true, icon: "link", onClick: () => {
+        close(); leaveSuperset(index); toast(`${niceName(ex.name)} seul, avec son repos`);
+      } })]
+  });
+}
 function optionsSheet(index) {
   const e = state.active.entries[index], ex = exercise(e.exerciseId), equip = equipOf(e);
   const row = (title, value, desc, onClick) => h("button", { type: "button", class: "row", onClick },
@@ -128,6 +162,7 @@ function optionsSheet(index) {
       h("p", { class: "body-sm discret", style: { margin: 0 } }, niceName(ex.name)),
       h("div", { class: "list" },
         canFormat(e) && row("Format", FORMATS[e.format || "series"], "Séries, EMOM ou Tabata, pour cette séance.", () => { close(); setTimeout(() => formatSheet(index)); }),
+        canSuperset(index) && row("Superset", groupLabel(index), "Enchaîner avec un autre exercice, sans repos entre les deux.", () => { close(); setTimeout(() => supersetSheet(index)); }),
         inLbs(equip) && !isInterval(e) && row("Pile", `${ex.stack ? `${ex.stack.step} lbs après ${ex.stack.from}` : "5 lbs"}${ex.ratio ? " · poulie ½" : ""}`,
           "Pas des poids sur la machine, et poulie démultipliée.", () => { close(); setTimeout(() => stackSheet(ex, equip)); }))]
   });
@@ -323,6 +358,24 @@ export function workoutView() {
   const grp = groupTag(a.entries, a.cursor);
   if (grp && amrap) grp.label = "AMRAP";
   const nextInGroup = grp && !grp.last ? exercise(a.entries[a.cursor + 1].exerciseId) : null;
+  // Superset / triset en séries : le tour se lit en entier (bande du tour, retour d'Alexis du 18/11).
+  // Tour en cours = séries déjà faites sur l'exercice en cours + 1 ; nombre de tours = l'exercice qui a le plus de séries.
+  const members = grp && !amrap && !isInterval(e) ? grp.members.filter(i => !isInterval(a.entries[i])) : null;
+  const letter = grp ? grp.tag.replace(/\d+$/, "") : "";
+  const tagOf = i => `${letter}${grp.members.indexOf(i) + 1}`;
+  const rounds = members ? Math.max(...members.map(i => a.entries[i].target.sets)) : 0;
+  const round = e.sets.length + 1;
+  // Ce qui suit la série en cours (même règle que logSet) : enchaîner, repos puis tour suivant, ou fin du groupe.
+  const after = members && (() => {
+    const n = e.sets.length + 1;
+    const openAfter = i => (i === a.cursor ? n : a.entries[i].sets.length) < a.entries[i].target.sets;
+    const chain = members.find(i => i > a.cursor && a.entries[i].sets.length < a.entries[i].target.sets && a.entries[i].sets.length < n);
+    if (chain !== undefined) return { chain, text: `Enchaîne avec ${tagOf(chain)}, sans repos.` };
+    const rest = a.entries[grp.members.at(-1)].target.rest;
+    if (members.some(openAfter)) return { rest, text: `Puis repos ${clock(rest)}, et tour ${round + 1}.` };
+    const nx = a.entries[grp.members.at(-1) + 1];
+    return nx ? { rest, text: `Dernier tour. Puis repos ${clock(rest)}, et ${niceName(exercise(nx.exerciseId).name)}.` } : { text: "Dernière série de la séance." };
+  })();
 
   // ——— Matériel du jour d'abord : l'ouverture de la séance. Chaque matériel est une grande tuile qui dit combien
   // d'exercices du programme en dépendent ; la séance se réécrit sous les yeux (avant → après), le programme ne bouge pas.
@@ -541,7 +594,7 @@ export function workoutView() {
   if (resting) {
     const rl = ruler("bleu");
     // Bouton principal pendant le repos : sa jauge se vide avec le temps restant, comme l'anneau ; un tap lance la suite sans attendre.
-    const nextLabel = exDone ? "Fin du repos" : `Lancer la série ${e.sets.length + 1}`;
+    const nextLabel = exDone ? "Fin du repos" : members ? `Lancer le tour ${e.sets.length + 1}` : `Lancer la série ${e.sets.length + 1}`;
     const fill = h("span", { class: "rest-fill", "aria-hidden": "true" }), btnTime = h("span", { class: "num" });
     restBtn = h("button", { class: "btn lg rest-btn", type: "button", onClick: () => { a.restEndsAt = null; save(); } },
       fill, h("span", { class: "rest-label" }, nextLabel), btnTime);
@@ -561,7 +614,7 @@ export function workoutView() {
       exDone
         ? nextEx && h("div", { class: "hint" }, icon("caretRight"), h("span", { class: "body-sm" }, "Ensuite : ", h("b", { class: "fort medium" }, niceName(nextEx.name)), "."))
         : h("div", { class: "card next-set" },
-            h("span", { class: "heading-md" }, `Série ${e.sets.length + 1} / ${e.target.sets}`),
+            h("span", { class: "heading-md" }, members ? `Tour ${round} / ${rounds} · ${grp.tag}` : `Série ${e.sets.length + 1} / ${e.target.sets}`),
             weightStepper(e), repsStepper("Reps")));
     hero.update = update;
     // Ajuster le repos au pouce, de part et d'autre du bouton principal.
@@ -638,6 +691,9 @@ export function workoutView() {
   } else if (exDone) {
     // Fin d'exercice : le moment fort de la séance (volume, record battu, la suite).
     const exVolume = e.sets.reduce((b, x) => b + setVolume(x), 0);
+    const groupDone = members && members.length > 1 && members.every(i => a.entries[i].sets.length >= a.entries[i].target.sets);
+    const groupSets = groupDone ? members.reduce((t, i) => t + a.entries[i].sets.length, 0) : 0;
+    const groupVolume = groupDone ? members.reduce((t, i) => t + a.entries[i].sets.reduce((b, x) => b + setVolume(x), 0), 0) : 0;
     const record = !interval && !amrap && sessionRecords({ startedAt: a.startedAt, entries: [e] })[0];
     const nextEx = !isLast && exercise(a.entries[a.cursor + 1].exerciseId);
     // La boussole Fluide : où en est ce muscle dans sa cible de la semaine, séance en cours comprise.
@@ -650,8 +706,9 @@ export function workoutView() {
       h("span", { class: "caption" }, week >= target ? "Cible atteinte : le reste de la semaine est du bonus." : `Encore ${target - week} série${target - week > 1 ? "s" : ""} pour la cible ${STATUS[state.matrix[m].status].label.toLowerCase()}.`));
     hero = h("div", { class: "wo-hero done" },
       h("span", { class: "done-badge", "aria-hidden": "true" }, icon("check")),
-      h("h2", { class: "heading-xl" }, allDone ? "Séance bouclée" : "Exercice terminé"),
+      h("h2", { class: "heading-xl" }, allDone ? "Séance bouclée" : groupDone ? `${grp.label} terminé` : "Exercice terminé"),
       h("span", { class: "body-md discret num" }, allDone ? "Toutes les séries sont faites. Bien joué."
+        : groupDone ? `${members.length} exercices · ${groupSets} séries · ${int(groupVolume)} kg soulevés`
         : `${e.sets.length} ${amrap ? "tour" : interval ? "round" : "série"}${e.sets.length > 1 ? "s" : ""}${exVolume ? ` · ${int(exVolume)} kg soulevés` : ""}`),
       record && pill(`Record · 1RM est. ${num(record.value)} kg (+${num(record.delta)})`, "succes"),
       !allDone && (nextEx ? h("span", { class: "body-sm" }, "Ensuite : ", h("b", { class: "fort medium" }, niceName(nextEx.name)))
@@ -665,13 +722,14 @@ export function workoutView() {
     hero = col(
       h("div", { class: `wo-hero${goSince !== null ? ` go${goSince < 2 ? " arrive" : ""}` : ""}` },
         goSince !== null && h("h2", { class: "heading-xl go-title" }, "À toi"),
-        h("div", { class: "overline" }, `Série ${e.sets.length + 1} / ${e.target.sets}`),
+        h("div", { class: "overline" }, members ? `${round >= rounds ? "Dernier tour · " : "Tour "}${round} / ${rounds}` : `Série ${e.sets.length + 1} / ${e.target.sets}`),
         over,
         h("span", { class: "body-sm discret num" }, `Objectif ${reps(e.target.repsMin, e.target.repsMax)} reps · RPE ${String(rpeTarget).replace(".", ",")}, ${rir(rpeTarget)}`)),
       e.hint === "charge" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Haut de fourchette atteint la dernière fois : ", h("b", { class: "fort medium" }, charge(equipOf(e), e.draft.weight)), ".")),
       e.hint === "reps" && e.sets.length === 0 && h("div", { class: "hint" }, icon("trend"), h("span", { class: "body-sm" }, "Même charge, vise ", h("b", { class: "fort medium" }, `${e.draft.reps} reps`), " (une de plus que la dernière fois).")),
       e.tempo && h("div", { class: "hint" }, icon("timer"), h("span", { class: "body-sm" }, "Charge légère aujourd'hui : ", h("b", { class: "fort medium" }, "3 s à la descente"), ", et va chercher les 15 à 20 reps. Ces séries ne changent pas ta charge de référence.")),
       weightStepper(e),
+      after && h("div", { class: "hint" }, icon("link"), h("span", { class: "body-sm" }, after.text)),
       repsStepper("Reps"),
       rpeField(e.draft.rpe, v => { e.draft.rpe = v; save(true); }));
     if (over) { hero.update = () => { over.textContent = `Repos fini depuis ${clock(Math.floor((Date.now() - a.goAt) / 1000))}`; }; hero.update(); }
@@ -701,7 +759,7 @@ export function workoutView() {
         ? btn("Fait", { variant: "primary", size: "lg", icon: "check", onClick: guard(done) })
       : canLaunch
         ? btn("Lancer le chrono", { variant: "primary", size: "lg", icon: "timer", onClick: guard(() => startClock(a.cursor)) })
-        : btn(interval ? "Round fait" : "Série faite", { variant: "primary", size: "lg", icon: "check", onClick: guard(done) });
+        : btn(interval ? "Round fait" : after?.chain !== undefined ? `Série faite, vers ${tagOf(after.chain)}` : after?.rest ? "Série faite, repos" : "Série faite", { variant: "primary", size: "lg", icon: "check", onClick: guard(done) });
   if (a.goAt && !exDone && !resting) primary.classList.add("go");
   // Exercice précédent / suivant : flèches nommées, à l'écart du bouton principal.
   const nav = (dir, ok) => ok
@@ -712,9 +770,24 @@ export function workoutView() {
   const equip = equipOf(e);
   const subtitle = [EQUIPS[equip], ex.muscle,
     amrap ? `AMRAP ${clock(lead.target.time)}, sans repos` : interval ? formatLine
-      : nextInGroup ? `puis ${niceName(nextInGroup.name)}, sans repos` : grp ? `repos ${clock(e.target.rest)} après le tour` : `repos ${clock(e.target.rest)}`,
+      : members ? `${grp.label} ${grp.tag}` : nextInGroup ? `puis ${niceName(nextInGroup.name)}, sans repos` : grp ? `repos ${clock(e.target.rest)} après le tour` : `repos ${clock(e.target.rest)}`,
     e.extra && "hors programme"].filter(Boolean).join(" · ");
-  const hasOptions = !exDone && (canFormat(e) || (inLbs(equip) && !interval));
+  // Bande du tour : une case par exercice. Fait ce tour-ci (se touche pour corriger), à toi, à venir (charge préparée), fini.
+  const band = members && members.length > 1 && h("div", { class: `round-band${members.length > 2 ? " three" : ""}`, role: "list", "aria-label": `${grp.label} ${letter}, tour ${Math.min(round, rounds)} sur ${rounds}` },
+    members.map(i => {
+      const x = a.entries[i], xe = exercise(x.exerciseId), cur = i === a.cursor && !resting && !exDone;
+      const finished = x.sets.length >= x.target.sets, last = x.sets[x.sets.length - 1];
+      const doneNow = !cur && x.sets.length > e.sets.length && last;
+      const state = cur ? "now" : doneNow ? "done" : finished ? "finished" : "next";
+      const value = state === "now" ? "À toi" : state === "finished" ? `Fini · ${x.sets.length} série${x.sets.length > 1 ? "s" : ""}`
+        : state === "done" ? `${charge(equipOf(x), last.weight)} × ${last.reps}` : `${charge(equipOf(x), x.draft.weight)} · vise ${x.draft.reps}`;
+      const label = `${tagOf(i)} · ${niceName(xe.name)}`;
+      const onClick = state === "done" ? () => go(`#/seance/serie/${i}/${x.sets.length - 1}`) : state === "now" ? null : () => setCursor(i);
+      return h(onClick ? "button" : "div", { class: `round-tile ${state}`, role: "listitem", ...(onClick && { type: "button", onClick, "aria-label": state === "done" ? `Corriger ${label} : ${value}` : `Aller à ${label}` }) },
+        h("span", { class: "set-idx" }, state === "done" || state === "finished" ? icon("check") : tagOf(i)),
+        h("span", { class: "round-text" }, h("span", { class: "body-md fort num" }, value), h("span", { class: "caption" }, label)));
+    }));
+  const hasOptions = !exDone && (canFormat(e) || (inLbs(equip) && !interval) || canSuperset(a.cursor));
 
   const el = h("div", { class: "screen workout big-targets" },
     h("div", { class: "wo-head" },
@@ -724,7 +797,8 @@ export function workoutView() {
         h("button", { class: "btn ghost xs", onClick: finishSheet }, "Terminer")),
       h("div", null,
         h("h1", { class: "heading-xl wo-title" }, exerciseTitle(ex)),
-        h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, subtitle)),
+        h("p", { class: "body-md discret num", style: { margin: "4px 0 0" } }, subtitle),
+        band),
       h("div", { class: "wo-tools" },
         a.deload && pill(a.reprise ? "Reprise · volume ÷ 2, charges −10 %" : "Deload · volume ÷ 2", "attention"),
         !exDone && btn("Remplacer", { variant: "secondary", size: "sm", icon: "swap", onClick: () => swapSheet(a.cursor) }),

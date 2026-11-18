@@ -803,3 +803,19 @@ dialog.sheet { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 .navbar-title h1 span { font: inherit; color: inherit; }
 .navbar-title h1 span.violet { color: var(--violet); }
 .card.tap.violet .display-xs { font-size: 22px; line-height: 24px; }
+
+/* Superset / triset : bande du tour sous le titre, une case par exercice (maquette 396:7766). */
+.round-band { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--spacing-4); margin-top: var(--spacing-12); padding: var(--spacing-4); border-radius: 20px; background: var(--fond-carte); }
+.round-tile { display: flex; align-items: center; gap: var(--spacing-12); min-height: 52px; min-width: 0; padding: var(--spacing-8) var(--spacing-12) var(--spacing-8) var(--spacing-8); border: 0; border-radius: var(--radius-md); background: none; color: inherit; font: inherit; text-align: left; }
+button.round-tile { cursor: pointer; }
+button.round-tile:active { background: var(--fond-discret); }
+.round-tile.now { background: var(--fond-discret); }
+.round-tile .set-idx { flex: none; width: 28px; height: 28px; }
+.round-tile.now .set-idx { background: var(--jaune); color: var(--texte-inverse); }
+.round-tile.next .set-idx { background: var(--bleu); color: var(--texte-inverse); }
+.round-tile.done .set-idx, .round-tile.finished .set-idx { background: var(--etat-succes-soft); color: var(--etat-succes); }
+.round-tile.finished { opacity: .56; }
+.round-text { display: flex; flex-direction: column; min-width: 0; }
+.round-text > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.round-band.three .round-tile { flex-direction: column; align-items: flex-start; gap: var(--spacing-4); padding: var(--spacing-8); }
+.round-band.three .round-text { width: 100%; }
