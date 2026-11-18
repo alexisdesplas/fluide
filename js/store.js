@@ -1347,6 +1347,42 @@ export function removeEntry(index) {
   save();
 }
 
+// Superset décidé en séance (Options › Superset) : l'autre exercice quitte sa place et son groupe,
+// vient juste après le groupe de celui-ci, et s'y lie. Pour cette séance ; « Garder » en fin de séance le reporte.
+const openEntry = x => !isInterval(x) && !isAmrap(x) && x.sets.length < x.target.sets;
+export function supersetCandidates(index) {
+  const list = state.active.entries, me = list[index], g = groupOf(list, index);
+  if (!openEntry(me) || (g?.members.length || 1) >= GROUP_MAX) return [];
+  const end = g ? g.members.at(-1) : index;
+  return list.map((x, i) => i).filter(i => i !== index && !(g && g.members.includes(i)) && openEntry(list[i]))
+    .sort((i, j) => (i === end + 1 ? -1 : j === end + 1 ? 1 : i - j));
+}
+export function supersetWith(index, other) {
+  const a = state.active, list = a.entries, cur = list[a.cursor], me = list[index], o = list[other];
+  list.splice(other, 1);
+  delete o.group;
+  list.forEach((x, k) => { if (x.group && !groupOf(list, k)) delete x.group; });
+  const at = list.indexOf(me), g = groupOf(list, at), end = g ? g.members.at(-1) : at;
+  list.splice(end + 1, 0, o);
+  const gid = me.group || uid();
+  for (let k = g ? g.members[0] : at; k <= end + 1; k++) list[k].group = gid;
+  a.cursor = list.indexOf(cur);
+  a.edited = true;
+  save();
+}
+export function leaveSuperset(index) {
+  const a = state.active, list = a.entries, cur = list[a.cursor], e = list[index], g = groupOf(list, index);
+  if (!g) return;
+  const end = g.members.at(-1);
+  list.splice(index, 1);
+  list.splice(end, 0, e); // juste après ce qui reste du groupe
+  delete e.group;
+  list.forEach((x, k) => { if (x.group && !groupOf(list, k)) delete x.group; });
+  a.cursor = list.indexOf(cur);
+  a.edited = true;
+  save();
+}
+
 export function linkEntries(index) {
   toggleLink(state.active.entries, index);
   state.active.edited = true;
