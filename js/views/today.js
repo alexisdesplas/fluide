@@ -1,4 +1,4 @@
-import { state, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklyGoal, history, template, exercise, setHabit, habit, dayKey, stepsAverage, startWorkout, sessionSets, STATUS, MUSCLES, CYCLES, PLACES } from "../store.js";
+import { state, plannedTemplate, hasWeekPlan, weekdayIndex, WEEKDAYS, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklyGoal, history, template, exercise, setHabit, habit, dayKey, stepsAverage, startWorkout, sessionSets, STATUS, MUSCLES, CYCLES, PLACES } from "../store.js";
 import { h, icon, btn, pill, go, int, clock, dateLong, ago, stepper, sheet, radios, toast } from "../ui.js";
 import { account } from "../compte.js";
 import { placeSummary } from "./places.js";
@@ -145,8 +145,11 @@ export function todayView() {
   const pos = cyclePosition(), c = state.cycle, a = state.active;
   const today = dayKey();
   if (picked?.day !== today) picked = null;
-  const auto = nextTemplate();
+  // Semaine type : la séance prévue aujourd'hui ; un jour de repos (ou sans semaine type), la moins récente.
+  const planned = plannedTemplate();
+  const auto = planned || nextTemplate();
   const next = (picked && template(picked.id)) || auto;
+  const over = picked ? "Séance du jour" : planned ? `Prévue ce ${WEEKDAYS[weekdayIndex()].toLowerCase()}` : hasWeekPlan() ? "Repos prévu · si tu t'entraînes" : "Séance du jour";
   const date = `${cap(dateLong(Date.now()))} · bloc ${CYCLES[c.type].label}${pos.over ? " terminé" : pos.reprise ? ", reprise" : pos.deload ? ", deload" : ` S${pos.week} / ${c.weeks}`}`;
   const screen = (content, ...ctas) => ({ el: h("div", { class: "screen today has-cta" }, h("div", { class: "scroll" }, content), h("div", { class: "cta-bar" }, ctas)), tab: "" });
 
@@ -191,7 +194,7 @@ export function todayView() {
   const here = place || state.profile.place || "gym";
   const rope = enduranceToday();
   return screen([
-    hero({ date, over: "Séance du jour", name: next.name, why,
+    hero({ date, over, name: next.name, why,
       top: state.templates.filter(t => t.items.length).length > 1 && btn("Changer", { variant: "secondary", icon: "swap", onClick: () => changeSheet(next, auto) }) }),
     pauseCard(),
     h("div", { class: "places", role: "group", "aria-label": "Où es-tu ?" }, Object.entries(PLACES).map(([k, p]) =>

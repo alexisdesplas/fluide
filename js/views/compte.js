@@ -1,4 +1,4 @@
-import { configured, account, signedIn, confirmed, clearConfirmed, signIn, signUp, sendReset, recovering, setNewPassword, remoteSummary, resolve, signOut, syncNow, shortcutKeyInfo, newShortcutKey, deleteShortcutKey } from "../compte.js";
+import { configured, account, signedIn, confirmed, clearConfirmed, signIn, signUp, sendReset, recovering, setNewPassword, remoteSummary, resolve, signOut, syncNow, shortcutKeyInfo, newShortcutKey, deleteShortcutKey, takeAdopted } from "../compte.js";
 import { state } from "../store.js";
 import { h, icon, btn, pill, go, navbar, sheet, confirmSheet, toast, dateShort, int } from "../ui.js";
 
@@ -43,6 +43,8 @@ const submitBtn = label => { const b = btn(label, { variant: "primary", size: "l
 async function landed(result) {
   if (result === "choose") return chooseSheet();
   if (result === "confirm") return go("#/compte/valider");
+  const adopted = takeAdopted();
+  if (adopted) { go("#/seances"); toast(`Programme « ${adopted} » ajouté à ton compte`); return; }
   go("#/profil");
   toast(result === "pulled" ? "Données du compte récupérées" : "Connecté : tes données sont sur ton compte");
 }
