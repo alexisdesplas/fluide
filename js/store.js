@@ -287,7 +287,7 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) return migrate(JSON.parse(raw));
   } catch {}
-  return seed();
+  return withPrograms(seed());
 }
 
 // Données d'avant la base d'exercices : les anciens noms sont renommés (même id, l'historique suit),
@@ -311,6 +311,19 @@ function migrate(st) {
   delete st.profile.define;
   // Lieux : la salle a tout, la maison et le street partent du matériel donné par Alexis.
   if (!st.profile.places) { st.profile.places = defaultPlaces(); st.profile.place = "gym"; delete st.profile.gear; }
+  return withPrograms(st);
+}
+
+// Programmes enregistrés : avant eux, les séances types formaient un seul programme sans nom.
+// Le programme en cours garde ses séances dans state.templates (tout le reste de l'app y lit) ; les autres les gardent chez eux.
+function withPrograms(st) {
+  if (!Array.isArray(st.programs) || !st.programs.length) {
+    const id = uid();
+    st.programs = [{ id, name: "Mon programme", split: st.profile.split || "perso", templates: [], week: Array(7).fill(null), createdAt: Date.now() }];
+    st.programId = id;
+  }
+  if (!st.programs.some(p => p.id === st.programId)) st.programId = st.programs[0].id;
+  for (const p of st.programs) { if (!Array.isArray(p.week) || p.week.length !== 7) p.week = Array(7).fill(null); p.templates ||= []; }
   return st;
 }
 
@@ -840,10 +853,96 @@ export function weekPlan(templates, endurance) {
 }
 
 // Le nombre de séances reste celui de la semaine donnée : un programme plus court laisse des jours libres.
+// Le programme choisi devient un nouveau programme enregistré, avec sa semaine type ; l'ancien reste dans Mes programmes
+// (sauf s'il était vide). La semaine type suit la répartition de « Ta semaine ».
 export function applyProgram(key, templates) {
-  state.templates = templates;
-  state.profile.split = key;
+  const cur = activeProgram();
+  const week = Array(7).fill(null);
+  (SPREAD[Math.min(templates.length, 7)] || []).forEach((d, i) => { week[d] = templates[i].id; });
+  if (!state.templates.length) {
+    Object.assign(cur, { name: SPLITS[key]?.label || cur.name, split: key, week });
+    state.templates = templates;
+    state.profile.split = key;
+    save();
+    return cur;
+  }
+  return createProgram(SPLITS[key]?.label || "Programme", { templates, week, split: key });
+}
+
+// ——— Programmes enregistrés et semaine type
+
+export const activeProgram = () => state.programs.find(p => p.id === state.programId);
+export const programById = id => state.programs.find(p => p.id === id);
+export const programTemplates = p => (p.id === state.programId ? state.templates : p.templates);
+
+// Passer à un autre programme : les séances en cours rentrent dans leur programme, celles de l'autre en sortent.
+// Les séances gardent leurs id : l'historique et « faite il y a… » suivent d'un programme à l'autre.
+export function switchProgram(id) {
+  const cur = activeProgram(), next = programById(id);
+  if (!next || next === cur) return;
+  cur.templates = state.templates;
+  state.templates = next.templates;
+  next.templates = [];
+  state.programId = next.id;
+  state.profile.split = next.split || "perso";
+  drafts = [];
   save();
+}
+
+export function createProgram(name, { templates = [], week = Array(7).fill(null), split = "perso", sharedFrom, sharedBy } = {}) {
+  const p = { id: uid(), name: String(name).trim().slice(0, 40) || "Programme", split, templates, week, createdAt: Date.now() };
+  if (sharedFrom) Object.assign(p, { sharedFrom, sharedBy });
+  state.programs.push(p);
+  switchProgram(p.id);
+  save();
+  return p;
+}
+
+export function renameProgram(id, name) {
+  const p = programById(id);
+  if (p && name.trim()) { p.name = name.trim().slice(0, 40); save(); }
+}
+
+// Copie complète : nouvelles séances (nouveaux id), même semaine type. La copie ne devient pas le programme en cours.
+export function duplicateProgram(id) {
+  const p = programById(id);
+  const map = {};
+  const templates = programTemplates(p).map(t => { const c = JSON.parse(JSON.stringify(t)); map[t.id] = c.id = uid(); c.items.forEach(it => { it.id = uid(); }); return c; });
+  const groups = {};
+  for (const t of templates) for (const it of t.items) if (it.group) it.group = groups[it.group] ||= uid();
+  const copy = { id: uid(), name: `${p.name} (copie)`.slice(0, 40), split: p.split, templates, week: p.week.map(x => map[x] || null), createdAt: Date.now() };
+  state.programs.push(copy);
+  save();
+  return copy;
+}
+
+// Le programme en cours ne se supprime pas : on passe d'abord à un autre.
+export function deleteProgram(id) {
+  if (id === state.programId) return;
+  state.programs = state.programs.filter(p => p.id !== id);
+  save();
+}
+
+// Semaine type du programme en cours : un jour (0 = lundi) reçoit une séance type, ou rien (repos).
+export const weekdayIndex = (t = Date.now()) => (new Date(t).getDay() + 6) % 7;
+export function setWeekDay(day, templateId) {
+  activeProgram().week[day] = templateId || null;
+  save();
+}
+// Répartit les séances non vides sur la semaine, comme le programme recommandé (lundi, mercredi, vendredi…).
+export function spreadWeek() {
+  const list = state.templates.filter(t => t.items.length);
+  const week = Array(7).fill(null);
+  (SPREAD[Math.min(list.length, 7)] || []).forEach((d, i) => { week[d] = list[i].id; });
+  activeProgram().week = week;
+  save();
+}
+export const hasWeekPlan = (p = activeProgram()) => p.week.some(Boolean);
+// Séance prévue aujourd'hui dans la semaine type (null : jour de repos, ou pas de semaine type).
+export function plannedTemplate(t = Date.now()) {
+  const id = activeProgram()?.week[weekdayIndex(t)];
+  const tpl = id && state.templates.find(x => x.id === id);
+  return tpl?.items.length ? tpl : null;
 }
 
 // Séries prévues par muscle pour une liste de séances données (aperçu avant de valider).
@@ -866,16 +965,36 @@ export function deleteTemplate(id) {
   const d = drafts.findIndex(p => p.id === id);
   if (d >= 0) drafts.splice(d, 1);
   state.templates = state.templates.filter(p => p.id !== id);
+  const w = activeProgram()?.week;
+  if (w) w.forEach((x, d) => { if (x === id) w[d] = null; });
   save();
 }
 
-export function addItem(templateId, exerciseId) {
+const newItem = exerciseId => {
   const last = lastPerformance(exerciseId);
   const ex = exercise(exerciseId);
-  const item = { id: uid(), exerciseId, format: "series", sets: 3, repsMin: 8, repsMax: 12, weight: last ? pileFor(exerciseId, ex.equip, last.maxWeight) : nearestWeight(ex.equip, 20, ex.stack), rest: 90 };
-  template(templateId).items.push(item);
+  return { id: uid(), exerciseId, format: "series", sets: 3, repsMin: 8, repsMax: 12, weight: last ? pileFor(exerciseId, ex.equip, last.maxWeight) : nearestWeight(ex.equip, 20, ex.stack), rest: 90 };
+};
+
+// Exercices choisis dernièrement dans le catalogue : proposés juste après les favoris.
+const RECENT_MAX = 8;
+export const recentExercises = () => (state.recentExercises || []).map(exercise).filter(Boolean);
+export function rememberExercises(ids) {
+  state.recentExercises = [...new Set([...[...ids].reverse(), ...(state.recentExercises || [])])].slice(0, RECENT_MAX);
+}
+
+export function addItem(templateId, exerciseId) {
+  return addItems(templateId, [exerciseId])[0];
+}
+
+// Plusieurs exercices d'un coup, dans l'ordre du choix ; chain les enchaîne en superset ou triset (3 au plus).
+export function addItems(templateId, exerciseIds, { chain = false } = {}) {
+  const items = exerciseIds.map(newItem);
+  if (chain && items.length >= 2 && items.length <= GROUP_MAX) { const g = uid(); items.forEach(it => { it.group = g; }); }
+  template(templateId).items.push(...items);
+  rememberExercises(exerciseIds);
   save();
-  return item;
+  return items;
 }
 
 export function moveItem(templateId, itemId, dir) {
@@ -905,7 +1024,8 @@ export const IMPORT_TYPE = "fluide-templates";
 const clampInt = (v, min, max, def) => (Number.isFinite(+v) ? Math.min(max, Math.max(min, Math.round(+v))) : def);
 
 // Renvoie { templates } prêtes à ajouter, ou { error } avec la raison à afficher.
-export function parseTemplates(text) {
+// create : un exercice absent du catalogue mais décrit (muscle, matériel) est créé (programme partagé par un autre compte).
+export function parseTemplates(text, { create = false } = {}) {
   const s = String(text ?? ""), a = s.indexOf("{"), b = s.lastIndexOf("}");
   if (a < 0 || b < a) return { error: "Aucune séance dans ce texte. Copie tout le bloc préparé par le coach." };
   let data;
@@ -919,7 +1039,11 @@ export function parseTemplates(text) {
   const templates = data.templates.map((t, ti) => {
     const groups = {};
     const items = (Array.isArray(t.items) ? t.items : []).map(it => {
-      const ex = find(it.exercise);
+      let ex = find(it.exercise);
+      if (!ex && create && GROUPS.includes(it.muscle) && String(it.exercise ?? "").trim()) {
+        ex = { id: uid(), name: String(it.exercise).trim().slice(0, 80), muscle: it.muscle, equip: EQUIPS[it.equip] ? it.equip : "barre", pref: "neutre", note: "" };
+        state.exercises.push(ex);
+      }
       if (!ex) { missing.push(String(it.exercise ?? "?")); return null; }
       const [lo, hi] = Array.isArray(it.reps) ? it.reps : [it.reps, it.reps];
       const repsMin = clampInt(lo, 1, 50, 8), repsMax = Math.max(repsMin, clampInt(hi, 1, 50, repsMin));
@@ -929,7 +1053,10 @@ export function parseTemplates(text) {
         : last ? pileFor(ex.id, ex.equip, last.maxWeight)
         : known ? known.weight : nearestWeight(ex.equip, typicalLoad(ex), ex.stack);
       const item = { id: uid(), exerciseId: ex.id, format: "series", sets: clampInt(it.sets, 1, 10, 3), repsMin, repsMax, weight, rest: clampInt(it.rest, 0, 600, 90) };
-      if (it.group) item.group = groups[it.group] ||= uid();
+      if (it.format === "emom" || it.format === "tabata") {
+        Object.assign(item, FORMAT_DEFAULTS[it.format], { format: it.format });
+        for (const k of ["rounds", "every", "work", "off"]) if (Number.isFinite(+it[k]) && it[k] !== null) item[k] = clampInt(it[k], 1, 600, item[k]);
+      } else if (it.group) item.group = groups[it.group] ||= uid();
       return item;
     }).filter(Boolean);
     // Un groupe qui ne tient pas (exercice seul, ou séparé par un autre) est délié.
@@ -939,6 +1066,36 @@ export function parseTemplates(text) {
   if (missing.length) return { error: `Pas dans le catalogue : ${missing.join(", ")}.` };
   if (templates.some(t => !t.items.length)) return { error: "Une des séances n'a aucun exercice." };
   return { templates };
+}
+
+// Programme vers le même format, enrichi pour un autre compte : muscle et matériel de chaque exercice (pour recréer
+// ceux qui ne sont pas au catalogue), nom du programme et semaine type (index de séance par jour, null = repos).
+export function exportProgram(p) {
+  const templates = programTemplates(p).filter(t => t.items.length);
+  return {
+    type: IMPORT_TYPE, version: 2, name: p.name,
+    week: p.week.map(id => { const i = templates.findIndex(t => t.id === id); return i >= 0 ? i : null; }),
+    templates: templates.map(t => ({ name: t.name, items: t.items.map((it, i) => {
+      const ex = exercise(it.exerciseId), g = groupOf(t.items, i);
+      const out = { exercise: ex.name, muscle: ex.muscle, equip: ex.equip, sets: it.sets, reps: [it.repsMin, it.repsMax], rest: it.rest, weight: it.weight ?? null };
+      if (g) out.group = String.fromCharCode(65 + t.items.slice(0, g.members[0]).filter((x, k) => groupOf(t.items, k)?.members[0] === k).length);
+      if (it.format === "emom" || it.format === "tabata") Object.assign(out, { format: it.format, rounds: it.rounds, every: it.every, work: it.work, off: it.off, reps: [it.repsMin, it.repsMin] });
+      return out;
+    }) }))
+  };
+}
+
+// Programme reçu par lien : il devient un programme enregistré, en cours, avec sa semaine type.
+// sharedFrom (le jeton du lien) évite de l'ajouter deux fois (ouvert puis repris après la création du compte).
+export function addSharedProgram({ token, sender, program }) {
+  const done = state.programs.find(p => p.sharedFrom === token);
+  if (done) { switchProgram(done.id); return { program: done }; }
+  const count = state.exercises.length;
+  const parsed = parseTemplates(JSON.stringify(program), { create: true });
+  if (parsed.error) { state.exercises.length = count; return { error: parsed.error }; }
+  const week = Array.isArray(program.week) && program.week.length === 7
+    ? program.week.map(i => (Number.isInteger(i) ? parsed.templates[i]?.id || null : null)) : Array(7).fill(null);
+  return { program: createProgram(program.name || "Programme partagé", { templates: parsed.templates, week, sharedFrom: token, sharedBy: sender || null }) };
 }
 
 export function addTemplates(list) {
@@ -960,6 +1117,7 @@ export function replaceItemExercise(templateId, itemId, exerciseId) {
   const last = lastPerformance(exerciseId), equip = exercise(exerciseId).equip;
   it.weight = last ? pileFor(exerciseId, equip, last.maxWeight) : convertWeight(exercise(it.exerciseId).equip, equip, it.weight);
   it.exerciseId = exerciseId;
+  rememberExercises([exerciseId]);
   save();
 }
 

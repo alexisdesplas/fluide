@@ -86,3 +86,44 @@ revoke all on function public.fluide_nouvelle_cle() from public, anon;
 revoke all on function public.fluide_envoyer_pas(text, integer, date) from public;
 grant execute on function public.fluide_nouvelle_cle() to authenticated;
 grant execute on function public.fluide_envoyer_pas(text, integer, date) to anon, authenticated;
+
+-- ——— Programmes partagés par lien (Réglages › Programme › Mes programmes › Partager)
+-- L'expéditeur connecté enregistre une copie du programme sous un jeton aléatoire (128 bits) ; le lien
+-- …/#/invitation/<jeton> part par e-mail. La personne qui l'ouvre lit le programme sans compte, par la fonction
+-- fluide_get_share (jamais la table), pendant 30 jours.
+
+create table if not exists public.fluide_shares (
+  token text primary key check (length(token) >= 20),
+  owner_id uuid not null default auth.uid() references auth.users on delete cascade,
+  sender_name text check (length(sender_name) <= 60),
+  recipient_email text check (length(recipient_email) <= 200),
+  program jsonb not null check (pg_column_size(program) < 200000),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '30 days',
+  opened_at timestamptz
+);
+
+-- L'expéditeur crée, voit et retire ses liens ; personne d'autre ne lit la table.
+grant select, insert, delete on public.fluide_shares to authenticated;
+alter table public.fluide_shares enable row level security;
+create policy "Voir ses partages" on public.fluide_shares
+  for select to authenticated using ((select auth.uid()) = owner_id);
+create policy "Créer ses partages" on public.fluide_shares
+  for insert to authenticated with check ((select auth.uid()) = owner_id);
+create policy "Retirer ses partages" on public.fluide_shares
+  for delete to authenticated using ((select auth.uid()) = owner_id);
+
+-- Lecture d'un lien, sans connexion : rien si le jeton est inconnu ou expiré. Note la première ouverture.
+create or replace function public.fluide_get_share(share_token text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  s public.fluide_shares;
+begin
+  select * into s from public.fluide_shares where token = share_token and expires_at > now();
+  if s.token is null then return null; end if;
+  update public.fluide_shares set opened_at = coalesce(opened_at, now()) where token = s.token;
+  return jsonb_build_object('sender', s.sender_name, 'recipient', s.recipient_email, 'program', s.program, 'expires_at', s.expires_at);
+end $$;
+
+revoke all on function public.fluide_get_share(text) from public;
+grant execute on function public.fluide_get_share(text) to anon, authenticated;
