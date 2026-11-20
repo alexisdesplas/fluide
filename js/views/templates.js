@@ -1,6 +1,7 @@
-import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, startWorkout, parseTemplates, addTemplates } from "../store.js";
+import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, recentExercises, addItems, GROUP_MAX, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, activeProgram, hasWeekPlan, weekdayIndex, WEEKDAYS, enduranceWeek, setEnduranceWeek, startWorkout, parseTemplates, addTemplates } from "../store.js";
 import { h, icon, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
+import { weekDays } from "./programs.js";
 
 export const prefPill = pref =>
   pref === "aime" ? pill("Favori", "accent") : pref === "evite" ? pill("Je n'aime pas") : pref === "douleur" ? pill("Douleur", "danger") : null;
@@ -53,32 +54,63 @@ export const linkRow = (list, i, onToggle) => {
 // filtrés par muscle et par matériel. Sans recherche ni filtre, chaque muscle montre ses 5 plus utiles.
 // Le premier dessin d'un écran passe muscle (null pour tout voir) pour repartir des filtres à zéro.
 const filter = { muscle: null, equip: null };
+
+// Recherche tolérante : sans accents ni casse, mots dans n'importe quel ordre, pluriels (« halteres » trouve « Haltère »),
+// et le matériel ou le muscle comptent comme des mots du nom (« rowing poulie », « dos barre »).
+const fold = s => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+const haystacks = new WeakMap();
+const haystack = e => {
+  let hs = haystacks.get(e);
+  if (!hs || hs.name !== e.name) haystacks.set(e, hs = { name: e.name, text: fold(`${e.name} ${EQUIPS[e.equip] || ""} ${e.muscle}`) });
+  return hs.text;
+};
+const STOP = new Set(["de", "du", "des", "a", "au", "aux", "avec", "en", "la", "le", "les", "sur", "un", "une", "et"]);
+const terms = q => fold(q).split(/[\s,'’-]+/).filter(w => w && !STOP.has(w)).map(w => w.length > 3 ? w.replace(/[sx]$/, "") : w);
+export const searchMatch = (e, q) => { const ws = terms(q); return ws.every(w => haystack(e).includes(w)); };
+
 // only : ce qu'on montre sans recherche (hors de la salle, ce qui se fait sur place) ; la recherche voit tout.
-export function catalogue(list, query, { onPick, note, pickIcon = "plus", muscle, only }) {
+// selected : choix multiple (ajout à une séance type) ; toucher une ligne la coche ou la décoche, onPick prévient l'écran.
+export function catalogue(list, query, { onPick, note, pickIcon = "plus", muscle, only, selected }) {
   if (muscle !== undefined) Object.assign(filter, { muscle, equip: null }); // ouverture : muscle imposé (ou aucun), matériel libre
-  const q = query.trim().toLowerCase();
-  const match = e => !e.mix && (!only || q || only(e)) && (!q || e.name.toLowerCase().includes(q)) && (!filter.muscle || e.muscle === filter.muscle) && (!filter.equip || e.equip === filter.equip);
+  const q = query.trim();
+  const match = e => !e.mix && (!only || q || only(e)) && (!q || searchMatch(e, q)) && (!filter.muscle || e.muscle === filter.muscle) && (!filter.equip || e.equip === filter.equip);
   const short = !q && !filter.muscle;
   const favs = state.exercises.filter(e => e.pref === "aime" && match(e)).sort((a, b) => a.name.localeCompare(b.name));
+  const recents = q ? [] : recentExercises().filter(e => e.pref !== "aime" && match(e));
   const groups = GROUPS.map(m => [m, state.exercises.filter(e => e.muscle === m && e.pref !== "aime" && match(e)).sort(byUsefulness)])
     .filter(([, xs]) => xs.length);
-  const redraw = () => catalogue(list, query, { onPick, note, pickIcon, only });
-  const chipRow = (options, key) => h("div", { class: "chips scroll-x" }, options.map(([v, label]) =>
-    h("button", { type: "button", class: "chip", "aria-pressed": String(filter[key] === v), onClick: () => { filter[key] = filter[key] === v ? null : v; redraw(); } }, label)));
-  const row = e => h("div", { class: "row pick", style: e.pref === "douleur" ? { opacity: .6 } : null },
-    h("button", { class: "row-btn", onClick: () => onPick(e) },
+  const total = favs.length + groups.reduce((n, [, xs]) => n + xs.length, 0);
+  const redraw = () => catalogue(list, query, { onPick, note, pickIcon, only, selected });
+  const chipRow = (options, key, label) => h("div", { class: "chips scroll-x", role: "group", "aria-label": label }, options.map(([v, text]) =>
+    h("button", { type: "button", class: "chip", "aria-pressed": String(filter[key] === v), onClick: () => { filter[key] = filter[key] === v ? null : v; redraw(); } }, text)));
+  const pickState = (b, e) => {
+    const on = selected(e);
+    b.setAttribute("aria-pressed", String(on));
+    b.closest(".row").classList.toggle("on", on);
+    b.querySelector(".chev")?.replaceWith(icon(on ? "check" : "plus", "chev"));
+  };
+  const row = e => {
+    const on = selected?.(e);
+    const b = h("button", { class: "row-btn", ...(selected ? { "aria-pressed": String(!!on) } : null),
+      onClick: ev => { const btnEl = ev.currentTarget; onPick(e); if (selected) pickState(btnEl, e); } },
       h("div", { class: "row-main" }, h("span", { class: "body-md fort" }, e.name), h("span", { class: "caption num" }, [EQUIPS[e.equip], note(e)].filter(Boolean).join(" · "))),
-      e.pref !== "aime" && prefPill(e.pref), icon(pickIcon, "chev")),
-    e.pref !== "douleur" && h("button", { class: "star", "aria-pressed": String(e.pref === "aime"), "aria-label": e.pref === "aime" ? `Retirer ${e.name} des favoris` : `Mettre ${e.name} en favori`,
-      onClick: () => { toggleFav(e.id); redraw(); } }, icon("star")));
+      e.pref !== "aime" && prefPill(e.pref), icon(on ? "check" : pickIcon, "chev"));
+    return h("div", { class: `row pick${on ? " on" : ""}`, style: e.pref === "douleur" ? { opacity: .6 } : null }, b,
+      e.pref !== "douleur" && h("button", { class: "star", "aria-pressed": String(e.pref === "aime"), "aria-label": e.pref === "aime" ? `Retirer ${e.name} des favoris` : `Mettre ${e.name} en favori`,
+        onClick: () => { toggleFav(e.id); redraw(); } }, icon("star")));
+  };
   const block = (title, xs, m) => h("div", null, h("div", { class: "overline", style: { margin: "0 0 8px" } }, short && m ? `${title} · ${xs.length}` : title),
     h("div", { class: "list" }, (short && m ? xs.slice(0, 5) : xs.slice(0, 150)).map(row)),
     short && m && xs.length > 5 && btn(`Voir les ${xs.length} exercices`, { variant: "ghost", full: true, onClick: () => { filter.muscle = m; redraw(); } }));
+  const reset = (q || filter.muscle || filter.equip) && h("p", { class: "caption num", style: { margin: 0 }, role: "status" },
+    total ? `${total} exercice${total > 1 ? "s" : ""}` : "Aucun exercice", (filter.muscle || filter.equip) && [" · ",
+      h("button", { type: "button", class: "link-btn", onClick: () => { Object.assign(filter, { muscle: null, equip: null }); redraw(); } }, "Retirer les filtres")]);
   list.replaceChildren(
-    chipRow(GROUPS.map(m => [m, m]), "muscle"),
-    chipRow(Object.entries(EQUIPS), "equip"),
-    ...[favs.length && block("★ Favoris", favs), ...groups.map(([m, xs]) => block(m, xs, m))].filter(Boolean));
-  if (!favs.length && !groups.length) list.append(h("p", { class: "body-sm discret", style: { margin: 0 } }, "Aucun exercice ne correspond."));
+    chipRow(GROUPS.map(m => [m, m]), "muscle", "Muscle"),
+    chipRow(Object.entries(EQUIPS), "equip", "Matériel"),
+    ...[reset, favs.length && block("★ Favoris", favs), recents.length && block("Récents", recents), ...groups.map(([m, xs]) => block(m, xs, m))].filter(Boolean));
+  if (!total) list.append(h("p", { class: "body-sm discret", style: { margin: 0 } }, q ? "Essaie un autre mot, ou crée l'exercice." : "Change de muscle ou de matériel."));
+  return total;
 }
 
 // Mouvement d'un exercice dans une feuille : animation 3D si on en a une, sinon les deux photos (départ, arrivée) en fondu.
@@ -105,8 +137,8 @@ export const exerciseTitle = (e, attrs = {}) => hasMovement(e)
   ? h("button", { ...attrs, type: "button", class: `${attrs.class || ""} ex-link`, "aria-label": `${niceName(e.name)}, voir le mouvement`, onClick: () => movementSheet(e) }, h("span", { class: "ex-name" }, niceName(e.name)), icon("play"))
   : h("span", attrs, niceName(e.name));
 
-function nameSheet({ title, value = "", okLabel, onOk }) {
-  const input = h("input", { class: "input", value, placeholder: "Ex. Haut A, Push, Full body", maxLength: 40, "aria-label": "Nom" });
+export function nameSheet({ title, value = "", okLabel, onOk, placeholder = "Ex. Haut A, Push, Full body" }) {
+  const input = h("input", { class: "input", value, placeholder, maxLength: 40, "aria-label": "Nom" });
   sheet({ title, okLabel, body: h("div", { class: "field" }, input),
     ok: () => { const v = input.value.trim(); if (!v) { input.focus(); return false; } onOk(v); } });
   setTimeout(() => input.focus(), 50);
@@ -114,17 +146,26 @@ function nameSheet({ title, value = "", okLabel, onOk }) {
 
 export function templatesView() {
   editing = null;
-  const n = state.templates.length;
+  const n = state.templates.length, prog = activeProgram(), planned = hasWeekPlan(prog);
+  const others = state.programs.length - 1;
   const el = h("div", { class: "screen" },
-    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Programme", subtitle: `${n} séance${n > 1 ? "s" : ""} type${n > 1 ? "s" : ""} · Fluide prend chaque jour la moins récente`,
+    navbar({ back: { label: "Réglages", href: "#/profil" }, title: "Programme", subtitle: `${n} séance${n > 1 ? "s" : ""} type${n > 1 ? "s" : ""} · ${planned ? "Fluide suit ta semaine type" : "Fluide prend chaque jour la moins récente"}`,
       action: { label: "Nouvelle", onClick: () => nameSheet({ title: "Nouvelle séance", okLabel: "Créer la séance",
         onOk: v => { const t = createTemplate(v); setTimeout(() => go(`#/seances/${t.id}`)); } }) } }),
     h("div", { class: "scroll" },
-      n > 0 && h("button", { class: "card tap violet", onClick: () => go("#/seances/programme") },
+      h("button", { class: "card tap violet", onClick: () => go("#/seances/programmes"), "aria-label": `Programme en cours : ${prog.name}. Mes programmes` },
         h("div", { class: "card-head" },
-          h("div", null, h("div", { class: "overline" }, "Programme"), h("div", { class: "display-xs violet" }, SPLITS[state.profile.split || "perso"].label),
-            state.profile.minutes != null && h("div", { class: "caption num", style: { marginTop: "4px" } }, weekLine(state.profile))),
-          h("span", { class: "btn secondary sm" }, "Changer"))),
+          h("div", { style: { minWidth: 0 } }, h("div", { class: "overline" }, "Programme en cours"), h("div", { class: "display-xs violet" }, prog.name),
+            h("div", { class: "caption num", style: { marginTop: "4px" } }, [prog.split && prog.split !== "perso" && SPLITS[prog.split]?.label !== prog.name && SPLITS[prog.split]?.label,
+              prog.split && prog.split !== "perso" && state.profile.minutes != null && weekLine(state.profile), prog.sharedBy && `partagé par ${prog.sharedBy}`].filter(Boolean).join(" · ") || "Tes séances types")),
+          h("span", { class: "btn secondary sm" }, others > 0 ? `Mes programmes · ${others + 1}` : "Mes programmes"))),
+      n > 0 && h("button", { class: "card tap", onClick: () => go("#/seances/semaine-type") },
+        h("div", { class: "card-head" }, h("div", null, h("div", { class: "overline" }, "Semaine type"),
+          h("div", { class: "body-md fort medium" }, planned ? weekDays(prog) : "Pas encore planifiée")), icon("calendar", "chev discret")),
+        h("div", { class: "week-strip", "aria-hidden": "true" }, prog.week.map((id, d) => {
+          const t = id && state.templates.find(x => x.id === id);
+          return h("span", { class: `${t ? "on" : ""}${d === weekdayIndex() ? " today" : ""}` }, h("b", null, WEEKDAYS[d][0]), h("small", null, t ? t.name : "—"));
+        }))),
       n ? state.templates.map(t => {
         const last = history().find(s => s.templateId === t.id);
         const muscles = [...new Set(t.items.map(i => exercise(i.exerciseId)?.muscle))].join(" · ");
@@ -197,6 +238,7 @@ export function importView() {
 let editing = null;
 
 export function templateView({ id }) {
+  picking = null;
   const t = template(id);
   if (!t) { setTimeout(() => go("#/seances")); return { el: h("div") }; }
   const edit = editing === t.id;
@@ -206,20 +248,41 @@ export function templateView({ id }) {
   const leave = () => { editing = null; go(home); };
   const toggle = () => { editing = edit ? null : t.id; save(); };
 
-  const rows = t.items.flatMap((it, i) => {
+  // Une ligne d'exercice. Dans un superset, le numéro devient son repère (A1, A2) et le repos passe dans l'en-tête du bloc.
+  const rowFor = (it, i, g) => {
     const ex = exercise(it.exerciseId);
-    const g = groupTag(t.items, i);
-    const main = [h("span", { class: "num-lead", "aria-hidden": "true" }, i + 1), h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, niceName(ex.name)),
-      h("span", { class: "caption num" }, g ? `${g.label} ${g.tag} · ` : "", itemLine(it, g && !g.last))), prefPill(ex.pref)];
-    const cls = `row${g ? " grouped" : ""}`;
+    const line = g ? `${it.sets} × ${reps(it.repsMin, it.repsMax)} · ${charge(ex.equip, it.weight)}` : itemLine(it, false);
+    const main = [h("span", { class: "num-lead", "aria-hidden": "true" }, g ? g.tag : i + 1), h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, niceName(ex.name)),
+      h("span", { class: "caption num" }, line)), prefPill(ex.pref)];
     return edit
-      ? [h("div", { class: cls }, ...main,
+      ? h("div", { class: "row" }, ...main,
           h("div", { class: "reorder" },
             h("button", { class: "btn secondary square", "aria-label": `Monter ${ex.name}`, disabled: i === 0, onClick: () => moveItem(t.id, it.id, -1) }, icon("up")),
-            h("button", { class: "btn secondary square", "aria-label": `Descendre ${ex.name}`, disabled: i === t.items.length - 1, onClick: () => moveItem(t.id, it.id, 1) }, icon("down")))),
-        linkRow(t.items, i, () => toggleLink(t.items, i))]
-      : h("button", { class: cls, onClick: () => go(`#/seances/${t.id}/${it.id}`) }, ...main, icon("caretRight", "chev"));
-  });
+            h("button", { class: "btn secondary square", "aria-label": `Descendre ${ex.name}`, disabled: i === t.items.length - 1, onClick: () => moveItem(t.id, it.id, 1) }, icon("down"))))
+      : h("button", { class: "row", onClick: () => go(`#/seances/${t.id}/${it.id}`) }, ...main, icon("caretRight", "chev"));
+  };
+  // Superset ou triset : un seul bloc, en-tête (lettre, tours, repos après le tour), exercices reliés par un trait, « Délier » entre eux.
+  const supersetBlock = g => {
+    const first = groupTag(t.items, g.members[0]), letter = first.tag[0], last = t.items[g.members.at(-1)];
+    const tours = Math.max(...g.members.map(k => t.items[k].sets || 0));
+    return h("div", { class: "superset", role: "group", "aria-label": `${g.label} ${letter}` },
+      h("div", { class: "superset-head" },
+        h("span", { class: "superset-letter", "aria-hidden": "true" }, letter),
+        h("div", { class: "row-main" },
+          h("span", { class: "superset-title" }, `${g.label} · ${tours} tour${tours > 1 ? "s" : ""}`),
+          h("span", { class: "caption num" }, `Sans repos entre eux · repos ${clock(last.rest)} après le tour`))),
+      ...g.members.flatMap((k, j) => [rowFor(t.items[k], k, groupTag(t.items, k)),
+        j < g.members.length - 1 && h("div", { class: "superset-join" },
+          h("button", { type: "button", class: "btn ghost xs", "aria-label": `Délier ${exercise(t.items[k].exerciseId).name} et ${exercise(t.items[k + 1].exerciseId).name}`,
+            onClick: () => toggleLink(t.items, k) }, icon("link"), "Délier"))]));
+  };
+  const rows = [];
+  for (let i = 0; i < t.items.length;) {
+    const g = groupOf(t.items, i);
+    const end = g ? g.members.at(-1) : i;
+    rows.push(g ? supersetBlock(g) : rowFor(t.items[i], i, null), linkRow(t.items, end, () => toggleLink(t.items, end)));
+    i = end + 1;
+  }
   const list = t.items.length ? h("div", { class: "list" }, rows)
     : h("div", { class: "empty" }, icon("barbell"), h("h2", { class: "display-xs" }, "Aucun exercice"),
         h("p", { class: "body-sm discret", style: { margin: 0 } }, "Commence par un ou deux polyarticulaires lourds, puis l'isolation."));
@@ -231,7 +294,7 @@ export function templateView({ id }) {
       ? [
           h("label", { class: "field" }, h("span", { class: "caption medium" }, "Nom de la séance"),
             h("input", { class: "input", value: t.name, maxLength: 40, onChange: e => { const v = e.target.value.trim(); if (v) { t.name = v; save(); } else e.target.value = t.name; } })),
-          h("p", { class: "caption", style: { margin: 0 } }, "Les flèches changent l'ordre dans la séance : les polyarticulaires lourds d'abord. « Lier » enchaîne deux ou trois exercices en superset ou triset : sans repos entre eux, le repos du dernier après le tour."),
+          h("p", { class: "caption", style: { margin: 0 } }, "Les flèches changent l'ordre dans la séance : les polyarticulaires lourds d'abord. Deux exercices liés s'enchaînent sans repos."),
           list,
           btn(draft ? "Retirer du programme" : "Supprimer la séance type", { variant: "danger", full: true, onClick: () => confirmSheet({
             title: draft ? "Retirer la séance du programme ?" : "Supprimer la séance type ?",
@@ -241,8 +304,10 @@ export function templateView({ id }) {
           }) })
         ]
       : [
+          t.items.length > 1 && !t.items.some(x => x.group) && h("p", { class: "caption", style: { margin: 0 } },
+            "« Lier » enchaîne deux ou trois exercices en superset ou triset : sans repos entre eux, le repos du dernier après le tour."),
           list,
-          btn("Ajouter un exercice", { variant: "secondary", size: "lg", full: true, icon: "plus", onClick: () => go(`#/seances/${t.id}/ajouter`) }),
+          btn("Ajouter des exercices", { variant: "secondary", size: "lg", full: true, icon: "plus", onClick: () => go(`#/seances/${t.id}/ajouter`) }),
           draft
             ? btn("Revenir au programme", { variant: "primary", size: "lg", full: true, onClick: leave })
             : btn(`Démarrer ${t.name}`, { variant: "primary", size: "lg", full: true, disabled: !t.items.length || !!state.active,
@@ -254,6 +319,7 @@ export function templateView({ id }) {
 }
 
 export function itemView({ id, item }) {
+  picking = null;
   const t = template(id);
   const it = t?.items.find(x => x.id === item);
   if (!it) { setTimeout(() => go(`#/seances/${id}`)); return { el: h("div") }; }
@@ -309,44 +375,82 @@ export function itemView({ id, item }) {
   return { el };
 }
 
-// Ajouter un exercice à une séance type, ou (item donné) remplacer celui d'une ligne : même catalogue, même recherche.
+// Ajouter des exercices à une séance type, ou (item donné) remplacer celui d'une ligne : même catalogue, même recherche.
+// En ajout, on coche plusieurs exercices puis « Ajouter » ; deux ou trois s'enchaînent en superset ou triset d'un geste.
+// Le choix survit aux redessins de l'écran (feuille fermée, exercice créé) ; on l'oublie en partant.
+let picking = null;
 export function pickerView({ id, item }) {
   const t = template(id);
   if (!t) { setTimeout(() => go("#/seances")); return { el: h("div") }; }
   const replacing = item && t.items.find(x => x.id === item);
+  const again = !replacing && picking?.id === t.id;
+  if (!again) picking = replacing ? null : { id: t.id, chosen: [], chain: false };
   const list = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } });
   const results = h("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } });
-  const add = exId => {
-    if (replacing) { replaceItemExercise(t.id, replacing.id, exId); toast(`${exercise(exId).name} à la place`); go(`#/seances/${t.id}/${replacing.id}`); return; }
-    const it = addItem(t.id, exId); toast(`${exercise(exId).name} ajouté`); go(`#/seances/${t.id}/${it.id}`);
-  };
+  const chosen = picking?.chosen || [];
+  const bar = h("div", { class: "pick-bar", hidden: true });
 
-  let first = true;
+  const confirm = () => {
+    const n = chosen.length;
+    const items = addItems(t.id, chosen, { chain: picking.chain });
+    picking = null;
+    if (n === 1) { toast(`${exercise(chosen[0]).name} ajouté`); go(`#/seances/${t.id}/${items[0].id}`); return; }
+    toast(items[0].group ? `${n === 2 ? "Superset" : "Triset"} ajouté` : `${n} exercices ajoutés`);
+    go(`#/seances/${t.id}`);
+  };
+  const drawBar = () => {
+    const n = chosen.length, canChain = n >= 2 && n <= GROUP_MAX;
+    if (!canChain) picking.chain = false;
+    bar.hidden = !n;
+    bar.replaceChildren(...[
+      h("p", { class: "caption pick-names", role: "status" }, chosen.map(x => niceName(exercise(x).name)).join(" · ")),
+      canChain && h("button", { type: "button", class: "chip", "aria-pressed": String(picking.chain), onClick: () => { picking.chain = !picking.chain; drawBar(); } },
+        icon("link"), n === 2 ? "Enchaîner en superset" : "Enchaîner en triset"),
+      n > GROUP_MAX && h("p", { class: "caption", style: { margin: 0 } }, `Superset ou triset : ${GROUP_MAX} exercices au plus.`),
+      btn(n === 1 ? "Ajouter 1 exercice" : `Ajouter ${n} exercices`, { variant: "primary", size: "lg", full: true, onClick: confirm })].filter(Boolean));
+  };
+  const pick = e => {
+    if (replacing) { replaceItemExercise(t.id, replacing.id, e.id); toast(`${e.name} à la place`); go(`#/seances/${t.id}/${replacing.id}`); return; }
+    const k = chosen.indexOf(e.id);
+    if (k >= 0) chosen.splice(k, 1); else chosen.push(e.id);
+    drawBar();
+  };
+  const add = exId => { chosen.splice(0, chosen.length, exId); picking.chain = false; confirm(); };
+
+  let first = !again;
   const draw = q => {
     q = q.trim();
     const exact = state.exercises.some(e => e.name.toLowerCase() === q.toLowerCase());
-    catalogue(results, q, { muscle: first ? (replacing ? exercise(replacing.exerciseId).muscle : null) : undefined, onPick: e => add(e.id), note: e => [t.items.some(i => i.exerciseId === e.id) && "déjà dans la séance"].filter(Boolean).join(" · ") });
-    list.replaceChildren(
-      q && !exact && btn(`Créer « ${q} »`, { variant: "secondary", full: true, icon: "plus", onClick: () => {
+    const found = catalogue(results, q, { muscle: first ? (replacing ? exercise(replacing.exerciseId).muscle : null) : undefined, onPick: pick,
+      selected: replacing ? undefined : e => chosen.includes(e.id),
+      note: e => [t.items.some(i => i.exerciseId === e.id) && "déjà dans la séance"].filter(Boolean).join(" · ") });
+    // « Créer » en tête quand rien ne correspond, sinon sous les résultats.
+    const create = q && !exact && btn(`Créer « ${q} »`, { variant: "secondary", full: true, icon: "plus", onClick: () => {
         let muscle = filter.muscle && MUSCLES.includes(filter.muscle) ? filter.muscle : MUSCLES[0], equip = filter.equip || "barre";
-        const pick = (options, value, onPick) => h("div", { class: "chips" }, options.map(([k, l]) => h("button", { class: "chip", type: "button", "aria-pressed": String(k === value),
-          onClick: e => { onPick(k); e.target.parentNode.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === e.target))); } }, l)));
+        const choose = (options, value, onChoose) => h("div", { class: "chips" }, options.map(([k, l]) => h("button", { class: "chip", type: "button", "aria-pressed": String(k === value),
+          onClick: e => { onChoose(k); e.target.parentNode.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === e.target))); } }, l)));
         sheet({ title: "Quel muscle ?", okLabel: "Créer l'exercice",
-          body: [pick(MUSCLES.map(m => [m, m]), muscle, m => { muscle = m; }),
+          body: [choose(MUSCLES.map(m => [m, m]), muscle, m => { muscle = m; }),
             h("span", { class: "overline" }, "Matériel"),
-            pick(Object.entries(EQUIPS), equip, k => { equip = k; })],
-          ok: () => { const name = q[0].toUpperCase() + q.slice(1); setTimeout(() => add(createExercise(name, muscle, equip).id)); } });
-      } }),
-      results);
+            choose(Object.entries(EQUIPS), equip, k => { equip = k; })],
+          ok: () => { const name = q[0].toUpperCase() + q.slice(1); setTimeout(() => {
+            const ex = createExercise(name, muscle, equip);
+            if (replacing) pick(ex); else if (chosen.length) { chosen.push(ex.id); toast(`${ex.name} créé et coché`); } else add(ex.id);
+          }); } });
+      } });
+    list.replaceChildren(...[!found && create, results, found && create].filter(Boolean));
     first = false;
   };
 
-  const search = h("input", { class: "input", type: "search", placeholder: "Chercher ou créer un exercice", "aria-label": "Chercher un exercice", onInput: e => draw(e.target.value) });
+  const search = h("input", { class: "input", type: "search", placeholder: "Nom, muscle ou matériel", "aria-label": "Chercher un exercice", enterkeyhint: "search", onInput: e => draw(e.target.value) });
   draw("");
+  if (!replacing) drawBar();
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: replacing ? { label: "Exercice", href: `#/seances/${t.id}/${replacing.id}` } : { label: t.name, href: `#/seances/${t.id}` },
-      title: replacing ? "Changer d'exercice" : "Ajouter un exercice", subtitle: replacing ? `À la place de ${exercise(replacing.exerciseId).name}` : "Favoris en premier" }),
-    h("div", { class: "scroll" }, search, list));
+    navbar({ back: replacing ? { label: "Exercice", href: `#/seances/${t.id}/${replacing.id}` } : { label: t.name, onClick: () => { picking = null; go(`#/seances/${t.id}`); } },
+      title: replacing ? "Changer d'exercice" : "Ajouter des exercices", subtitle: replacing ? `À la place de ${exercise(replacing.exerciseId).name}` : "Coche-en un ou plusieurs" }),
+    h("div", { class: "search-bar" }, search),
+    h("div", { class: "scroll" }, list),
+    !replacing && bar);
   return { el };
 }
 

@@ -819,3 +819,45 @@ button.round-tile:active { background: var(--fond-discret); }
 .round-text > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .round-band.three .round-tile { flex-direction: column; align-items: flex-start; gap: var(--spacing-4); padding: var(--spacing-8); }
 .round-band.three .round-text { width: 100%; }
+
+/* ——— Ajout d'exercices : recherche fixée en haut, lignes cochées, barre d'ajout en bas (choix multiple, superset). */
+.search-bar { padding: var(--spacing-8) var(--spacing-20) var(--spacing-12); background: var(--fond-page); border-bottom: 1px solid var(--bord-discret); }
+.search-bar + .scroll { padding-top: var(--spacing-16); }
+.row.pick.on { background: var(--jaune-doux); box-shadow: inset 4px 0 0 var(--jaune); }
+.row.pick.on .row-btn > .chev { color: var(--jaune); }
+.pick-bar { display: flex; flex-direction: column; gap: var(--spacing-12); padding: var(--spacing-12) var(--spacing-20) calc(var(--spacing-12) + var(--safe-bottom)); border-top: 1px solid var(--bord-discret); background: var(--fond-page); }
+.pick-bar[hidden] { display: none; }
+.pick-bar .chip { align-self: flex-start; display: inline-flex; align-items: center; gap: var(--spacing-8); }
+.pick-bar .chip svg { width: 16px; height: 16px; }
+.pick-names { margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.link-btn { border: 0; background: none; padding: 0; color: var(--texte-fort); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 4px; }
+
+/* ——— Superset / triset d'une séance type : un bloc jaune doux, une lettre, le repos dit une fois, un trait qui relie les exercices. */
+.superset { display: flex; flex-direction: column; padding: var(--spacing-4); border-radius: 20px; background: var(--jaune-doux); }
+.superset-head { display: flex; align-items: center; gap: var(--spacing-12); padding: var(--spacing-8) var(--spacing-12) var(--spacing-12); }
+.superset-letter { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--jaune); color: var(--texte-inverse); font: 800 italic 20px/20px var(--display); }
+.superset-title { font: 800 italic 18px/20px var(--display); letter-spacing: .02em; text-transform: uppercase; color: var(--jaune); }
+.superset .row { box-shadow: none; }
+.superset .num-lead { width: 32px; font-size: 20px; line-height: 24px; }
+.superset-join { position: relative; display: flex; justify-content: center; align-items: center; min-height: 44px; }
+.superset-join::before { content: ""; position: absolute; left: 34px; top: -8px; bottom: -8px; width: 4px; border-radius: 4px; background: var(--jaune); }
+.superset-join .btn { color: var(--texte-base); }
+.superset-join .btn svg { width: 16px; height: 16px; }
+.link-row:not(.on) .btn { color: var(--texte-discret); }
+
+/* ——— Semaine type : bande de 7 jours sur Programme (séance en violet, aujourd'hui souligné), lignes de jours. */
+.week-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--spacing-4); }
+.week-strip span { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-4); min-width: 0; padding: var(--spacing-8) var(--spacing-4); border-radius: var(--radius-sm); background: var(--fond-discret); }
+.week-strip b { font: 800 italic 16px/16px var(--display); color: var(--texte-discret); }
+.week-strip small { font: 500 12px/16px var(--font); color: var(--texte-discret); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.week-strip span.on { background: var(--violet-doux); }
+.week-strip span.on b, .week-strip span.on small { color: var(--violet); }
+.week-strip span.today { box-shadow: inset 0 0 0 2px var(--texte-discret); }
+.week-strip span.today b { color: var(--texte-fort); }
+.week-strip span.on.today { box-shadow: inset 0 0 0 2px var(--violet); }
+.row.plan-day.on { box-shadow: inset 4px 0 0 var(--violet); }
+.row.plan-day.is-today .body-md { color: var(--texte-fort); }
+/* Invitation : pas d'onglets, les choix restent en bas pendant qu'on parcourt les séances. */
+.cta-bar.invite-bar { padding-bottom: calc(var(--spacing-16) + var(--safe-bottom)); }
+.screen.has-cta.invite .scroll { padding-bottom: calc(176px + var(--safe-bottom)); }
+.cta-links { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-8); }

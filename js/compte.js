@@ -4,7 +4,7 @@
 // Pas de SDK : l'API REST de Supabase suffit. Le téléphone reste la source de travail ; chaque enregistrement
 // part vers le compte quelques secondes après, et l'app reprend la version du compte quand elle est plus récente.
 
-import { state, onPersist, replaceState, setHabit, save, dayKey } from "./store.js";
+import { state, onPersist, replaceState, setHabit, save, dayKey, addSharedProgram } from "./store.js";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config.js";
 
 const META = "fluid-compte";
@@ -57,8 +57,8 @@ async function token() {
 // Des données des deux côtés → l'écran demande lesquelles garder (renvoie "choose").
 async function afterSignIn() {
   const remote = await fetchRemote();
-  if (!remote) { await push(); return "pushed"; }
-  if (!hasLocalData()) { apply(remote); return "pulled"; }
+  if (!remote) { adoptInvite(); await push(); return "pushed"; }
+  if (!hasLocalData()) { apply(remote); adoptInvite(); return "pulled"; }
   pendingRemote = remote;
   return "choose";
 }
@@ -116,7 +116,7 @@ export async function setNewPassword(password) {
 let pendingRemote = null;
 export const remoteSummary = () => pendingRemote && { sessions: pendingRemote.data.sessions?.length || 0, templates: pendingRemote.data.templates?.length || 0, at: Date.parse(pendingRemote.updated_at) };
 export async function resolve(choice) {
-  if (choice === "compte") apply(pendingRemote); else await push();
+  if (choice === "compte") { apply(pendingRemote); adoptInvite(); } else { adoptInvite(); await push(); }
   pendingRemote = null;
 }
 
@@ -239,4 +239,54 @@ if (configured) {
   // Le Raccourci envoie les pas toutes les 5 minutes : l'app ouverte les reprend au même rythme.
   setInterval(() => document.visibilityState === "visible" && pullSteps(), 5 * 60 * 1000);
   addEventListener("online", syncNow);
+}
+
+// ——— Partage d'un programme par lien (supabase/schema.sql, table fluide_shares).
+// L'expéditeur, connecté, enregistre le programme sous un jeton aléatoire ; le lien #/invitation/<jeton> part par e-mail.
+// La personne qui l'ouvre lit le programme sans compte (fonction fluide_get_share), l'ajoute, puis crée son compte :
+// l'invitation reste en attente sur le téléphone et rejoint le compte dès la connexion (même si le compte avait déjà des données).
+
+const INVITE = "fluid-invite";
+export const SHARE_DAYS = 30;
+export const shareUrl = code => `${location.origin}${location.pathname}#/invitation/${code}`;
+const newCode = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const shareError = e => (e.code === "PGRST202" || e.code === "42P01" || e.status === 404
+  ? Object.assign(new Error("Le partage n'est pas encore activé sur le serveur (supabase/schema.sql)."), { status: e.status }) : e);
+
+export async function createShare({ program, sender, recipient }) {
+  const code = newCode();
+  try {
+    await call("/rest/v1/fluide_shares", { method: "POST", auth: await token(), headers: { Prefer: "return=minimal" },
+      body: { token: code, owner_id: meta.userId, sender_name: sender || null, recipient_email: recipient || null, program } });
+  } catch (e) { throw shareError(e); }
+  return { code, url: shareUrl(code) };
+}
+
+// Programme d'un lien : { sender, recipient, program, expires_at }, ou null (lien inconnu ou expiré).
+export async function getShare(code) {
+  try { return await call("/rest/v1/rpc/fluide_get_share", { method: "POST", body: { share_token: code } }); }
+  catch (e) { throw shareError(e); }
+}
+
+export const pendingInvite = () => { try { return JSON.parse(localStorage.getItem(INVITE)); } catch { return null; } };
+export function setPendingInvite(invite) {
+  try { invite ? localStorage.setItem(INVITE, JSON.stringify(invite)) : localStorage.removeItem(INVITE); } catch {}
+}
+// Adresse de l'invitation : proposée sur Créer ton compte.
+export function suggestEmail(email) {
+  if (!signedIn() && email) { meta.email = email; keep(); }
+}
+function adoptInvite() {
+  const invite = pendingInvite();
+  if (!invite) return;
+  const r = addSharedProgram(invite);
+  if (!r.error) meta.adopted = r.program.name;
+  setPendingInvite(null);
+  keep();
+}
+// Nom du programme repris à la connexion, une seule fois (pour le dire à l'écran).
+export function takeAdopted() {
+  const name = meta.adopted;
+  if (name) { delete meta.adopted; keep(); }
+  return name || null;
 }
