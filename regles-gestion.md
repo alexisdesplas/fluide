@@ -1,6 +1,6 @@
 # Règles de gestion — Fluide
 
-Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause), la v0.10.0 (refonte en 3 onglets), la v0.11.0 (séances collées du coach), la v0.12.0 (supersets en séance) et la v0.12.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
+Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause), la v0.10.0 (refonte en 3 onglets), la v0.11.0 (séances collées du coach), la v0.12.0 (supersets en séance), la v0.13.0 (réglages et séances existantes depuis le coach) et la v0.13.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
 
 ## Lire ce registre
 
@@ -14,7 +14,7 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 - **Source** : le fichier et la fonction, plutôt qu'un numéro de ligne qui bougerait. Les fichiers sont dans `js/`, sauf `schema.sql` dans `supabase/`.
 - **Mise à jour** : toute PR qui ajoute, change ou retire une règle met à jour ce fichier.
 
-**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.12.1, essayées aussi dans l'app. Les règles de lieux, de reprise, de la refonte et des séances collées viennent de la lecture des v0.8.0 à v0.12.0, avec quelques scénarios exécutés.
+**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.13.1, essayées aussi dans l'app. Les règles de lieux, de reprise, de la refonte et des séances collées viennent de la lecture des v0.8.0 à v0.13.0, avec quelques scénarios exécutés.
 
 ## Décompte
 
@@ -31,10 +31,10 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 | Matériel du jour | MAT | 10 |
 | Lieux de séance | LIE | 15 |
 | Reprise après une pause | RPR | 10 |
-| Séances types | TPL | 13 |
+| Séances types | TPL | 16 |
 | Pas du jour | PAS | 8 |
 | Compte et données | CPT | 10 |
-| **Total** | | **187** |
+| **Total** | | **190** |
 
 Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 
@@ -261,11 +261,14 @@ Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 | RG-TPL-06 | Changer de format garde la charge et pose les valeurs par défaut du format. En EMOM ou Tabata, l'exercice quitte son superset. | `store.js` › `setItemFormat` | Active |
 | RG-TPL-07 | Changer d'exercice garde séries, reps, repos et groupe. La charge part de la dernière performance, sinon de la charge convertie. | `store.js` › `replaceItemExercise` | Active |
 | RG-TPL-08 | Supprimer une séance type demande une confirmation. Les séances faites restent dans l'historique et les courbes. | `views/templates.js` › `templateView` ; `store.js` › `deleteTemplate` | Active |
-| RG-TPL-09 | Des séances préparées par le coach se collent depuis Réglages › Programme : un texte JSON de type `fluide-templates`, lu dans le presse-papiers ou collé dans le champ. Un aperçu s'affiche, et rien n'est ajouté avant « Ajouter ». Les séances rejoignent celles qui existent. | `store.js` › `parseTemplates`, `addTemplates` ; `views/templates.js` › `importView` | Active |
-| RG-TPL-10 | Chaque exercice se retrouve par son nom exact dans le catalogue, sans tenir compte de la casse, hors Melting pot. Un seul nom introuvable, ou une séance sans exercice, bloque tout le collage, avec la liste des noms manquants. | `store.js` › `parseTemplates` | Active |
+| RG-TPL-09 | « Coller du coach » (Réglages › Programme) lit un texte JSON de type `fluide-templates`, dans le presse-papiers ou collé dans le champ. Il peut contenir des séances neuves, des exercices à ajouter à des séances types existantes, le réglage de muscles, des favoris et des muscles à remplacer. Un aperçu montre tout ce qui va changer, dont les séries prévues avant et après par muscle, et rien ne bouge avant « Appliquer » (« Ajouter » s'il n'y a que des séances neuves). | `store.js` › `parseTemplates`, `applyImport` ; `views/templates.js` › `importView` | Active |
+| RG-TPL-10 | Chaque exercice se retrouve par son nom exact dans le catalogue, sans tenir compte de la casse, hors Melting pot. Un nom introuvable, un muscle inconnu, une séance sans exercice ou un texte sans rien à faire bloque tout le collage, avec la raison. | `store.js` › `parseTemplates` | Active |
 | RG-TPL-11 | Valeurs ramenées dans des bornes : 1 à 10 séries (3 par défaut), 1 à 50 reps (8 par défaut, le maximum jamais sous le minimum), repos de 0 à 10 min (90 s par défaut). Nom de 40 caractères au plus, « Séance N » sans nom. | `store.js` › `parseTemplates` | E-16 |
 | RG-TPL-12 | Charge : celle donnée, calée sur le matériel ; sinon la dernière charge maximale ; sinon celle d'une séance type ; sinon une charge courante (RG-LIE-08). | `store.js` › `parseTemplates` | Active |
 | RG-TPL-13 | La même lettre de groupe sur des exercices qui se suivent forme un superset. Un groupe qui ne tient pas (exercice seul, ou séparé par un autre) est délié. | `store.js` › `parseTemplates` | E-16 |
+| RG-TPL-14 | Un muscle réglé par le coach prend le statut, la cible (0 à 40 séries) et l'objectif donnés ; ce qui manque garde la valeur actuelle, et un statut seul remet la cible par défaut. Changer l'objectif recale les séances types (RG-VOL-07). Les exercices nommés en favoris passent en favori. | `store.js` › `parseTemplates`, `applyImport` | E-16 |
+| RG-TPL-15 | Les exercices à ajouter vont à la fin d'une séance type existante, choisie dans l'aperçu : par défaut une séance différente pour chaque ajout, d'abord celles qui travaillaient déjà ce muscle. Il faut au moins une séance type. | `store.js` › `parseTemplates`, `applyImport` ; `views/templates.js` › `importView` | Active |
+| RG-TPL-16 | Un muscle à remplacer voit tous ses exercices quitter d'abord toutes les séances types ; l'aperçu les liste avec leur séance. Les supersets qui ne tiennent plus sont déliés. | `store.js` › `replacedItems`, `applyImport` | Active |
 
 ## Pas du jour
 
@@ -313,9 +316,9 @@ Différences entre le code et l'intention écrite (commentaires, textes d'écran
 | E-13 | Bug | Remplacer un exercice en plein AMRAP crée un exercice en séries à l'intérieur du circuit : l'exercice d'origine y reste, et le remplaçant ne suit plus le format AMRAP. Trouvé en corrigeant E-03, pas corrigé : il faut d'abord décider ce que doit faire ce geste. | Exécuté | RG-SEA-19 |
 | E-14 | Bug | Remplacer un exercice après des séries en tempo lent enlève leur marque tempo : elles entrent dans l'historique et font redescendre la charge de référence. Essai : charge prévue 16 kg, une série à 10 kg en tempo, remplacement, et l'historique indique 10 kg. Vient de la v0.8.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-LIE-10 |
 | E-15 | Décision | Pendant une reprise ou un deload, les séances ont moitié moins de séries mais l'objectif de la semaine garde sa cible pleine : il ne peut pas être atteint. Déjà noté « à décider » dans `memoire.md`. | Relu | RG-RPR-10 |
-| E-16 | Bug | Les séances collées (v0.11.0) acceptent un superset de 4 exercices ou plus, et un repos de 0 s, alors qu'ailleurs un groupe compte 3 exercices au plus (RG-SEA-10) et un repos 15 s au moins (RG-TPL-03). Essai : 4 exercices du même groupe et un repos de 0 s, tous acceptés. Vient de la v0.11.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-TPL-11, RG-TPL-13 |
+| E-16 | Bug | Les séances collées (v0.11.0) acceptent un superset de 4 exercices ou plus, et un repos de 0 s, alors qu'ailleurs un groupe compte 3 exercices au plus (RG-SEA-10) et un repos 15 s au moins (RG-TPL-03). Depuis la v0.13.0, une cible de muscle collée peut aller jusqu'à 40 séries, contre 30 à l'écran (RG-VOL-03). Essai : 4 exercices du même groupe et un repos de 0 s, tous acceptés. Vient de la v0.11.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-TPL-11, RG-TPL-13, RG-TPL-14 |
 
-### Corrigés en v0.12.1
+### Corrigés en v0.13.1
 
 Les règles concernées décrivent désormais le comportement corrigé. Vérifié sous Node et dans l'app.
 

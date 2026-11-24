@@ -906,53 +906,97 @@ export function setItemFormat(item, format) {
 }
 
 // ——— Séances préparées par le coach (skill coach-fluide) : un texte JSON copié, puis collé dans Réglages › Programme.
-// { "type": "fluide-templates", "version": 1, "templates": [{ "name": "Haut", "items": [
-//   { "exercise": "Développé couché avec barre", "sets": 4, "reps": [6, 8], "rest": 90, "group": "A", "weight": 60 } ] }] }
+// { "type": "fluide-templates", "version": 1,
+//   "templates": [{ "name": "Haut", "items": [
+//     { "exercise": "Développé couché avec barre", "sets": 4, "reps": [6, 8], "rest": 90, "group": "A", "weight": 60 } ] }],
+//   "muscles": { "Abdos": { "status": "focus", "target": 12, "goal": "hypertrophie" } },
+//   "favorites": ["Crunch à la poulie à genoux"],
+//   "replace": ["Abdos"],
+//   "additions": [{ "name": "Abdos · bas du ventre", "items": [ … ] }] }
+// Tout est facultatif, sauf d'avoir au moins une chose à faire.
 // exercise : nom exact du catalogue (casse libre). group : même lettre sur des exercices qui se suivent = superset.
 // weight (kg, facultatif) : sinon la dernière charge faite, celle d'une séance type, ou une charge courante.
+// templates : séances neuves. additions : blocs ajoutés à la fin d'une séance type existante (choisie dans l'aperçu).
+// muscles : réglage Fluide du muscle (statut, cible de séries, objectif). favorites : exercices passés en favori.
+// replace : muscles dont les exercices quittent d'abord toutes tes séances types (les additions les remplacent).
 export const IMPORT_TYPE = "fluide-templates";
 const clampInt = (v, min, max, def) => (Number.isFinite(+v) ? Math.min(max, Math.max(min, Math.round(+v))) : def);
+const findExercise = name => {
+  const n = String(name ?? "").trim().toLowerCase();
+  return state.exercises.find(e => !e.mix && e.name.toLowerCase() === n);
+};
+// Exercices d'une séance du texte → éléments de séance type. Les noms inconnus vont dans missing.
+function importItems(list, missing) {
+  const groups = {};
+  const items = (Array.isArray(list) ? list : []).map(it => {
+    const ex = findExercise(it.exercise);
+    if (!ex) { missing.push(String(it.exercise ?? "?")); return null; }
+    const [lo, hi] = Array.isArray(it.reps) ? it.reps : [it.reps, it.reps];
+    const repsMin = clampInt(lo, 1, 50, 8), repsMax = Math.max(repsMin, clampInt(hi, 1, 50, repsMin));
+    const last = lastPerformance(ex.id);
+    const known = state.templates.flatMap(x => x.items).find(x => x.exerciseId === ex.id && typeof x.weight === "number");
+    const weight = Number.isFinite(+it.weight) && it.weight !== null ? nearestWeight(ex.equip, +it.weight, ex.stack)
+      : last ? pileFor(ex.id, ex.equip, last.maxWeight)
+      : known ? known.weight : nearestWeight(ex.equip, typicalLoad(ex), ex.stack);
+    const item = { id: uid(), exerciseId: ex.id, format: "series", sets: clampInt(it.sets, 1, 10, 3), repsMin, repsMax, weight, rest: clampInt(it.rest, 0, 600, 90) };
+    if (it.group) item.group = groups[it.group] ||= uid();
+    return item;
+  }).filter(Boolean);
+  // Un groupe qui ne tient pas (exercice seul, ou séparé par un autre) est délié.
+  items.forEach((x, k) => { if (x.group && !groupOf(items, k)) delete x.group; });
+  return items;
+}
 
-// Renvoie { templates } prêtes à ajouter, ou { error } avec la raison à afficher.
+// Renvoie { templates, additions, muscles, favorites, replace } prêts à appliquer, ou { error } avec la raison à afficher.
 export function parseTemplates(text) {
   const s = String(text ?? ""), a = s.indexOf("{"), b = s.lastIndexOf("}");
   if (a < 0 || b < a) return { error: "Aucune séance dans ce texte. Copie tout le bloc préparé par le coach." };
   let data;
   try { data = JSON.parse(s.slice(a, b + 1)); } catch { return { error: "Le texte est incomplet : recopie tout le bloc, accolades comprises." }; }
-  if (data?.type !== IMPORT_TYPE || !Array.isArray(data.templates) || !data.templates.length) return { error: "Ce texte n'est pas une séance Fluide." };
-  const find = name => {
-    const n = String(name ?? "").trim().toLowerCase();
-    return state.exercises.find(e => !e.mix && e.name.toLowerCase() === n);
-  };
-  const missing = [];
-  const templates = data.templates.map((t, ti) => {
-    const groups = {};
-    const items = (Array.isArray(t.items) ? t.items : []).map(it => {
-      const ex = find(it.exercise);
-      if (!ex) { missing.push(String(it.exercise ?? "?")); return null; }
-      const [lo, hi] = Array.isArray(it.reps) ? it.reps : [it.reps, it.reps];
-      const repsMin = clampInt(lo, 1, 50, 8), repsMax = Math.max(repsMin, clampInt(hi, 1, 50, repsMin));
-      const last = lastPerformance(ex.id);
-      const known = state.templates.flatMap(x => x.items).find(x => x.exerciseId === ex.id && typeof x.weight === "number");
-      const weight = Number.isFinite(+it.weight) && it.weight !== null ? nearestWeight(ex.equip, +it.weight, ex.stack)
-        : last ? pileFor(ex.id, ex.equip, last.maxWeight)
-        : known ? known.weight : nearestWeight(ex.equip, typicalLoad(ex), ex.stack);
-      const item = { id: uid(), exerciseId: ex.id, format: "series", sets: clampInt(it.sets, 1, 10, 3), repsMin, repsMax, weight, rest: clampInt(it.rest, 0, 600, 90) };
-      if (it.group) item.group = groups[it.group] ||= uid();
-      return item;
-    }).filter(Boolean);
-    // Un groupe qui ne tient pas (exercice seul, ou séparé par un autre) est délié.
-    items.forEach((x, k) => { if (x.group && !groupOf(items, k)) delete x.group; });
-    return { id: uid(), name: String(t.name ?? "").trim().slice(0, 40) || `Séance ${ti + 1}`, items };
+  if (data?.type !== IMPORT_TYPE) return { error: "Ce texte n'est pas une séance Fluide." };
+  const missing = [], unknown = [];
+  const block = (t, i, prefix) => ({ id: uid(), name: String(t?.name ?? "").trim().slice(0, 40) || `${prefix} ${i + 1}`, items: importItems(t?.items, missing) });
+  const templates = (Array.isArray(data.templates) ? data.templates : []).map((t, i) => block(t, i, "Séance"));
+  const additions = (Array.isArray(data.additions) ? data.additions : []).map((t, i) => block(t, i, "Ajout"));
+  const muscles = Object.entries(data.muscles && typeof data.muscles === "object" ? data.muscles : {}).flatMap(([m, v]) => {
+    if (!MUSCLES.includes(m)) { unknown.push(m); return []; }
+    const cur = state.matrix[m], status = STATUS[v?.status] ? v.status : cur.status;
+    const goal = GOALS[v?.goal] ? v.goal : goalOf(m);
+    return [{ muscle: m, status, target: clampInt(v?.target, 0, 40, v?.status ? STATUS[status].def : cur.target), goal }];
   });
-  if (missing.length) return { error: `Pas dans le catalogue : ${missing.join(", ")}.` };
-  if (templates.some(t => !t.items.length)) return { error: "Une des séances n'a aucun exercice." };
-  return { templates };
+  const favorites = (Array.isArray(data.favorites) ? data.favorites : []).flatMap(n => {
+    const ex = findExercise(n);
+    if (!ex) { missing.push(String(n ?? "?")); return []; }
+    return [ex.id];
+  });
+  const replace = (Array.isArray(data.replace) ? data.replace : []).filter(m => (MUSCLES.includes(m) ? true : (unknown.push(m), false)));
+  if (missing.length) return { error: `Pas dans le catalogue : ${[...new Set(missing)].join(", ")}.` };
+  if (unknown.length) return { error: `Muscle inconnu : ${[...new Set(unknown)].join(", ")}.` };
+  if (![templates, additions, muscles, favorites, replace].some(x => x.length)) return { error: "Ce texte ne contient rien à ajouter ni à régler." };
+  if ([...templates, ...additions].some(t => !t.items.length)) return { error: "Une des séances n'a aucun exercice." };
+  if (additions.length && !state.templates.length) return { error: "Tu n'as pas encore de séance type pour recevoir ces exercices. Choisis d'abord un programme." };
+  return { templates, additions, muscles, favorites, replace };
+}
+
+// Exercices que « replace » retirerait de tes séances types : [{ template, item }].
+export const replacedItems = muscles => state.templates.flatMap(t =>
+  t.items.filter(it => muscles.includes(exercise(it.exerciseId)?.muscle)).map(item => ({ template: t, item })));
+
+// Applique un texte du coach. targets[i] : id de la séance type qui reçoit additions[i].
+export function applyImport({ templates = [], additions = [], muscles = [], favorites = [], replace = [] }, targets = []) {
+  for (const { muscle, status, target, goal } of muscles) setMuscle(muscle, status, target, goal);
+  for (const id of favorites) exercise(id).pref = "aime";
+  if (replace.length) for (const t of state.templates) {
+    t.items = t.items.filter(it => !replace.includes(exercise(it.exerciseId)?.muscle));
+    t.items.forEach((x, k) => { if (x.group && !groupOf(t.items, k)) delete x.group; });
+  }
+  additions.forEach((add, i) => template(targets[i])?.items.push(...add.items));
+  state.templates.push(...templates);
+  save();
 }
 
 export function addTemplates(list) {
-  state.templates.push(...list);
-  save();
+  applyImport({ templates: list });
 }
 
 export function removeItem(templateId, itemId) {
