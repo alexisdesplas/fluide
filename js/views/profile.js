@@ -1,4 +1,4 @@
-import { state, save, replaceState, ENDURANCE, enduranceWeek, toggleFav, cyclePosition, inReprise, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GOALS, SPLITS } from "../store.js";
+import { state, save, replaceState, ENDURANCE, enduranceWeek, enduranceOn, exercise, setCircuit, circuitsOf, itemSets, toggleFav, cyclePosition, inReprise, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GOALS, SPLITS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, go, int, num, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
@@ -95,9 +95,12 @@ export function profileView() {
       h("div", { class: "tiles" },
         tile("jaune", "Exercices favoris", plural(prefs.aime || 0, "favori"), `${plural(prefs.evite || 0, "évité")} · ${prefs.douleur || 0} en douleur`, "#/profil/exercices"),
         tile("bleu", "Équipement", "3 lieux", "salle, chez moi, street", "#/profil/lieux")),
+      h("h2", { class: "group-title" }, "Progression"),
+      h("div", { class: "list" },
+        line("À faire progresser", (() => { const n = (p.focus || []).filter(exercise).length; return n ? plural(n, "mouvement") : "Aucun"; })(), "jaune", "#/profil/progression")),
       h("h2", { class: "group-title" }, "Et aussi"),
       h("div", { class: "list" },
-        line("Objectif additionnel", ENDURANCE[p.endurance] ? `${ENDURANCE[p.endurance].short.split(" ")[0]} · S${enduranceWeek()} / ${ENDURANCE[p.endurance].weeks.length}` : "Aucun", "orange", "#/seances/programme/semaine"),
+        line("Objectif additionnel", !ENDURANCE[p.endurance] ? "Aucun" : p.endurancePaused ? `${ENDURANCE[p.endurance].short.split(" ")[0]} · en pause` : `${ENDURANCE[p.endurance].short.split(" ")[0]} · S${enduranceWeek()} / ${ENDURANCE[p.endurance].weeks.length}`, "orange", "#/seances/programme/semaine"),
         line("Bloc", `${CYCLES[c.type].label} · ${pos.over ? "terminé" : pos.reprise ? "reprise" : pos.deload ? "deload" : `semaine ${pos.week} sur ${c.weeks}`}`, "violet", "#/profil/bloc"),
         line("Toi", `${p.age ?? 30} ans · ${num(p.bodyWeight ?? 75)} kg`, "", "#/profil/toi"),
         line("Compte et données", !configured ? "sur ce téléphone" : signedIn() ? (m.error || m.dirty ? "en attente" : "à jour") : "sans compte", signedIn() && !m.error && !m.dirty ? "vert" : "", "#/profil/donnees")),
@@ -131,12 +134,12 @@ export function blocView() {
 
 // Toi : objectif du moment, niveau, mesures, routine.
 // Écran « Toi » : saisie sur écran dédié, rien ne change avant « Enregistrer », le retour annule.
-const PROFILE_KEYS = ["goal", "level", "age", "bodyWeight", "stepsTarget", "warmup"];
+const PROFILE_KEYS = ["goal", "level", "age", "bodyWeight", "height", "stepsTarget", "warmup"];
 let youDraft = null;
 
 export function youView() {
   const p = state.profile;
-  youDraft ||= { ...Object.fromEntries(PROFILE_KEYS.map(k => [k, p[k]])), age: p.age ?? 30, bodyWeight: p.bodyWeight ?? 75 };
+  youDraft ||= { ...Object.fromEntries(PROFILE_KEYS.map(k => [k, p[k]])), age: p.age ?? 30, bodyWeight: p.bodyWeight ?? 75, height: p.height ?? 178 };
   const d = youDraft;
   const set = k => v => { d[k] = v; };
   const back = () => { youDraft = null; go("#/profil"); };
@@ -153,11 +156,14 @@ export function youView() {
           stepper({ value: d.age, min: 14, max: 90, compact: true, format: v => `${v} ans`, label: "âge", onChange: set("age") })),
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Poids"),
           stepper({ value: d.bodyWeight, step: 0.5, min: 35, max: 200, compact: true, format: v => `${num(v)} kg`, label: "poids", onChange: set("bodyWeight") })),
+        h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Taille"),
+          stepper({ value: d.height, min: 140, max: 220, compact: true, format: v => `${v} cm`, label: "taille", onChange: set("height") })),
+        h("p", { class: "caption", style: { margin: 0 } }, "Âge, poids et taille fixent les repères athlétiques : jusqu'où monter les charges. En sèche, mets ton poids à jour : les repères partent de ton poids sec visé, pas du gras."),
         h("div", { class: "field-row" }, h("span", { class: "body-md fort" }, "Cible de pas par jour"),
           stepper({ value: d.stepsTarget, step: 500, min: 2000, max: 30000, compact: true, format: int, label: "pas par jour", onChange: set("stepsTarget") }))),
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Échauffement")),
       h("input", { class: "input", value: d.warmup, "aria-label": "Échauffement", onInput: e => { d.warmup = e.target.value; } }),
-      ENDURANCE[p.endurance] && h("p", { class: "caption", style: { margin: 0 } }, `Avec ton plan ${ENDURANCE[p.endurance].short.toLowerCase()}, l'échauffement devient la séance corde du jour. Celui-ci sert les jours où le plan prévoit le jour long, à faire à part.`),
+      ENDURANCE[enduranceOn()] && h("p", { class: "caption", style: { margin: 0 } }, `Avec ton plan ${ENDURANCE[enduranceOn()].short.toLowerCase()}, l'échauffement devient la séance corde du jour. Celui-ci sert les jours où le plan prévoit le jour long, à faire à part.`),
       btn("Enregistrer", { variant: "primary", size: "lg", full: true, onClick: () => {
         Object.assign(p, d, { warmup: (d.warmup || "").trim() || p.warmup });
         youDraft = null;
@@ -189,7 +195,7 @@ export function dataView() {
 let muscleDraft = null;
 export function muscleView({ muscle: m }) {
   if (!MUSCLES.includes(m)) { setTimeout(() => go("#/profil/matrice")); return { el: h("div") }; }
-  if (muscleDraft?.key !== location.hash) muscleDraft = { key: location.hash, ...state.matrix[m], goal: goalOf(m) };
+  if (muscleDraft?.key !== location.hash) muscleDraft = { key: location.hash, ...state.matrix[m], goal: goalOf(m), circuit: state.profile.circuits?.[m] || "" };
   const draft = muscleDraft;
   const planned = plannedSets()[m] || 0;
   const back = () => { muscleDraft = null; go("#/profil/matrice"); };
@@ -208,7 +214,24 @@ export function muscleView({ muscle: m }) {
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif")),
       radios(Object.entries(GOALS).map(([k, g]) => [k, g.label, g.desc]), draft.goal, v => { draft.goal = v; }, `Objectif ${m}`),
       h("p", { class: "caption", style: { margin: 0 } }, "Changer l'objectif recale les reps et le repos de ce muscle dans tes séances types."),
-      btn("Enregistrer", { variant: "primary", size: "lg", full: true, onClick: () => { setMuscle(m, draft.status, draft.target, draft.goal); back(); } })));
+      // Séance du muscle : ses exercices, ou un Tabata collé depuis le coach (un mouvement par round).
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, `Séance ${m.toLowerCase()}`)),
+      circuitsOf(m).length > 0 && radios([["", "Exercices du programme", "Choisis exercice par exercice dans tes séances types."],
+        ...circuitsOf(m).map(c => [c.id, c.name, `${c.moves.length} exercices, ${c.tabata.work} s d'effort, ${c.tabata.off} s de pause · ${c.tabata.rounds} rounds, compte ${itemSets({ format: "tabata", rounds: c.tabata.rounds, work: c.tabata.work })} séries. Remplace les exercices de ce muscle dans tes séances types.`])],
+        draft.circuit, v => { draft.circuit = v; }, `Séance ${m}`),
+      h("p", { class: "caption", style: { margin: 0 } }, circuitsOf(m).length
+        ? "Un autre Tabata ? Demande-le au coach, puis colle-le dans Programme › Coller du coach."
+        : "Pour travailler ce muscle en Tabata d'exercices variés, demande-le au coach, puis colle-le dans Programme › Coller du coach."),
+      btn("Coller du coach", { variant: "secondary", full: true, icon: "clipboard", onClick: () => { muscleDraft = null; go("#/seances/coller"); } }),
+      btn("Enregistrer", { variant: "primary", size: "lg", full: true, onClick: () => {
+        const changed = draft.circuit !== (state.profile.circuits?.[m] || "");
+        setMuscle(m, draft.status, draft.target, draft.goal);
+        if (changed) {
+          const n = setCircuit(m, draft.circuit || null), name = draft.circuit && exercise(draft.circuit).name;
+          toast(name ? (n ? `${name} dans ${n} séance${n > 1 ? "s" : ""}` : `${name} pour ${m.toLowerCase()}`) : "Tabata retiré : choisis tes exercices dans Programme");
+        }
+        back();
+      } })));
   return { el };
 }
 
