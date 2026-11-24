@@ -1,8 +1,9 @@
-# Vercel ne reçoit que l'app : pas les notes de conception ni le contexte Claude.
+# Vercel ne reçoit que l'app : ni les guides, ni le schéma, ni les notes locales.
 memoire.md
 livrables/
 CLAUDE.md
 .claude/
 supabase/
+docs/
 PRODUCT.md
 .impeccable/

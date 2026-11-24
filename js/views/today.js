@@ -66,7 +66,7 @@ export function volumeBars(done, { only } = {}) {
   }));
 }
 
-// Pas reçus par le lien du Raccourci iOS « Pas du jour » (livrables/fluide/raccourci-pas.md) : un nombre entier,
+// Pas reçus par le lien du Raccourci iOS « Pas du jour » (docs/raccourci-pas.md) : un nombre entier,
 // espaces de milliers tolérés (« 8 432 »). null si ce n'est pas un nombre de pas plausible.
 const STEPS_MAX = 60000;
 export function parseSteps(text) {

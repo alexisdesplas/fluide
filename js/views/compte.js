@@ -2,8 +2,8 @@ import { configured, account, signedIn, confirmed, clearConfirmed, signIn, signU
 import { state } from "../store.js";
 import { h, icon, btn, pill, go, navbar, sheet, confirmSheet, toast, dateShort, int } from "../ui.js";
 
-// Guide de construction du Raccourci iOS (les livrables ne sont pas déployés sur Vercel : on le lit sur GitHub).
-export const RACCOURCI_PAS = "https://github.com/alexisdesplas/fluide/blob/main/livrables/fluide/raccourci-pas.md";
+// Guide de construction du Raccourci iOS (le dossier docs n'est pas déployé sur Vercel : on le lit sur GitHub).
+export const RACCOURCI_PAS = "https://github.com/alexisdesplas/fluide/blob/main/docs/raccourci-pas.md";
 
 // Écrans alignés sur Figma, section F · Compte : en-tête de compte (tuile + titre + texte), champs avec l'erreur
 // sous le champ, bouton, puis le lien de bascule en bas (Se connecter ↔ Créer mon compte).

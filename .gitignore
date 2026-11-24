@@ -1,4 +1,14 @@
+# Système et outils
 .DS_Store
 *.log
 .vercel
 .env*
+
+# Notes et contexte de travail, gardés en local (pas publiés)
+memoire.md
+CLAUDE.md
+PRODUCT.md
+livrables/
+.impeccable/
+.claude/
+.worktreeinclude
