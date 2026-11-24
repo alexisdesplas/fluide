@@ -263,48 +263,55 @@ export const addWeeks = (t, n) => { const d = new Date(t); d.setDate(d.getDate()
 // Semaines entre deux lundis : arrondi, l'écart fait une heure de plus ou de moins au changement d'heure.
 const weeksBetween = (a, b) => Math.round((startOfWeek(b) - startOfWeek(a)) / (7 * DAY));
 
-// Tabata épaules (vidéo choisie par Alexis le 24/11/2026, « 10 minute lightweight dumbbell shoulder workout ») :
-// 10 exercices aux haltères légers, 30 s d'effort et 30 s de pause, un exercice par round. Il remplace tout le travail
-// des épaules dans les séances types (réglage du muscle Épaules). Comme le melting pot : jamais proposé comme alternative.
+// Tabata d'exercices variés, un exercice par round (collé depuis le coach, Réglages › Programme › Coller du coach) :
+// un exercice caché (circuit) qui porte la liste des mouvements et son format. Il devient la séance d'un muscle
+// (profile.circuits[muscle]) : il remplace alors les exercices de ce muscle dans les séances types et le programme généré.
+// Comme le melting pot : jamais proposé comme alternative ni dans le catalogue.
+// Posé d'office : le Tabata épaules de la vidéo d'Alexis (24/11/2026, « 10 minute lightweight dumbbell shoulder workout »).
 export const SHOULDER_TABATA = {
-  name: "Tabata épaules",
+  name: "Tabata épaules", muscle: "Épaules", equip: "halteres",
   moves: ["Élévation frontale alternée + rowing menton", "Ouverture des deltoïdes arrière", "Push press", "Double élévation frontale, prise pronation",
     "Développé Arnold", "Oiseau penché", "Élévation frontale alternée, marteau puis pronation", "Élévation latérale", "Développé épaules", "Élévation frontale avec rotation"],
-  work: 30, off: 30, reps: 12, weight: 5
+  rounds: 10, work: 30, off: 30, reps: 12, weight: 5
 };
-const tabataItem = (exerciseId, weight = SHOULDER_TABATA.weight) => ({ id: uid(), exerciseId, format: "tabata", rounds: SHOULDER_TABATA.moves.length,
-  work: SHOULDER_TABATA.work, off: SHOULDER_TABATA.off, repsMin: SHOULDER_TABATA.reps, repsMax: SHOULDER_TABATA.reps, weight });
 // st : l'état passé à la migration (state n'existe pas encore pendant le chargement).
-function shoulderTabataOf(st = state) {
-  let e = st.exercises.find(x => x.circuit === "epaules");
-  if (!e) st.exercises.push(e = { id: uid(), name: SHOULDER_TABATA.name, muscle: "Épaules", equip: "halteres", pref: "neutre", note: "", circuit: "epaules", moves: SHOULDER_TABATA.moves });
-  e.moves = SHOULDER_TABATA.moves;
-  return e;
+export function circuitExercise(def, st = state) {
+  let e = st.exercises.find(x => x.circuit && x.name.toLowerCase() === def.name.toLowerCase());
+  if (!e) st.exercises.push(e = { id: uid(), name: def.name, pref: "neutre", note: "", circuit: true });
+  return Object.assign(e, { muscle: def.muscle, equip: def.equip, moves: def.moves,
+    tabata: { rounds: def.rounds, work: def.work, off: def.off, reps: def.reps, weight: def.weight } });
 }
-export const shoulderTabata = () => shoulderTabataOf();
+export const circuitItem = e => ({ id: uid(), exerciseId: e.id, format: "tabata", rounds: e.tabata.rounds, work: e.tabata.work, off: e.tabata.off,
+  repsMin: e.tabata.reps, repsMax: e.tabata.reps, weight: e.tabata.weight });
+export const circuitFor = (m, st = state) => { const id = st.profile.circuits?.[m]; return (id && st.exercises.find(e => e.id === id)) || null; };
+export const circuitsOf = m => state.exercises.filter(e => e.circuit && e.muscle === m && e.tabata);
 export const tabataMoves = e => exercise(e.exerciseId)?.moves || null;
-// Chaque séance type qui travaille les épaules les travaille avec le Tabata, à la place du premier exercice d'épaules ;
-// les autres exercices d'épaules sortent. Les mouvements à faire progresser restent (Réglages › Mouvement à faire progresser).
+// Chaque séance type qui travaille le muscle le travaille avec le Tabata, à la place de son premier exercice de ce muscle ;
+// les autres sortent (un ancien Tabata du muscle compris). Les mouvements à faire progresser restent.
 // Renvoie le nombre de séances changées.
-export function applyShoulderTabata(templates = state.templates, st = state) {
-  const tab = shoulderTabataOf(st);
+export function applyCircuit(m, templates = state.templates, st = state) {
+  const c = circuitFor(m, st);
+  if (!c) return 0;
   const muscleOf = id => st.exercises.find(e => e.id === id)?.muscle;
   const keep = new Set(st.profile.focus || []);
   let changed = 0;
   for (const t of templates) {
-    const shoulders = t.items.filter(it => muscleOf(it.exerciseId) === "Épaules" && it.exerciseId !== tab.id && !keep.has(it.exerciseId) && it.format !== "amrap");
-    const has = t.items.some(it => it.exerciseId === tab.id);
-    if (!shoulders.length) continue;
-    const at = t.items.indexOf(shoulders[0]);
-    t.items = t.items.flatMap((it, i) => (i === at && !has ? [tabataItem(tab.id)] : shoulders.includes(it) ? [] : [it]));
+    const out = t.items.filter(it => muscleOf(it.exerciseId) === m && it.exerciseId !== c.id && !keep.has(it.exerciseId) && it.format !== "amrap");
+    const has = t.items.some(it => it.exerciseId === c.id);
+    if (!out.length) continue;
+    const at = t.items.indexOf(out[0]);
+    t.items = t.items.flatMap((it, i) => (i === at && !has ? [circuitItem(c)] : out.includes(it) ? [] : [it]));
     t.items.forEach((x, k) => { if (x.group && !groupOf(t.items, k)) delete x.group; });
     changed++;
   }
   return changed;
 }
-export function setShoulderTabata(on) {
-  state.profile.shoulderTabata = on;
-  const n = on ? applyShoulderTabata() : 0;
+// id : le Tabata qui devient la séance du muscle, ou null pour revenir aux exercices (les séances types gardent leur Tabata).
+export function setCircuit(m, id) {
+  const p = state.profile;
+  p.circuits = { ...p.circuits };
+  if (id) p.circuits[m] = id; else delete p.circuits[m];
+  const n = id ? applyCircuit(m) : 0;
   save();
   return n;
 }
@@ -321,14 +328,15 @@ function seed() {
   for (const m of MUSCLES) matrix[m].target = STATUS[matrix[m].status].def;
   const st = {
     version: 1,
-    profile: { goal: "Prise de muscle", level: "Intermédiaire", days: 4, split: "hautbas", stepsTarget: 8000, warmup: "Corde à sauter 3-5 min", endurance: "corde", enduranceStart: CORDE_START, endurancePaused: true, shoulderTabata: true, focus: [], places: defaultPlaces(), place: "gym" },
+    profile: { goal: "Prise de muscle", level: "Intermédiaire", days: 4, split: "hautbas", stepsTarget: 8000, warmup: "Corde à sauter 3-5 min", endurance: "corde", enduranceStart: CORDE_START, endurancePaused: true, circuits: {}, focus: [], places: defaultPlaces(), place: "gym" },
     matrix,
     cycle: { type: "volume", start: startOfWeek(Date.now()), weeks: 6 },
     cycles: [],
     exercises, templates,
     sessions: [], habits: {}, active: null
   };
-  applyShoulderTabata(st.templates, st);
+  st.profile.circuits = { "Épaules": circuitExercise(SHOULDER_TABATA, st).id };
+  applyCircuit("Épaules", st.templates, st);
   return st;
 }
 
@@ -363,8 +371,12 @@ function migrate(st) {
   if (!st.profile.places) { st.profile.places = defaultPlaces(); st.profile.place = "gym"; delete st.profile.gear; }
   // 24/11/2026 : le plan corde passe en pause (Alexis ne fait plus que des échauffements à la corde). Il se relance dans Ta semaine.
   if (st.profile.endurancePaused === undefined) st.profile.endurancePaused = true;
-  // Tabata épaules à la place des exercices d'épaules, posé une fois ; il se coupe dans le réglage du muscle Épaules.
-  if (st.profile.shoulderTabata === undefined) { st.profile.shoulderTabata = true; applyShoulderTabata(st.templates, st); }
+  // Tabata épaules à la place des exercices d'épaules, posé une fois ; il se change dans le réglage du muscle Épaules.
+  if (!st.profile.circuits) {
+    st.profile.circuits = st.profile.shoulderTabata === false ? {} : { "Épaules": circuitExercise(SHOULDER_TABATA, st).id };
+    applyCircuit("Épaules", st.templates, st);
+  }
+  delete st.profile.shoulderTabata;
   st.profile.focus ||= [];
   return st;
 }
@@ -393,7 +405,10 @@ export function replaceState(next) {
 
 // ——— Lecture
 
-export const exercise = id => state.exercises.find(e => e.id === id);
+// pending : Tabatas d'un texte du coach en cours d'aperçu, pas encore ajoutés (ils passent avant, pour montrer la version collée).
+let pending = [];
+export const exercise = id => pending.find(e => e.id === id) || state.exercises.find(e => e.id === id);
+export const clearPending = () => { pending = []; };
 // Séances d'un programme pas encore validé (aperçu) : elles se modifient comme des séances types,
 // mais rien ne rejoint tes séances avant « Utiliser ce programme ».
 let drafts = [];
@@ -889,8 +904,9 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
     const order = [...muscles.filter(m => BIG.includes(m)), ...muscles.filter(m => !BIG.includes(m))];
     for (const m of order) {
       const target = state.matrix[m].target; if (!target || (calves && m === "Mollets")) continue;
-      // Épaules : le Tabata épaules à la place des exercices (réglage du muscle Épaules).
-      if (m === "Épaules" && state.profile.shoulderTabata) { items.push(tabataItem(shoulderTabata().id)); continue; }
+      // Muscle qui a son Tabata (réglage du muscle) : le Tabata à la place des exercices.
+      const c = circuitFor(m);
+      if (c) { items.push(circuitItem(c)); continue; }
       const sets = Math.max(1, Math.round(target / freq[m]));
       // Pas plus de 4 séries par exercice : 12 séries deviennent 3 exercices de 4.
       const count = Math.ceil(sets / 4), parts = Array.from({ length: count }, (_, i) => Math.floor(sets / count) + (i < sets % count ? 1 : 0));
@@ -1057,7 +1073,15 @@ export function setItemFormat(item, format) {
 //   "favorites": ["Crunch à la poulie à genoux"],
 //   "replace": ["Abdos"],
 //   "additions": [{ "name": "Abdos · bas du ventre", "items": [ … ] }] }
+//   "circuits": [{ "name": "Tabata épaules", "muscle": "Épaules", "equip": "halteres", "rounds": 10, "work": 30, "off": 30,
+//                  "reps": 12, "weight": 5, "moves": ["Push press", "Développé Arnold", …] }]
 // Tout est facultatif, sauf d'avoir au moins une chose à faire.
+// circuits : Tabatas d'exercices variés (un mouvement par round, texte libre) qui deviennent LA séance de leur muscle :
+// ils remplacent les exercices de ce muscle dans toutes les séances types et dans le programme généré. Un nom déjà connu
+// sans « moves » reprend le Tabata existant. rounds : par défaut un par mouvement.
+// Dans « items », un Tabata pour une seule séance : { "tabata": "Tabata épaules", "muscle": …, "moves": […], … } ;
+// et un exercice du catalogue en EMOM ou Tabata : { "exercise": "Burpees", "format": "tabata", "rounds": 8, "work": 20, "off": 10, "reps": 10 }
+// ou { "exercise": "Pompes", "format": "emom", "rounds": 10, "every": 60, "reps": 10 }.
 // exercise : nom exact du catalogue (casse libre). group : même lettre sur des exercices qui se suivent = superset.
 // weight (kg, facultatif) : sinon la dernière charge faite, celle d'une séance type, ou une charge courante.
 // templates : séances neuves. additions : blocs ajoutés à la fin d'une séance type existante (choisie dans l'aperçu).
@@ -1069,10 +1093,29 @@ const findExercise = name => {
   const n = String(name ?? "").trim().toLowerCase();
   return state.exercises.find(e => !e.mix && !e.circuit && e.name.toLowerCase() === n);
 };
+// Tabata d'exercices variés du texte : un exercice en attente (pending) jusqu'à « Appliquer ». problems : ce qui manque.
+function readCircuit(raw, problems) {
+  const name = String(raw?.name ?? raw?.tabata ?? "").trim().slice(0, 40);
+  if (!name) { problems.push("un Tabata sans nom"); return null; }
+  const known = state.exercises.find(x => x.circuit && x.tabata && x.name.toLowerCase() === name.toLowerCase());
+  const moves = Array.isArray(raw.moves) ? raw.moves.map(x => String(x).trim().slice(0, 80)).filter(Boolean).slice(0, 40) : known?.moves;
+  if (!moves?.length) { problems.push(`${name} : la liste des mouvements (moves)`); return null; }
+  const muscle = MUSCLES.includes(raw.muscle) ? raw.muscle : known?.muscle;
+  if (!muscle) { problems.push(`${name} : le muscle (${MUSCLES.join(", ")})`); return null; }
+  const equip = EQUIPS[raw.equip] ? raw.equip : known?.equip || "halteres", t = known?.tabata || {};
+  const num_ = (v, min, max, def) => clampInt(v, min, max, def);
+  const tabata = { rounds: num_(raw.rounds, 1, 60, t.rounds ?? moves.length), work: num_(raw.work, 5, 300, t.work ?? 20), off: num_(raw.off, 0, 300, t.off ?? 10),
+    reps: num_(raw.reps, 1, 100, t.reps ?? 12), weight: Number.isFinite(+raw.weight) && raw.weight !== null && raw.weight !== "" ? nearestWeight(equip, +raw.weight) : t.weight ?? 0 };
+  const e = { ...(known || { id: uid(), pref: "neutre", note: "", circuit: true }), name, muscle, equip, moves, tabata };
+  pending = [...pending.filter(x => x.id !== e.id), e];
+  return e;
+}
+
 // Exercices d'une séance du texte → éléments de séance type. Les noms inconnus vont dans missing.
-function importItems(list, missing) {
+function importItems(list, missing, problems) {
   const groups = {};
   const items = (Array.isArray(list) ? list : []).map(it => {
+    if (it?.tabata || Array.isArray(it?.moves)) { const c = readCircuit(it, problems); return c && circuitItem(c); }
     const ex = findExercise(it.exercise);
     if (!ex) { missing.push(String(it.exercise ?? "?")); return null; }
     const [lo, hi] = Array.isArray(it.reps) ? it.reps : [it.reps, it.reps];
@@ -1082,6 +1125,11 @@ function importItems(list, missing) {
     const weight = Number.isFinite(+it.weight) && it.weight !== null ? nearestWeight(ex.equip, +it.weight, ex.stack)
       : last ? pileFor(ex.id, ex.equip, last.maxWeight)
       : known ? known.weight : nearestWeight(ex.equip, typicalLoad(ex), ex.stack);
+    if (it.format === "tabata" || it.format === "emom") {
+      const d = FORMAT_DEFAULTS[it.format], r = clampInt(it.reps?.[0] ?? it.reps, 1, 100, d.repsMin);
+      return { id: uid(), exerciseId: ex.id, format: it.format, rounds: clampInt(it.rounds, 1, 60, d.rounds), repsMin: r, repsMax: r, weight,
+        ...(it.format === "tabata" ? { work: clampInt(it.work, 5, 300, d.work), off: clampInt(it.off, 0, 300, d.off) } : { every: clampInt(it.every, 15, 600, d.every) }) };
+    }
     const item = { id: uid(), exerciseId: ex.id, format: "series", sets: clampInt(it.sets, 1, 10, 3), repsMin, repsMax, weight, rest: clampInt(it.rest, 0, 600, 90) };
     if (it.group) item.group = groups[it.group] ||= uid();
     return item;
@@ -1098,8 +1146,11 @@ export function parseTemplates(text) {
   let data;
   try { data = JSON.parse(s.slice(a, b + 1)); } catch { return { error: "Le texte est incomplet : recopie tout le bloc, accolades comprises." }; }
   if (data?.type !== IMPORT_TYPE) return { error: "Ce texte n'est pas une séance Fluide." };
-  const missing = [], unknown = [];
-  const block = (t, i, prefix) => ({ id: uid(), name: String(t?.name ?? "").trim().slice(0, 40) || `${prefix} ${i + 1}`, items: importItems(t?.items, missing) });
+  const missing = [], unknown = [], problems = [];
+  pending = [];
+  const block = (t, i, prefix) => ({ id: uid(), name: String(t?.name ?? "").trim().slice(0, 40) || `${prefix} ${i + 1}`, items: importItems(t?.items, missing, problems) });
+  const circuits = (Array.isArray(data.circuits) ? data.circuits : []).map(c => readCircuit(c, problems)).filter(Boolean)
+    .map(e => ({ muscle: e.muscle, exerciseId: e.id }));
   const templates = (Array.isArray(data.templates) ? data.templates : []).map((t, i) => block(t, i, "Séance"));
   const additions = (Array.isArray(data.additions) ? data.additions : []).map((t, i) => block(t, i, "Ajout"));
   const muscles = Object.entries(data.muscles && typeof data.muscles === "object" ? data.muscles : {}).flatMap(([m, v]) => {
@@ -1115,11 +1166,22 @@ export function parseTemplates(text) {
   });
   const replace = (Array.isArray(data.replace) ? data.replace : []).filter(m => (MUSCLES.includes(m) ? true : (unknown.push(m), false)));
   if (missing.length) return { error: `Pas dans le catalogue : ${[...new Set(missing)].join(", ")}.` };
+  if (problems.length) return { error: `Il manque ${problems.join(" ; ")}.` };
   if (unknown.length) return { error: `Muscle inconnu : ${[...new Set(unknown)].join(", ")}.` };
-  if (![templates, additions, muscles, favorites, replace].some(x => x.length)) return { error: "Ce texte ne contient rien à ajouter ni à régler." };
+  if (![templates, additions, muscles, favorites, replace, circuits].some(x => x.length)) return { error: "Ce texte ne contient rien à ajouter ni à régler." };
   if ([...templates, ...additions].some(t => !t.items.length)) return { error: "Une des séances n'a aucun exercice." };
   if (additions.length && !state.templates.length) return { error: "Tu n'as pas encore de séance type pour recevoir ces exercices. Choisis d'abord un programme." };
-  return { templates, additions, muscles, favorites, replace };
+  return { templates, additions, muscles, favorites, replace, circuits };
+}
+
+// Aperçu d'un Tabata qui devient la séance de son muscle : les séances types telles qu'elles seraient après « Appliquer ».
+export function circuitPreview(circuits) {
+  const st = { profile: { ...state.profile, circuits: { ...state.profile.circuits } }, exercises: [...state.exercises.filter(e => !pending.some(p => p.id === e.id)), ...pending] };
+  const templates = JSON.parse(JSON.stringify(state.templates));
+  for (const { muscle, exerciseId } of circuits) { st.profile.circuits[muscle] = exerciseId; applyCircuit(muscle, templates, st); }
+  const before = new Map(state.templates.flatMap(t => t.items.map(it => [it.id, t])));
+  const kept = new Set(templates.flatMap(t => t.items.map(it => it.id)));
+  return { templates, removed: [...before].filter(([id]) => !kept.has(id)).map(([id, t]) => ({ template: t, item: t.items.find(it => it.id === id) })) };
 }
 
 // Exercices que « replace » retirerait de tes séances types : [{ template, item }].
@@ -1127,7 +1189,10 @@ export const replacedItems = muscles => state.templates.flatMap(t =>
   t.items.filter(it => muscles.includes(exercise(it.exerciseId)?.muscle)).map(item => ({ template: t, item })));
 
 // Applique un texte du coach. targets[i] : id de la séance type qui reçoit additions[i].
-export function applyImport({ templates = [], additions = [], muscles = [], favorites = [], replace = [] }, targets = []) {
+export function applyImport({ templates = [], additions = [], muscles = [], favorites = [], replace = [], circuits = [] }, targets = []) {
+  // Tabatas collés : ajoutés (ou mis à jour) dans tes exercices.
+  for (const e of pending) { const cur = state.exercises.find(x => x.id === e.id); if (cur) Object.assign(cur, e); else state.exercises.push(e); }
+  pending = [];
   for (const { muscle, status, target, goal } of muscles) setMuscle(muscle, status, target, goal);
   for (const id of favorites) exercise(id).pref = "aime";
   if (replace.length) for (const t of state.templates) {
@@ -1136,6 +1201,10 @@ export function applyImport({ templates = [], additions = [], muscles = [], favo
   }
   additions.forEach((add, i) => template(targets[i])?.items.push(...add.items));
   state.templates.push(...templates);
+  if (circuits.length) {
+    state.profile.circuits = { ...state.profile.circuits };
+    for (const { muscle, exerciseId } of circuits) { state.profile.circuits[muscle] = exerciseId; applyCircuit(muscle); }
+  }
   save();
 }
 
@@ -1231,6 +1300,16 @@ export function startClock(index) {
   state.active.entries[index].clock = Date.now();
   state.active.restEndsAt = null; // le chrono EMOM / Tabata remplace le repos en cours
   save();
+}
+
+// Rounds d'un EMOM ou d'un Tabata notés tout seuls au chrono (fin de l'effort, ou de la minute), avec la charge
+// et les reps réglées : pas besoin de toucher l'écran entre deux rounds. Un round se corrige en touchant sa ligne.
+export function catchUpRounds(index, done) {
+  const e = state.active.entries[index];
+  const n = Math.min(done, e.target.rounds);
+  if (e.sets.length >= n) return false;
+  while (e.sets.length < n) e.sets.push({ weight: e.draft.weight, reps: e.draft.reps, round: e.sets.length + 1, doneAt: Date.now() });
+  return true;
 }
 
 export function stopClock(index) {

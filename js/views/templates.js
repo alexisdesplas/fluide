@@ -1,4 +1,4 @@
-import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, enduranceOn, setEndurancePaused, startWorkout, parseTemplates, applyImport, replacedItems } from "../store.js";
+import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, enduranceOn, setEndurancePaused, startWorkout, parseTemplates, applyImport, replacedItems, circuitPreview, clearPending } from "../store.js";
 import { h, icon, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
@@ -26,7 +26,7 @@ export function chargeStepper({ equip, value, note, onChange, ex, values }) {
 export const itemLine = (it, chained) => {
   const w = charge(exercise(it.exerciseId)?.equip, it.weight);
   return it.format === "emom" ? `EMOM ${it.rounds} × ${clock(it.every)} · ${it.repsMin} reps · ${w}`
-    : it.format === "tabata" ? `Tabata ${it.rounds} × ${it.work} s / ${it.off} s · ${w}`
+    : it.format === "tabata" ? `Tabata ${exercise(it.exerciseId)?.moves ? `${exercise(it.exerciseId).moves.length} exercices · ` : ""}${it.rounds} × ${it.work} s / ${it.off} s · ${w}`
     : `${it.sets} × ${reps(it.repsMin, it.repsMax)} · ${w} · ${chained ? "sans repos" : `repos ${clock(it.rest)}`}`;
 };
 
@@ -158,7 +158,7 @@ function defaultTargets(additions, replace) {
 const setsOfMuscle = (items, m) => items.reduce((a, it) => a + (exercise(it.exerciseId)?.muscle === m ? itemSets(it) : 0), 0);
 
 export function importView() {
-  const back = () => { pasted = null; go("#/seances"); };
+  const back = () => { pasted = null; clearPending(); go("#/seances"); };
   const read = text => {
     const r = text.trim() ? parseTemplates(text) : {};
     pasted = { text, ...r, ...(r.additions && { targets: defaultTargets(r.additions, r.replace) }) };
@@ -184,14 +184,16 @@ export function importView() {
   }));
   const draw = () => {
     const p = pasted || { text: "" };
-    const { templates = [], additions = [], muscles = [], favorites = [], replace = [], targets = [] } = p;
-    const removed = replace.length ? replacedItems(replace) : [];
-    const onlyNew = templates.length && !additions.length && !muscles.length && !favorites.length && !replace.length;
-    const ready = !p.error && (templates.length || additions.length || muscles.length || favorites.length || replace.length);
+    const { templates = [], additions = [], muscles = [], favorites = [], replace = [], circuits = [], targets = [] } = p;
+    // Tabata qui devient la séance d'un muscle : séances types telles qu'elles seront, exercices qui en sortent.
+    const preview = !p.error && circuits.length ? circuitPreview(circuits) : null;
+    const removed = [...(replace.length ? replacedItems(replace) : []), ...(preview?.removed || [])];
+    const onlyNew = templates.length && !additions.length && !muscles.length && !favorites.length && !replace.length && !circuits.length;
+    const ready = !p.error && (templates.length || additions.length || muscles.length || favorites.length || replace.length || circuits.length);
     // Séries prévues par semaine, avant et après, pour chaque muscle touché.
-    const touched = [...new Set([...muscles.map(x => x.muscle), ...replace, ...additions.flatMap(a => a.items.map(it => exercise(it.exerciseId).muscle))])].filter(m => MUSCLES.includes(m));
-    const all = state.templates.flatMap(t => t.items);
-    const after = m => setsOfMuscle(all, m) - setsOfMuscle(removed.map(x => x.item), m) + additions.reduce((a, x) => a + setsOfMuscle(x.items, m), 0) + templates.reduce((a, x) => a + setsOfMuscle(x.items, m), 0);
+    const touched = [...new Set([...muscles.map(x => x.muscle), ...replace, ...circuits.map(c => c.muscle), ...additions.flatMap(a => a.items.map(it => exercise(it.exerciseId).muscle))])].filter(m => MUSCLES.includes(m));
+    const all = (preview?.templates || state.templates).flatMap(t => t.items);
+    const after = m => setsOfMuscle(all, m) - setsOfMuscle((replace.length ? replacedItems(replace) : []).map(x => x.item), m) + additions.reduce((a, x) => a + setsOfMuscle(x.items, m), 0) + templates.reduce((a, x) => a + setsOfMuscle(x.items, m), 0);
     const target = m => muscles.find(x => x.muscle === m)?.target ?? state.matrix[m].target;
     body.replaceChildren(...[
       h("p", { class: "body-sm discret", style: { margin: 0 } }, "Copie le bloc de texte que le coach t'a préparé, puis colle-le ici. Il peut ajouter des séances, compléter tes séances types ou régler un muscle. Rien ne change avant « Appliquer »."),
@@ -212,8 +214,17 @@ export function importView() {
       favorites.length > 0 && h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "En favori")),
       favorites.length > 0 && h("div", { class: "list" }, favorites.map(id => h("div", { class: "row" },
         h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, niceName(exercise(id).name))), pill("Favori", "accent")))),
+      ...circuits.flatMap(({ muscle, exerciseId }) => {
+        const c = exercise(exerciseId), t = c.tabata, n = preview?.templates.filter(x => x.items.some(it => it.exerciseId === exerciseId)).length || 0;
+        return [
+          h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, c.name),
+            h("span", { class: "caption num" }, `${muscle} · à chaque fois · ${n} séance${n > 1 ? "s" : ""} type${n > 1 ? "s" : ""}`)),
+          h("p", { class: "caption num", style: { margin: 0 } }, `${t.rounds} rounds de ${t.work} s, ${t.off} s de pause · ${t.reps} reps · ${charge(c.equip, t.weight)} · compte ${itemSets({ format: "tabata", rounds: t.rounds, work: t.work })} séries. Il remplace les exercices ${muscle === "Épaules" || muscle === "Abdos" ? "d'" : "de "}${muscle.toLowerCase()} de tes séances types, et du programme quand tu en génères un.`),
+          h("div", { class: "list" }, c.moves.map((mv, i) => h("div", { class: "row" },
+            h("span", { class: "num-lead", "aria-hidden": "true" }, i + 1), h("div", { class: "row-main" }, h("span", { class: "body-md" }, mv)))))];
+      }),
       removed.length > 0 && h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Retiré de tes séances"),
-        h("span", { class: "caption" }, "remplacés par les ajouts")),
+        h("span", { class: "caption" }, "remplacés par ce que tu colles")),
       removed.length > 0 && h("div", { class: "list" }, removed.map(({ template: t, item: it }) => h("div", { class: "row" },
         h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, niceName(exercise(it.exerciseId).name)),
           h("span", { class: "caption num" }, `${t.name} · ${itemSets(it)} séries`))))),

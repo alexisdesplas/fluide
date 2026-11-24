@@ -1,4 +1,4 @@
-import { state, save, replaceState, ENDURANCE, enduranceWeek, enduranceOn, exercise, setShoulderTabata, SHOULDER_TABATA, toggleFav, cyclePosition, inReprise, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GOALS, SPLITS } from "../store.js";
+import { state, save, replaceState, ENDURANCE, enduranceWeek, enduranceOn, exercise, setCircuit, circuitsOf, itemSets, toggleFav, cyclePosition, inReprise, startCycle, deloadNow, setMuscle, plannedSets, history, sessionRecords, setPref, setAbsent, goalOf, MUSCLES, STATUS, CYCLES, PREFS, GOALS, SPLITS } from "../store.js";
 import { h, icon, pageHead, navbar, btn, go, int, num, stepper, segmented, radios, sheet, confirmSheet, toast, dateShort } from "../ui.js";
 import { cycleCard } from "./today.js";
 import { prefPill } from "./templates.js";
@@ -195,7 +195,7 @@ export function dataView() {
 let muscleDraft = null;
 export function muscleView({ muscle: m }) {
   if (!MUSCLES.includes(m)) { setTimeout(() => go("#/profil/matrice")); return { el: h("div") }; }
-  if (muscleDraft?.key !== location.hash) muscleDraft = { key: location.hash, ...state.matrix[m], goal: goalOf(m), tabata: !!state.profile.shoulderTabata };
+  if (muscleDraft?.key !== location.hash) muscleDraft = { key: location.hash, ...state.matrix[m], goal: goalOf(m), circuit: state.profile.circuits?.[m] || "" };
   const draft = muscleDraft;
   const planned = plannedSets()[m] || 0;
   const back = () => { muscleDraft = null; go("#/profil/matrice"); };
@@ -214,19 +214,21 @@ export function muscleView({ muscle: m }) {
       h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Objectif")),
       radios(Object.entries(GOALS).map(([k, g]) => [k, g.label, g.desc]), draft.goal, v => { draft.goal = v; }, `Objectif ${m}`),
       h("p", { class: "caption", style: { margin: 0 } }, "Changer l'objectif recale les reps et le repos de ce muscle dans tes séances types."),
-      m === "Épaules" && h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Séance épaules")),
-      m === "Épaules" && h("button", { type: "button", class: "radio-card", role: "checkbox", "aria-checked": String(draft.tabata), onClick: ev => {
-        draft.tabata = !draft.tabata; ev.currentTarget.setAttribute("aria-checked", String(draft.tabata));
-      } },
-        h("span", { class: "radio-dot", "aria-hidden": "true" }),
-        h("span", { class: "radio-text" }, h("span", { class: "body-md fort semibold" }, "Tabata épaules à chaque fois"),
-          h("span", { class: "caption" }, `${SHOULDER_TABATA.moves.length} exercices aux haltères légers, ${SHOULDER_TABATA.work} s d'effort, ${SHOULDER_TABATA.work} s de pause (11 min, compte ${Math.round(SHOULDER_TABATA.moves.length * SHOULDER_TABATA.work / 80)} séries). Il remplace les exercices d'épaules de tes séances types, sauf un mouvement à faire progresser.`))),
+      // Séance du muscle : ses exercices, ou un Tabata collé depuis le coach (un mouvement par round).
+      h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, `Séance ${m.toLowerCase()}`)),
+      circuitsOf(m).length > 0 && radios([["", "Exercices du programme", "Choisis exercice par exercice dans tes séances types."],
+        ...circuitsOf(m).map(c => [c.id, c.name, `${c.moves.length} exercices, ${c.tabata.work} s d'effort, ${c.tabata.off} s de pause · ${c.tabata.rounds} rounds, compte ${itemSets({ format: "tabata", rounds: c.tabata.rounds, work: c.tabata.work })} séries. Remplace les exercices de ce muscle dans tes séances types.`])],
+        draft.circuit, v => { draft.circuit = v; }, `Séance ${m}`),
+      h("p", { class: "caption", style: { margin: 0 } }, circuitsOf(m).length
+        ? "Un autre Tabata ? Demande-le au coach, puis colle-le dans Programme › Coller du coach."
+        : "Pour travailler ce muscle en Tabata d'exercices variés, demande-le au coach, puis colle-le dans Programme › Coller du coach."),
+      btn("Coller du coach", { variant: "secondary", full: true, icon: "clipboard", onClick: () => { muscleDraft = null; go("#/seances/coller"); } }),
       btn("Enregistrer", { variant: "primary", size: "lg", full: true, onClick: () => {
-        const tabata = m === "Épaules" && draft.tabata !== !!state.profile.shoulderTabata ? draft.tabata : null;
+        const changed = draft.circuit !== (state.profile.circuits?.[m] || "");
         setMuscle(m, draft.status, draft.target, draft.goal);
-        if (tabata !== null) {
-          const n = setShoulderTabata(tabata);
-          toast(tabata ? (n ? `Tabata épaules dans ${n} séance${n > 1 ? "s" : ""}` : "Tabata épaules activé") : "Tabata épaules coupé : choisis tes exercices dans Programme");
+        if (changed) {
+          const n = setCircuit(m, draft.circuit || null), name = draft.circuit && exercise(draft.circuit).name;
+          toast(name ? (n ? `${name} dans ${n} séance${n > 1 ? "s" : ""}` : `${name} pour ${m.toLowerCase()}`) : "Tabata retiré : choisis tes exercices dans Programme");
         }
         back();
       } })));
