@@ -1,4 +1,4 @@
-import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, startWorkout, parseTemplates, applyImport, replacedItems } from "../store.js";
+import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, enduranceOn, setEndurancePaused, startWorkout, parseTemplates, applyImport, replacedItems } from "../store.js";
 import { h, icon, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
@@ -413,7 +413,7 @@ const previewRow = (t, it, i) => {
 };
 
 // Ta semaine : ce que le programme doit respecter. Une ligne sous le programme sur l'écran Séances.
-export const weekLine = p => [`${p.days} séance${p.days > 1 ? "s" : ""}`, `${p.minutes} min`, ENDURANCE[p.endurance]?.short].filter(Boolean).join(" · ");
+export const weekLine = p => [`${p.days} séance${p.days > 1 ? "s" : ""}`, `${p.minutes} min`, ENDURANCE[p.endurance] && `${ENDURANCE[p.endurance].short}${p.endurancePaused ? " en pause" : ""}`].filter(Boolean).join(" · ");
 
 // Choisir un programme : chaque split est généré pour ta semaine (séances, temps, objectif longue durée),
 // le mieux classé est recommandé et sélectionné d'entrée.
@@ -424,7 +424,7 @@ let chosen = null, options = null;
 const times = o => (o.freq === o.freqMax ? o.freq : `${o.freq} à ${o.freqMax}`);
 const list = xs => xs.length > 1 ? `${xs.slice(0, -1).join(", ")} et ${xs.at(-1)}` : xs[0];
 function reasons(o, p, week) {
-  const sp = SPLITS[o.key], end = ENDURANCE[p.endurance];
+  const sp = SPLITS[o.key], end = ENDURANCE[enduranceOn()];
   const mins = o.templates.map(estimate), long = week.find(d => d.endurance === "long");
   const kept = o.short.filter(x => !o.below.includes(x));
   const planned = plannedSetsOf(o.templates);
@@ -455,13 +455,13 @@ function reasons(o, p, week) {
 export function programView() {
   const p = state.profile;
   if (p.minutes == null) { setTimeout(() => go("#/seances/programme/semaine")); return { el: h("div") }; }
-  if (!options) { options = recommend(p); chosen = options[0].key; }
+  if (!options) { options = recommend({ ...p, endurance: enduranceOn() }); chosen = options[0].key; }
   const reco = options[0].fits ? options[0].key : null;
   const opt = options.find(o => o.key === chosen);
   const preview = opt?.templates || [];
   setDrafts(preview); // les séances de l'aperçu s'ouvrent et se modifient comme des séances types
   const split = SPLITS[chosen];
-  const week = weekPlan(preview, p.endurance);
+  const week = weekPlan(preview, enduranceOn());
   const pick = k => { chosen = k; dispatchEvent(new HashChangeEvent("hashchange")); };
   const leave = () => { chosen = null; options = null; setDrafts([]); go("#/seances"); };
   const use = () => {
@@ -508,7 +508,7 @@ export function programView() {
               d.endurance === "facile" && (d.session ? "corde facile en échauffement" : "corde facile"),
               d.endurance === "recup" && (d.session ? "corde récup en échauffement" : "corde récup")].filter(Boolean).join(" · "))),
           d.endurance === "long" && pill("Jour long", "tag orange")))),
-        h("p", { class: "caption", style: { margin: 0 } }, p.endurance ? `Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant le jour long de corde loin des jambes. Les jours de muscu, la séance corde du jour (facile ou récup) sert d'échauffement.` : "Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant un jour de repos entre deux grosses séances."),
+        h("p", { class: "caption", style: { margin: 0 } }, enduranceOn() ? `Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant le jour long de corde loin des jambes. Les jours de muscu, la séance corde du jour (facile ou récup) sert d'échauffement.` : "Les séances tournent dans cet ordre. Décale les jours si besoin, en gardant un jour de repos entre deux grosses séances."),
         h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Aperçu"), h("span", { class: "caption" }, `${preview.length} séances`)),
         h("p", { class: "caption", style: { margin: 0 } }, "Modifie chaque séance avant de valider : exercices, séries, ordre, supersets. Changer de programme repart de zéro."),
         preview.map(t => h("div", { class: "card" },
@@ -557,8 +557,13 @@ export function weekView() {
       h("div", { class: "section-title" }, h("h2", { class: "heading-md orange" }, "Objectif additionnel")),
       h("p", { class: "caption", style: { margin: 0 } }, "Un sport que tu prépares à côté de la muscu. Il compte dans la récupération des jambes."),
       goalCards,
-      ENDURANCE[p.endurance]?.weeks && (() => {
-        const e = ENDURANCE[p.endurance], line = h("p", { class: "caption num", style: { margin: 0 } });
+      ENDURANCE[p.endurance]?.weeks && h("button", { type: "button", class: "radio-card", role: "checkbox", "aria-checked": String(!!p.endurancePaused),
+        onClick: () => { options = null; setEndurancePaused(!p.endurancePaused); } },
+        h("span", { class: "radio-dot", "aria-hidden": "true" }),
+        h("span", { class: "radio-text" }, h("span", { class: "body-md fort semibold" }, "En pause"),
+          h("span", { class: "caption" }, "Le plan s'arrête : échauffement à la corde des Réglages, pas de jour long, jambes sans limite. Il reprend où il en était."))),
+      ENDURANCE[enduranceOn()]?.weeks && (() => {
+        const e = ENDURANCE[enduranceOn()], line = h("p", { class: "caption num", style: { margin: 0 } });
         const show = w => { const wk = e.weeks[w - 1]; line.textContent = `Faciles ${blocksLabel(wk.easy)} · jour long ${blocksLabel(wk.long)}${wk.deload ? " · deload" : ""}`; };
         show(enduranceWeek());
         return h("div", { class: "card" },

@@ -1,4 +1,4 @@
-import { state, history, cyclePosition, enduranceWeek, enduranceGoalWeek, repriseDefaults, startReprise, endReprise, inReprise, startOfWeek, ENDURANCE, CYCLES, PAUSE_DAYS, blocksLabel } from "../store.js";
+import { state, enduranceOn, history, cyclePosition, enduranceWeek, enduranceGoalWeek, repriseDefaults, startReprise, endReprise, inReprise, startOfWeek, ENDURANCE, CYCLES, PAUSE_DAYS, blocksLabel } from "../store.js";
 import { h, icon, navbar, btn, pill, go, stepper, confirmSheet, toast, dateLong } from "../ui.js";
 
 const DAY = 86400000;
@@ -24,7 +24,7 @@ export function pauseCard() {
 
 // Écran dédié : où le bloc et la corde reprennent lundi, avec la semaine allégée d'ici là.
 export function repriseView() {
-  const c = state.cycle, e = ENDURANCE[state.profile.endurance]?.weeks ? ENDURANCE[state.profile.endurance] : null;
+  const c = state.cycle, e = ENDURANCE[enduranceOn()]?.weeks ? ENDURANCE[enduranceOn()] : null;
   const back = { label: "Aujourd'hui", href: "#/" };
 
   if (inReprise()) {
