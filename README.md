@@ -39,6 +39,7 @@ Les données vivent sur l'iPhone (localStorage, clé `fluid-v1`). Compte optionn
 - `manifest.webmanifest`, `icons/` : installation
 - `docs/` : guides (Raccourci iOS « Pas du jour »)
 - `supabase/` : schéma et mise en place du compte
+- `regles-gestion.md` : registre des règles de gestion
 
 ## Développer
 

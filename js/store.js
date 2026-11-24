@@ -13,6 +13,9 @@ export const MUSCLES = ["Pecs", "Dos", "Épaules", "Biceps", "Triceps", "Quadris
 // Groupes du catalogue hors matrice Fluide : leurs séries ne comptent pas dans l'objectif.
 export const GROUPS = [...MUSCLES, "Avant-bras", "Échauffement", "Mobilité"];
 
+// Séances de muscu par semaine : le même réglage dans Ta semaine et dans Réglages, aux bornes des programmes.
+export const SESSIONS_PER_WEEK = { min: 2, max: 6 };
+
 export const STATUS = {
   maintien: { label: "Maintenir", range: [4, 8], def: 6 },
   focus: { label: "Progresser", range: [10, 16], def: 12 },
@@ -369,6 +372,8 @@ function migrate(st) {
   delete st.profile.define;
   // Lieux : la salle a tout, la maison et le street partent du matériel donné par Alexis.
   if (!st.profile.places) { st.profile.places = defaultPlaces(); st.profile.place = "gym"; delete st.profile.gear; }
+  // Réglages allait de 1 à 7 séances : on revient dans les bornes des programmes.
+  if (st.profile.days != null) st.profile.days = Math.min(SESSIONS_PER_WEEK.max, Math.max(SESSIONS_PER_WEEK.min, st.profile.days));
   // 24/11/2026 : le plan corde passe en pause (Alexis ne fait plus que des échauffements à la corde). Il se relance dans Ta semaine.
   if (st.profile.endurancePaused === undefined) st.profile.endurancePaused = true;
   // Tabata épaules à la place des exercices d'épaules, posé une fois ; il se change dans le réglage du muscle Épaules.
@@ -479,11 +484,15 @@ export function weeklyGoal(t = Date.now()) {
 const PREF_RANK = { aime: 0, neutre: 1, evite: 2, douleur: 3 };
 export const byUsefulness = (a, b) => PREF_RANK[a.pref] - PREF_RANK[b.pref] || (lastPerformance(b.id) ? 1 : 0) - (lastPerformance(a.id) ? 1 : 0) || (a.rank ?? 999) - (b.rank ?? 999) || a.name.localeCompare(b.name);
 
-// Alternatives quand la machine est prise : même muscle, jamais un exercice en douleur.
+// Exercice qu'on peut proposer de soi-même : ni en douleur, ni Melting pot, ni Tabata de muscle, ni absent, et faisable avec le matériel et les charges du lieu.
+// Le reste du catalogue ne sort que si on le cherche.
+export const proposable = e => e.pref !== "douleur" && !e.mix && !e.circuit && available(e) && reachable(e);
+
+// Alternatives quand la machine est prise : même muscle, exercices qu'on peut proposer ; si aucun ne va au lieu, ceux du muscle hors douleur.
 export function alternatives(exerciseId) {
   const ex = exercise(exerciseId);
   const all = state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur" && !e.mix && !e.circuit);
-  const here = all.filter(e => available(e) && reachable(e));
+  const here = all.filter(proposable);
   return (here.length ? here : all).sort(byUsefulness);
 }
 
@@ -638,10 +647,11 @@ function syncLoads(only = () => true) {
 }
 
 // Records battus dans une séance : meilleur 1RM estimé de l'exercice, comparé à tout ce qui précède.
+// EMOM et Tabata n'en battent pas : comme pour l'historique, leurs charges sous-maximales fausseraient le 1RM.
 export function sessionRecords(s) {
   const out = [];
   for (const e of s.entries) {
-    if (!e.sets.length || e.tempo) continue;
+    if (!e.sets.length || e.tempo || isInterval(e)) continue;
     const best = Math.max(...e.sets.map(x => e1rm(effWeight(x), x.reps)));
     const prev = exerciseHistory(e.exerciseId, s.startedAt);
     if (!prev.length) continue;
@@ -665,8 +675,9 @@ export function stepsAverage(days = 7) {
 
 // ——— Écriture : profil, matrice, cycle
 
+// Le statut fixe le volume : l'objectif du muscle (force, endurance) reste tel quel.
 export function setMatrix(muscle, status) {
-  state.matrix[muscle] = { status, target: STATUS[status].def };
+  state.matrix[muscle] = { ...state.matrix[muscle], status, target: STATUS[status].def };
   save();
 }
 
@@ -1517,16 +1528,18 @@ export function deleteSet(index, k) {
 }
 
 // Machine prise : on remplace l'exercice pour cette séance seulement, le programme ne bouge pas.
-// Si des séries sont déjà faites, elles restent sur l'exercice d'origine et l'alternative reprend les séries restantes.
+// Si des séries ou des rounds sont déjà faits, ils restent sur l'exercice d'origine et l'alternative reprend ce qui reste.
 export function swapExercise(index, exerciseId) {
   const a = state.active;
   let e = a.entries[index];
   const last = lastPerformance(exerciseId);
   if (e.tempo) { e.target = e.gearFormat.target; delete e.tempo; delete e.gearFormat; }
-  if (e.sets.length && !isInterval(e)) {
+  if (e.sets.length) {
+    const interval = isInterval(e);
     const left = Math.max(1, e.target.sets - e.sets.length);
-    e.target = { ...e.target, sets: e.sets.length };
-    e = { exerciseId: e.exerciseId, format: "series", itemId: e.itemId, group: e.group, target: { ...e.target, sets: left }, draft: { ...e.draft }, sets: [] };
+    e.target = { ...e.target, sets: e.sets.length, ...(interval && { rounds: e.sets.length }) };
+    if (interval) e.clock = null; // l'alternative relance son propre chrono
+    e = { exerciseId: e.exerciseId, format: interval ? e.format : "series", itemId: e.itemId, group: e.group, target: { ...e.target, sets: left, ...(interval && { rounds: left }) }, draft: { ...e.draft }, ...(interval && { clock: null }), sets: [] };
     a.entries.splice(index + 1, 0, e);
     a.cursor = index + 1;
   }

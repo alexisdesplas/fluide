@@ -1,5 +1,6 @@
 # Vercel ne reçoit que l'app : ni les guides, ni le schéma, ni les notes locales.
 memoire.md
+regles-gestion.md
 livrables/
 CLAUDE.md
 .claude/
