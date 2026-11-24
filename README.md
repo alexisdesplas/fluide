@@ -37,7 +37,8 @@ Les données vivent sur l'iPhone (localStorage, clé `fluid-v1`). Compte optionn
 - `css/app.css` : styles (DA pop, Barlow et Barlow Condensed)
 - `sw.js` : cache hors connexion (changer `CACHE` et lister tout nouveau fichier à chaque mise à jour)
 - `manifest.webmanifest`, `icons/` : installation
-- `livrables/`, `memoire.md` : notes de conception
+- `docs/` : guides (Raccourci iOS « Pas du jour »)
+- `supabase/` : schéma et mise en place du compte
 - `regles-gestion.md` : registre des règles de gestion
 
 ## Développer

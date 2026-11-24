@@ -326,7 +326,7 @@ Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 
 ## Écarts
 
-Différences entre le code et l'intention écrite (commentaires, textes d'écran, `memoire.md`).
+Différences entre le code et l'intention écrite (commentaires, textes d'écran, `memoire.md`, gardé en local hors du dépôt depuis le 24/11/2026).
 
 ### Ouverts
 
@@ -337,7 +337,7 @@ Différences entre le code et l'intention écrite (commentaires, textes d'écran
 | E-08 | Décision | Les descriptions des blocs promettent plus que le code. Intensité annonce un « volume réduit » et Spécialisation « le reste en maintien », mais rien ne les applique. Changer de bloc ne modifie que le RPE cible et les programmes générés ensuite, pas les séances types en place. | Relu | RG-BLC-02 |
 | E-09 | Décision | « Objectif du moment » et « Niveau » se règlent dans les Réglages mais n'agissent sur rien. Âge et poids non plus (déjà noté dans `memoire.md`). | Relu | Hors registre : aucune règle n'en découle |
 | E-10 | Décision | Hors programme et Modifier la séance n'ont plus d'accès depuis le 31/10 (décision confirmée le 04/11), mais le code reste, et le README comme le glossaire décrivent encore Hors programme. À retirer, ou à rouvrir. Le report en fin de séance est redevenu accessible avec les supersets en séance de la v0.12.0. | Relu | RG-SEA-28 et 29 |
-| E-11 | Doc | Le bouton « Coller depuis Santé » n'existe plus dans le code, alors que `memoire.md` et le guide `livrables/fluide/raccourci-pas.md` l'indiquent encore : un utilisateur sans compte suit donc une procédure impossible. | Relu | RG-PAS-02 |
+| E-11 | Doc | Le bouton « Coller depuis Santé » n'existe plus dans le code, alors que `memoire.md` (notes gardées en local) et le guide `docs/raccourci-pas.md`, publié dans le dépôt et lié depuis l'app, l'indiquent encore : un utilisateur sans compte suit donc une procédure impossible. | Relu | RG-PAS-02 |
 | E-12 | Doc | Autres passages périmés. Glossaire : « À définir, 12-20 reps », devenu l'objectif endurance à 15-20 reps, et « Machine prise », devenu « Remplacer ». README : « Les données restent sur l'iPhone ». `store.js` › `generateProgram` : le commentaire « 1 ou 2 exercices » contredit RG-PRG-07. `compte.js` › `hasLocalData` lit encore `state.corde`, retiré. | Relu | — |
 | E-13 | Bug | Remplacer un exercice en plein AMRAP crée un exercice en séries à l'intérieur du circuit : l'exercice d'origine y reste, et le remplaçant ne suit plus le format AMRAP. Trouvé en corrigeant E-03, pas corrigé : il faut d'abord décider ce que doit faire ce geste. | Exécuté | RG-SEA-19 |
 | E-14 | Bug | Remplacer un exercice après des séries en tempo lent enlève leur marque tempo : elles entrent dans l'historique et font redescendre la charge de référence. Essai : charge prévue 16 kg, une série à 10 kg en tempo, remplacement, et l'historique indique 10 kg. Vient de la v0.8.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-LIE-10 |

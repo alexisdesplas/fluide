@@ -20,7 +20,7 @@ create policy "Créer ses données" on public.fluide_state
 create policy "Mettre à jour ses données" on public.fluide_state
   for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
--- ——— Pas du jour envoyés par le Raccourci iOS « Pas du jour » (livrables/fluide/raccourci-pas.md)
+-- ——— Pas du jour envoyés par le Raccourci iOS « Pas du jour » (docs/raccourci-pas.md)
 -- Le Raccourci ne peut pas garder la session (elle expire en une heure) ni le mot de passe : il envoie une clé
 -- Raccourci, propre au compte, qui ne sert qu'à écrire les pas. On n'en garde que l'empreinte SHA-256.
 
