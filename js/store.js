@@ -2,6 +2,7 @@
 // exercices (avec préférences), séances types, séances faites, habitudes. Tout vit dans le localStorage.
 
 import { CATALOGUE } from "./exercices.js";
+import { athleticCap } from "./athletic.js";
 
 const KEY = "fluid-v1";
 const DAY = 86400000;
@@ -53,9 +54,10 @@ export const isAmrap = x => x?.format === "amrap";
 export const amrapMembers = (list, i) => groupOf(list, i)?.members || [i];
 
 // Équivalence pour l'objectif Fluide : un Tabata de 8 rounds compte 2 séries, un EMOM 1 série par tranche de 3 minutes.
-const roundsToSets = (format, rounds) => (format === "tabata" ? Math.ceil(rounds / 4) : format === "emom" ? Math.ceil(rounds / 3) : rounds);
-export const entrySets = e => (isInterval(e) ? roundsToSets(e.format, e.sets.length) : e.sets.length);
-export const itemSets = it => (isInterval(it) ? roundsToSets(it.format, it.rounds) : it.sets);
+// Tabata compté au temps d'effort (80 s = 1 série) : 8 × 20 s = 2 séries, comme validé ; 10 × 30 s = 4 séries.
+const roundsToSets = (format, rounds, work = 20) => (!rounds ? 0 : format === "tabata" ? Math.max(1, Math.round((rounds * work) / 80)) : format === "emom" ? Math.ceil(rounds / 3) : rounds);
+export const entrySets = e => (isInterval(e) ? roundsToSets(e.format, e.sets.length, e.target?.work ?? e.work) : e.sets.length);
+export const itemSets = it => (isInterval(it) ? roundsToSets(it.format, it.rounds, it.work) : it.sets);
 
 // Superset / triset : exercices en séries qui se suivent avec le même groupe. On enchaîne sans repos,
 // le repos du dernier exercice tombe après le tour complet. Marche pour les séances types comme pour la séance en cours.
@@ -261,6 +263,52 @@ export const addWeeks = (t, n) => { const d = new Date(t); d.setDate(d.getDate()
 // Semaines entre deux lundis : arrondi, l'écart fait une heure de plus ou de moins au changement d'heure.
 const weeksBetween = (a, b) => Math.round((startOfWeek(b) - startOfWeek(a)) / (7 * DAY));
 
+// Tabata épaules (vidéo choisie par Alexis le 24/11/2026, « 10 minute lightweight dumbbell shoulder workout ») :
+// 10 exercices aux haltères légers, 30 s d'effort et 30 s de pause, un exercice par round. Il remplace tout le travail
+// des épaules dans les séances types (réglage du muscle Épaules). Comme le melting pot : jamais proposé comme alternative.
+export const SHOULDER_TABATA = {
+  name: "Tabata épaules",
+  moves: ["Élévation frontale alternée + rowing menton", "Ouverture des deltoïdes arrière", "Push press", "Double élévation frontale, prise pronation",
+    "Développé Arnold", "Oiseau penché", "Élévation frontale alternée, marteau puis pronation", "Élévation latérale", "Développé épaules", "Élévation frontale avec rotation"],
+  work: 30, off: 30, reps: 12, weight: 5
+};
+const tabataItem = (exerciseId, weight = SHOULDER_TABATA.weight) => ({ id: uid(), exerciseId, format: "tabata", rounds: SHOULDER_TABATA.moves.length,
+  work: SHOULDER_TABATA.work, off: SHOULDER_TABATA.off, repsMin: SHOULDER_TABATA.reps, repsMax: SHOULDER_TABATA.reps, weight });
+// st : l'état passé à la migration (state n'existe pas encore pendant le chargement).
+function shoulderTabataOf(st = state) {
+  let e = st.exercises.find(x => x.circuit === "epaules");
+  if (!e) st.exercises.push(e = { id: uid(), name: SHOULDER_TABATA.name, muscle: "Épaules", equip: "halteres", pref: "neutre", note: "", circuit: "epaules", moves: SHOULDER_TABATA.moves });
+  e.moves = SHOULDER_TABATA.moves;
+  return e;
+}
+export const shoulderTabata = () => shoulderTabataOf();
+export const tabataMoves = e => exercise(e.exerciseId)?.moves || null;
+// Chaque séance type qui travaille les épaules les travaille avec le Tabata, à la place du premier exercice d'épaules ;
+// les autres exercices d'épaules sortent. Les mouvements à faire progresser restent (Réglages › Mouvement à faire progresser).
+// Renvoie le nombre de séances changées.
+export function applyShoulderTabata(templates = state.templates, st = state) {
+  const tab = shoulderTabataOf(st);
+  const muscleOf = id => st.exercises.find(e => e.id === id)?.muscle;
+  const keep = new Set(st.profile.focus || []);
+  let changed = 0;
+  for (const t of templates) {
+    const shoulders = t.items.filter(it => muscleOf(it.exerciseId) === "Épaules" && it.exerciseId !== tab.id && !keep.has(it.exerciseId) && it.format !== "amrap");
+    const has = t.items.some(it => it.exerciseId === tab.id);
+    if (!shoulders.length) continue;
+    const at = t.items.indexOf(shoulders[0]);
+    t.items = t.items.flatMap((it, i) => (i === at && !has ? [tabataItem(tab.id)] : shoulders.includes(it) ? [] : [it]));
+    t.items.forEach((x, k) => { if (x.group && !groupOf(t.items, k)) delete x.group; });
+    changed++;
+  }
+  return changed;
+}
+export function setShoulderTabata(on) {
+  state.profile.shoulderTabata = on;
+  const n = on ? applyShoulderTabata() : 0;
+  save();
+  return n;
+}
+
 function seed() {
   const exercises = CATALOGUE.map(fromCatalogue);
   const byName = n => exercises.find(e => e.name === n).id;
@@ -271,15 +319,17 @@ function seed() {
   const matrix = {};
   for (const m of MUSCLES) matrix[m] = { status: ["Pecs", "Dos", "Épaules", "Quadris"].includes(m) ? "focus" : "maintien" };
   for (const m of MUSCLES) matrix[m].target = STATUS[matrix[m].status].def;
-  return {
+  const st = {
     version: 1,
-    profile: { goal: "Prise de muscle", level: "Intermédiaire", days: 4, split: "hautbas", stepsTarget: 8000, warmup: "Corde à sauter 3-5 min", endurance: "corde", enduranceStart: CORDE_START, places: defaultPlaces(), place: "gym" },
+    profile: { goal: "Prise de muscle", level: "Intermédiaire", days: 4, split: "hautbas", stepsTarget: 8000, warmup: "Corde à sauter 3-5 min", endurance: "corde", enduranceStart: CORDE_START, endurancePaused: true, shoulderTabata: true, focus: [], places: defaultPlaces(), place: "gym" },
     matrix,
     cycle: { type: "volume", start: startOfWeek(Date.now()), weeks: 6 },
     cycles: [],
     exercises, templates,
     sessions: [], habits: {}, active: null
   };
+  applyShoulderTabata(st.templates, st);
+  return st;
 }
 
 function load() {
@@ -311,10 +361,17 @@ function migrate(st) {
   delete st.profile.define;
   // Lieux : la salle a tout, la maison et le street partent du matériel donné par Alexis.
   if (!st.profile.places) { st.profile.places = defaultPlaces(); st.profile.place = "gym"; delete st.profile.gear; }
+  // 24/11/2026 : le plan corde passe en pause (Alexis ne fait plus que des échauffements à la corde). Il se relance dans Ta semaine.
+  if (st.profile.endurancePaused === undefined) st.profile.endurancePaused = true;
+  // Tabata épaules à la place des exercices d'épaules, posé une fois ; il se coupe dans le réglage du muscle Épaules.
+  if (st.profile.shoulderTabata === undefined) { st.profile.shoulderTabata = true; applyShoulderTabata(st.templates, st); }
+  st.profile.focus ||= [];
   return st;
 }
 
 export let state = load();
+// Après le chargement du module (les fonctions plus bas sont alors prêtes) : charges des séances types à jour.
+queueMicrotask(() => { if (syncLoads()) save(true); });
 const listeners = new Set();
 
 // quiet : on enregistre sans redessiner (steppers, champs en cours de saisie).
@@ -410,7 +467,7 @@ export const byUsefulness = (a, b) => PREF_RANK[a.pref] - PREF_RANK[b.pref] || (
 // Alternatives quand la machine est prise : même muscle, jamais un exercice en douleur.
 export function alternatives(exerciseId) {
   const ex = exercise(exerciseId);
-  const all = state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur" && !e.mix);
+  const all = state.exercises.filter(e => e.id !== exerciseId && e.muscle === ex.muscle && e.pref !== "douleur" && !e.mix && !e.circuit);
   const here = all.filter(e => available(e) && reachable(e));
   return (here.length ? here : all).sort(byUsefulness);
 }
@@ -464,19 +521,105 @@ export function exerciseHistory(exerciseId, before = Infinity) {
 
 export const lastPerformance = (exerciseId, before) => exerciseHistory(exerciseId, before).at(-1) || null;
 
-// Double progression : on monte les reps dans la fourchette, puis la charge quand le haut est atteint partout.
+// Surcharge progressive, objectif hypertrophie (double progression) : on monte les reps dans la fourchette, puis la charge.
+// - La charge monte quand toutes les séries de travail atteignent le haut de la fourchette, ou dès qu'une série le dépasse
+//   (la charge prévue était trop légère). De combien : d'après le 1RM estimé de la meilleure série, la charge qui fait
+//   le bas de la fourchette avec 2 reps en réserve, au moins un pas de matériel. Une charge de départ mal calculée
+//   se rattrape donc en une séance. Mouvement à faire progresser : dès qu'une série touche le haut de la fourchette.
+// - Une charge plus lourde que prévu devient la nouvelle base (on part de la charge la plus lourde faite).
+// - Toutes les séries de travail sous le bas de la fourchette : trop lourd, la charge redescend au même calcul.
+// - Repère athlétique atteint (js/athletic.js) : la charge ne monte plus, les reps et le tempo prennent le relais.
+// hint : charge (un pas), jump (recalée, plus d'un pas), down (trop lourd), cap (repère atteint), reps (même charge).
+export function progressFrom(sets, item, focus = isFocus(item.exerciseId)) {
+  const ex = exercise(item.exerciseId), equip = ex?.equip, stack = ex?.stack, ratio = ratioOf(item.exerciseId);
+  const top = Math.max(...sets.map(effWeight));
+  const work = sets.filter(s => Math.abs(effWeight(s) - top) < 0.01);
+  const low = Math.min(...work.map(s => s.reps)), high = Math.max(...work.map(s => s.reps));
+  const from = { weight: top, reps: high, sets: work.length };
+  const pile = pileFor(item.exerciseId, equip, top);
+  if (!(top > 0)) return { weight: pile, reps: Math.min(item.repsMax, low + 1), hint: "reps", from };
+  const scale = weightScale(equip, stack);
+  const below = w => scale.findLast(x => x * ratio <= w + 0.01) ?? scale[0]; // valeur de pile dont la charge réelle tient sous w
+  const fit = Math.max(...work.map(s => e1rm(effWeight(s), s.reps))) / (1 + (item.repsMin + 2) / 30);
+  const up = high > item.repsMax || (work.length >= item.sets && low >= item.repsMax) || (focus && high >= item.repsMax);
+  if (up) {
+    const step = nextWeight(equip, pile, stack);
+    let w = Math.max(step, below(fit));
+    const cap = athleticCap(ex, item.repsMin);
+    if (cap !== null && w * ratio > cap + 0.01) {
+      w = Math.max(pile, below(cap));
+      if (w <= pile) return { weight: pile, reps: item.repsMax, hint: "cap", from };
+    }
+    return { weight: w, reps: item.repsMin, hint: w > step ? "jump" : "charge", from };
+  }
+  if (high < item.repsMin) {
+    const prev = scale.findLast(x => x < pile - 0.01) ?? pile;
+    return { weight: Math.min(prev, below(fit)), reps: item.repsMin, hint: "down", from };
+  }
+  return { weight: pile, reps: Math.min(item.repsMax, low + 1), hint: "reps", from };
+}
+
 export function suggestion(item, before) {
   const last = lastPerformance(item.exerciseId, before);
   if (!last) return { weight: item.weight, reps: item.repsMin, hint: null, last: null };
-  const ex = exercise(item.exerciseId), equip = ex?.equip;
-  const top = Math.max(...last.sets.map(effWeight));
-  const work = last.sets.filter(s => Math.abs(effWeight(s) - top) < 0.01);
-  const minReps = Math.min(...work.map(s => s.reps));
-  const pile = pileFor(item.exerciseId, equip, top);
-  if (top > 0 && work.length >= item.sets && minReps >= item.repsMax) {
-    return { weight: nextWeight(equip, pile, ex?.stack), reps: item.repsMin, hint: "charge", last };
+  return { ...progressFrom(last.sets, item), last };
+}
+
+// ——— Mouvements à faire progresser (Réglages) : en tête de leur séance, frais ; la charge monte dès qu'une série
+// touche le haut de la fourchette. Trois au plus.
+export const FOCUS_MAX = 3;
+export const isFocus = id => (state.profile.focus || []).includes(id);
+export function addFocus(exerciseId) {
+  const p = state.profile, ex = exercise(exerciseId);
+  p.focus = [...(p.focus || []).filter(id => id !== exerciseId), exerciseId].slice(-FOCUS_MAX);
+  // Pas encore au programme : il entre en tête de la séance type qui travaille le plus ce muscle.
+  let where = state.templates.find(t => t.items.some(it => it.exerciseId === exerciseId));
+  let added = false;
+  if (!where && state.templates.length) {
+    const count = t => t.items.filter(it => exercise(it.exerciseId)?.muscle === ex.muscle).length;
+    where = [...state.templates].sort((a, b) => count(b) - count(a))[0];
+    const last = lastPerformance(exerciseId);
+    const m = MUSCLES.includes(ex.muscle) ? ex.muscle : "Pecs";
+    where.items.unshift({ id: uid(), exerciseId, format: "series", sets: 3, ...prescription(m, BIG.includes(m)),
+      weight: last ? pileFor(exerciseId, ex.equip, last.maxWeight) : nearestWeight(ex.equip, typicalLoad(ex), ex.stack) });
+    added = true;
   }
-  return { weight: pile, reps: Math.min(item.repsMax, minReps + 1), hint: "reps", last };
+  save();
+  return { template: where?.name || null, added };
+}
+export function removeFocus(exerciseId) {
+  state.profile.focus = (state.profile.focus || []).filter(id => id !== exerciseId);
+  save();
+}
+
+// Les exercices à faire progresser passent en tête de la séance (avec leur superset), dans l'ordre du programme.
+function focusFirst(entries) {
+  const blocks = [];
+  for (let i = 0; i < entries.length; i++) {
+    const g = groupOf(entries, i), members = g ? g.members : [i];
+    blocks.push(members.map(k => entries[k]));
+    i = members.at(-1);
+  }
+  const hot = b => b.some(e => isFocus(e.exerciseId));
+  return [...blocks.filter(hot), ...blocks.filter(b => !hot(b))].flat();
+}
+
+// Charges en mémoire : après une séance, chaque séance type qui contient un exercice fait prend la charge de la prochaine fois
+// (celle qu'affichent Aujourd'hui et le Programme). Rien après une reprise : la suite repart de la charge d'avant.
+function rememberLoads(s) {
+  if (s.reprise) return;
+  const done = new Set(s.entries.filter(e => e.format === "series" && !e.tempo && e.sets.length).map(e => e.exerciseId));
+  syncLoads(id => done.has(id));
+}
+// Toutes les séances types recalées sur ce qui a été fait (à l'ouverture : rattrape les charges restées à leur valeur de départ).
+function syncLoads(only = () => true) {
+  let changed = false;
+  for (const t of state.templates) for (const it of t.items) {
+    if (isInterval(it) || it.format === "amrap" || !only(it.exerciseId) || !lastPerformance(it.exerciseId)) continue;
+    const w = suggestion(it).weight;
+    if (w !== it.weight) { it.weight = w; changed = true; }
+  }
+  return changed;
 }
 
 // Records battus dans une séance : meilleur 1RM estimé de l'exercice, comparé à tout ce qui précède.
@@ -632,9 +775,17 @@ const span = sec => (sec % 60 ? `${sec} s` : `${sec / 60} min`);
 export const blocksLabel = ([n, work, rest]) => (n === 1 ? `${span(work)} non-stop` : `${n} × ${span(work)} / ${span(rest)}`);
 export const blocksTotal = ([n, work, rest]) => n * work + (n - 1) * rest;
 
+// Objectif additionnel en cours : null quand il n'y en a pas, ou qu'il est en pause (échauffement des réglages, pas de jour long,
+// jambes sans limite). En pause, le plan garde sa semaine de départ.
+export const enduranceOn = () => (state.profile.endurancePaused ? null : state.profile.endurance);
+export function setEndurancePaused(paused) {
+  state.profile.endurancePaused = paused;
+  save();
+}
+
 // Semaine du plan d'endurance : comptée depuis la semaine 1 (réglée dans « Ta semaine »), bornée à la durée du plan.
 export function enduranceWeek(t = Date.now()) {
-  const p = state.profile, e = ENDURANCE[p.endurance];
+  const p = state.profile, e = ENDURANCE[enduranceOn()];
   if (!e?.weeks) return null;
   const w = p.enduranceStart == null ? 1 : weeksBetween(p.enduranceStart, t) + 1;
   return Math.min(e.weeks.length, Math.max(1, w));
@@ -647,11 +798,11 @@ export function setEnduranceWeek(week) {
 // Séance d'endurance du jour : facile, longue ou récup selon la semaine type du programme en place.
 // En reprise : le format récup tous les jours, sans jour long.
 export function enduranceToday(t = Date.now()) {
-  const p = state.profile, e = ENDURANCE[p.endurance];
+  const e = ENDURANCE[enduranceOn()];
   if (!e?.weeks) return null;
   if (inReprise(t)) return { week: state.reprise.ropeWeek, kind: "reprise", deload: false, blocks: e.recup };
   const week = enduranceWeek(t), plan = e.weeks[week - 1];
-  const kind = weekPlan(state.templates, p.endurance)[(new Date(t).getDay() + 6) % 7].endurance;
+  const kind = weekPlan(state.templates, enduranceOn())[(new Date(t).getDay() + 6) % 7].endurance;
   return { week, kind, deload: plan.deload, blocks: kind === "long" ? plan.long : kind === "recup" ? e.recup : plan.easy };
 }
 
@@ -680,14 +831,14 @@ export function repriseDefaults(t = Date.now()) {
 
 // Semaine où l'objectif d'endurance tombe si le plan reprend en semaine `week` au lundi `resumeAt`.
 export function enduranceGoalWeek(week, resumeAt) {
-  const e = ENDURANCE[state.profile.endurance];
+  const e = ENDURANCE[enduranceOn()];
   return e?.weeks ? addWeeks(resumeAt, e.weeks.length - week) : null;
 }
 
 export function startReprise({ blocWeek, ropeWeek }, t = Date.now()) {
   const end = repriseEnd(t);
   state.cycle.shift = weeksBetween(state.cycle.start, addWeeks(end, 1 - blocWeek));
-  if (ENDURANCE[state.profile.endurance]?.weeks && ropeWeek) state.profile.enduranceStart = addWeeks(end, 1 - ropeWeek);
+  if (ENDURANCE[enduranceOn()]?.weeks && ropeWeek) state.profile.enduranceStart = addWeeks(end, 1 - ropeWeek);
   state.reprise = { start: startOfDay(t), end, blocWeek, ropeWeek: ropeWeek || null, last: history()[0]?.startedAt ?? null };
   save();
 }
@@ -714,7 +865,7 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
   const plan = split.sessions.map(([name, ms]) => (ms.some(m => LEGS_MAIN.includes(m)) && ++legs > maxLegs
     ? [name.replace("Full body", "Haut"), ms.filter(m => !LEGS.includes(m) || m === "Abdos")] : [name, ms]));
   const freq = {}; for (const [, ms] of plan) for (const m of ms) freq[m] = (freq[m] || 0) + 1;
-  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && !e.mix && available(e, gearOf(), "gym")).sort(byUsefulness));
+  const pool = m => (pools[m] ||= state.exercises.filter(e => e.muscle === m && e.pref !== "douleur" && !e.mix && !e.circuit && available(e, gearOf(), "gym")).sort(byUsefulness));
   // Un exercice différent à chaque passage ; prefer choisit d'abord parmi ceux qui conviennent (barre pour le premier d'un gros muscle).
   const taken = new Set();
   const pick = (m, prefer = () => true) => {
@@ -738,6 +889,8 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
     const order = [...muscles.filter(m => BIG.includes(m)), ...muscles.filter(m => !BIG.includes(m))];
     for (const m of order) {
       const target = state.matrix[m].target; if (!target || (calves && m === "Mollets")) continue;
+      // Épaules : le Tabata épaules à la place des exercices (réglage du muscle Épaules).
+      if (m === "Épaules" && state.profile.shoulderTabata) { items.push(tabataItem(shoulderTabata().id)); continue; }
       const sets = Math.max(1, Math.round(target / freq[m]));
       // Pas plus de 4 séries par exercice : 12 séries deviennent 3 exercices de 4.
       const count = Math.ceil(sets / 4), parts = Array.from({ length: count }, (_, i) => Math.floor(sets / count) + (i < sets % count ? 1 : 0));
@@ -749,7 +902,7 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
     return { id: uid(), name, items };
   });
   // Corde : montées sur pointes lentes en fin de séance, 3 fois par semaine, d'abord les jours jambes.
-  const keep = new Set();
+  const keep = new Set(sessions.flatMap(t => t.items.filter(isInterval).map(it => it.id)));
   const ex = calves && pick("Mollets", e => !/assis/i.test(e.name));
   if (ex) [...sessions].sort((a, b) => hasLegs(b) - hasLegs(a)).slice(0, calves.per).forEach(t => {
     const it = { ...item(ex, "Mollets", calves.sets, false), repsMin: calves.reps, repsMax: calves.reps, rest: 60 };
@@ -757,7 +910,7 @@ export function generateProgram(key, { minutes, endurance } = {}, pools = {}) {
   });
   // Plancher de la semaine : le bas de la fourchette Fluide du muscle (ou sa cible si elle est plus basse),
   // réparti sur ses séances pour qu'une séance ne prenne pas toute la marge.
-  const setsIn = (t, m) => t.items.reduce((a, it) => a + (exercise(it.exerciseId).muscle === m ? it.sets : 0), 0);
+  const setsIn = (t, m) => t.items.reduce((a, it) => a + (exercise(it.exerciseId).muscle === m ? itemSets(it) : 0), 0);
   const low = m => Math.min(state.matrix[m].target, STATUS[state.matrix[m].status].range[0]);
   const canCut = (m, t) => sessions.reduce((a, s) => a + setsIn(s, m), 0) > low(m) && setsIn(t, m) > Math.floor(low(m) / freq[m]);
   for (const t of sessions) fitTime(t, minutes, keep, canCut);
@@ -779,7 +932,7 @@ export function prescription(m, heavy, cyc = state.cycle.type) {
 const PRIORITY = { maintien: 0, focus: 1, faible: 2 };
 function fitTime(t, minutes, keep, canCut) {
   if (!minutes || estimate(t) <= minutes) return;
-  for (const it of t.items) it.rest = Math.max(Math.min(60, it.rest), it.rest - 30);
+  for (const it of t.items) if (!isInterval(it)) it.rest = Math.max(Math.min(60, it.rest), it.rest - 30);
   const muscle = it => exercise(it.exerciseId).muscle;
   const score = it => PRIORITY[state.matrix[muscle(it)].status] * 10 + (BIG.includes(muscle(it)) ? 5 : 0) - it.sets;
   const trim = ok => {
@@ -914,7 +1067,7 @@ export const IMPORT_TYPE = "fluide-templates";
 const clampInt = (v, min, max, def) => (Number.isFinite(+v) ? Math.min(max, Math.max(min, Math.round(+v))) : def);
 const findExercise = name => {
   const n = String(name ?? "").trim().toLowerCase();
-  return state.exercises.find(e => !e.mix && e.name.toLowerCase() === n);
+  return state.exercises.find(e => !e.mix && !e.circuit && e.name.toLowerCase() === n);
 };
 // Exercices d'une séance du texte → éléments de séance type. Les noms inconnus vont dans missing.
 function importItems(list, missing) {
@@ -1041,11 +1194,12 @@ export function startWorkout(templateId, place = state.profile.place || "gym") {
       return {
         exerciseId: item.exerciseId, format: "series", itemId: item.id, startSets: sets, group: item.group,
         target: { sets, repsMin: item.repsMin, repsMax: item.repsMax, rest: item.rest },
-        draft: { weight: nearestWeight(exercise(item.exerciseId).equip, weight, exercise(item.exerciseId).stack), reps: s.reps, rpe: null }, hint: light ? null : s.hint,
+        draft: { weight: nearestWeight(exercise(item.exerciseId).equip, weight, exercise(item.exerciseId).stack), reps: s.reps, rpe: null }, hint: light ? null : s.hint, from: s.from,
         sets: []
       };
     })
   };
+  state.active.entries = focusFirst(state.active.entries);
   // baseWeight : la charge prévue au programme, avant toute adaptation au lieu.
   state.active.entries.forEach((e, i) => { e.slot = i; e.baseWeight = e.draft.weight; });
   setWorkoutPlace(place);
@@ -1164,7 +1318,7 @@ export function setWorkoutGear(gear) {
   a.entries.forEach((e, i) => {
     if (e.sets.length) return;
     const base = exercise(e.gearSwap ? e.swappedFrom : e.exerciseId);
-    if (!base || base.mix) return;
+    if (!base || base.mix || base.circuit) return;
     const planned = e.baseWeight ?? e.draft.weight;
     if (available(base) && loadFit(base.equip, planned || wantOf(base)).fit !== "no") {
       if (e.gearSwap) {
@@ -1459,6 +1613,14 @@ function keepInTemplate(a) {
   t.items = items;
 }
 
+// Prochaine charge d'un exercice de la séance en cours, d'après ses séries du jour et sa fourchette au programme.
+export function nextOf(e) {
+  if (!e.sets.length) return null;
+  const base = e.itemId && template(state.active?.templateId)?.items.find(i => i.id === e.itemId && i.exerciseId === e.exerciseId);
+  const { weight, reps, hint } = progressFrom(e.sets, { exerciseId: e.exerciseId, sets: base?.sets ?? e.target.sets, repsMin: e.target.repsMin, repsMax: e.target.repsMax });
+  return { weight, reps, hint };
+}
+
 export function finishWorkout(feeling, note, keep) {
   const a = state.active;
   const s = {
@@ -1467,6 +1629,9 @@ export function finishWorkout(feeling, note, keep) {
     cycle: a.cycle, week: a.week, deload: a.deload, ...(a.reprise && { reprise: true }), feeling, note: note.trim(),
     entries: a.entries.filter(e => e.sets.length).map(e => ({
       exerciseId: e.exerciseId, swappedFrom: e.swappedFrom, extra: e.extra, equip: e.equip, format: e.format || "series", ...(e.tempo && { tempo: true }),
+      ...(e.format === "tabata" && { work: e.target.work }),
+      // Charge de la prochaine fois, gardée avec la séance (le bilan la montre).
+      ...(!isInterval(e) && !isAmrap(e) && !e.tempo && !a.reprise && { next: nextOf(e) }),
       sets: e.sets.map(({ weight, reps, rpe, ratio }) => ({ weight, reps, rpe, ...(ratio && { ratio }) }))
     }))
   };
@@ -1474,6 +1639,7 @@ export function finishWorkout(feeling, note, keep) {
   state.active = null;
   if (!s.entries.length) { save(); return null; }
   state.sessions.push(s);
+  rememberLoads(s);
   state.habits[dayKey(s.startedAt)] = { ...state.habits[dayKey(s.startedAt)], session: true };
   save();
   return s;
