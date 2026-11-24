@@ -1,4 +1,4 @@
-import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, startWorkout, parseTemplates, addTemplates } from "../store.js";
+import { GOALS, goalOf, state, save, template, exercise, isDraft, setDrafts, replaceItemExercise, createTemplate, deleteTemplate, addItem, moveItem, removeItem, groupOf, canLink, toggleLink, createExercise, setEquip, weightScale, inLbs, toLbs, fromLbs, EQUIPS, setPref, toggleFav, setItemFormat, itemSets, applyProgram, plannedSetsOf, recommend, weekPlan, SPLITS, ENDURANCE, SESSION_MINUTES, suggestion, lastPerformance, plannedSets, history, byUsefulness, exercisePhotos, exerciseGif, hasMovement, MUSCLES, GROUPS, PREFS, FORMATS, STATUS, setMatrix, startOfWeek, blocksLabel, enduranceWeek, setEnduranceWeek, startWorkout, parseTemplates, applyImport, replacedItems } from "../store.js";
 import { h, icon, navbar, btn, pill, go, kg, clock, reps, ago, stepper, radios, segmented, sheet, confirmSheet, toast, num } from "../ui.js";
 import { estimate, volumeBars } from "./today.js";
 
@@ -136,7 +136,7 @@ export function templatesView() {
         h("p", { class: "body-md fort medium", style: { margin: 0 } }, "Aucune séance type"),
         h("p", { class: "body-sm discret", style: { margin: 0 } }, "Choisis un programme (full body, haut / bas, push / pull / legs…) ou crée tes séances toi-même."),
         btn("Choisir un programme", { variant: "primary", size: "lg", full: true, onClick: () => go("#/seances/programme") })),
-      btn("Coller des séances du coach", { variant: "secondary", size: "lg", full: true, icon: "clipboard", onClick: () => go("#/seances/coller") }),
+      btn("Coller du coach", { variant: "secondary", size: "lg", full: true, icon: "clipboard", onClick: () => go("#/seances/coller") }),
       n > 0 && h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Volume prévu par semaine")),
       n > 0 && h("div", { class: "card rose" },
         h("p", { class: "caption", style: { margin: 0 } }, "Si tu fais chaque séance une fois. Le trait blanc est la cible de chaque muscle : ajuste les séries pour tomber dessus."),
@@ -144,51 +144,104 @@ export function templatesView() {
   return { el, tab: "seances" };
 }
 
-// Séances préparées par le coach : on colle le texte, on voit les séances, rien n'est ajouté avant « Ajouter ».
-let pasted = null; // { text, templates?, error? }
+// Texte préparé par le coach : séances neuves, exercices ajoutés à tes séances types, réglage d'un muscle, favoris.
+// On colle le texte, on voit tout ce qui va changer, rien ne bouge avant « Appliquer ».
+let pasted = null; // { text, templates?, additions?, muscles?, favorites?, replace?, targets?, error? }
+
+// Séance type qui reçoit chaque ajout : d'abord celles qui avaient déjà ce muscle, une différente par ajout.
+function defaultTargets(additions, replace) {
+  const had = t => t.items.filter(it => replace.includes(exercise(it.exerciseId)?.muscle)).length;
+  const order = state.templates.map((t, i) => [t, i]).sort((a, b) => had(b[0]) - had(a[0]) || a[1] - b[1]).map(([t]) => t.id);
+  return additions.map((_, i) => order[i % order.length]);
+}
+
+const setsOfMuscle = (items, m) => items.reduce((a, it) => a + (exercise(it.exerciseId)?.muscle === m ? itemSets(it) : 0), 0);
 
 export function importView() {
   const back = () => { pasted = null; go("#/seances"); };
   const read = text => {
-    pasted = { text, ...(text.trim() ? parseTemplates(text) : {}) };
+    const r = text.trim() ? parseTemplates(text) : {};
+    pasted = { text, ...r, ...(r.additions && { targets: defaultTargets(r.additions, r.replace) }) };
     draw();
   };
   const paste = async () => {
     try { read(await navigator.clipboard.readText()); }
     catch { toast("Accès au presse-papiers refusé : colle le texte dans le champ."); }
   };
+  const pickTarget = i => {
+    let pick = pasted.targets[i];
+    sheet({ title: "Quelle séance ?", okLabel: "Choisir",
+      body: radios(state.templates.map(t => [t.id, t.name, `${t.items.length} exercice${t.items.length > 1 ? "s" : ""}${pasted.targets.some((x, k) => k !== i && x === t.id) ? " · reçoit déjà un ajout" : ""}`]), pick, v => { pick = v; }, "Séance type"),
+      ok: () => { pasted.targets[i] = pick; draw(); } });
+  };
   const body = h("div", { class: "scroll" });
+  const itemRows = items => h("div", { class: "list" }, items.map((it, i) => {
+    const g = groupTag(items, i);
+    return h("div", { class: `row${g ? " grouped" : ""}` },
+      h("span", { class: "num-lead", "aria-hidden": "true" }, i + 1),
+      h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, niceName(exercise(it.exerciseId).name)),
+        h("span", { class: "caption num" }, g ? `${g.label} ${g.tag} · ` : "", itemLine(it, g && !g.last))));
+  }));
   const draw = () => {
     const p = pasted || { text: "" };
-    const list = p.templates || [];
-    const total = list.length;
+    const { templates = [], additions = [], muscles = [], favorites = [], replace = [], targets = [] } = p;
+    const removed = replace.length ? replacedItems(replace) : [];
+    const onlyNew = templates.length && !additions.length && !muscles.length && !favorites.length && !replace.length;
+    const ready = !p.error && (templates.length || additions.length || muscles.length || favorites.length || replace.length);
+    // Séries prévues par semaine, avant et après, pour chaque muscle touché.
+    const touched = [...new Set([...muscles.map(x => x.muscle), ...replace, ...additions.flatMap(a => a.items.map(it => exercise(it.exerciseId).muscle))])].filter(m => MUSCLES.includes(m));
+    const all = state.templates.flatMap(t => t.items);
+    const after = m => setsOfMuscle(all, m) - setsOfMuscle(removed.map(x => x.item), m) + additions.reduce((a, x) => a + setsOfMuscle(x.items, m), 0) + templates.reduce((a, x) => a + setsOfMuscle(x.items, m), 0);
+    const target = m => muscles.find(x => x.muscle === m)?.target ?? state.matrix[m].target;
     body.replaceChildren(...[
-      h("p", { class: "body-sm discret", style: { margin: 0 } }, "Copie le bloc de texte que le coach t'a préparé, puis colle-le ici. Chaque séance rejoint ton programme ; tu peux la modifier ou la supprimer ensuite."),
-      btn("Coller", { variant: total ? "secondary" : "primary", size: "lg", full: true, icon: "clipboard", onClick: paste }),
+      h("p", { class: "body-sm discret", style: { margin: 0 } }, "Copie le bloc de texte que le coach t'a préparé, puis colle-le ici. Il peut ajouter des séances, compléter tes séances types ou régler un muscle. Rien ne change avant « Appliquer »."),
+      btn("Coller", { variant: ready ? "secondary" : "primary", size: "lg", full: true, icon: "clipboard", onClick: paste }),
       h("label", { class: "field" }, h("span", { class: "caption medium" }, "Texte du coach"),
         h("textarea", { class: `input${p.error ? " error" : ""}`, placeholder: "{ \"type\": \"fluide-templates\", … }", autocapitalize: "off", "aria-invalid": p.error ? "true" : null,
           onChange: e => read(e.target.value) }, p.text)),
       p.error && h("p", { class: "caption", role: "alert", style: { margin: 0, color: "var(--etat-danger)" } }, p.error),
-      ...list.flatMap(t => {
-        const sets = t.items.reduce((a, i) => a + itemSets(i), 0);
+      ready && touched.length > 0 && h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Volume par semaine")),
+      ready && touched.length > 0 && h("div", { class: "list" }, touched.map(m => {
+        const set = muscles.find(x => x.muscle === m), cur = state.matrix[m];
+        const changed = set && (set.status !== cur.status || set.target !== cur.target || set.goal !== goalOf(m));
+        return h("div", { class: "row" }, h("div", { class: "row-main" },
+          h("span", { class: "body-md fort medium" }, m),
+          h("span", { class: "caption num" }, `${after(m)} séries prévues · cible ${target(m)}`),
+          changed && h("span", { class: "caption num" }, `${STATUS[set.status].label} · ${set.target} séries${set.goal !== goalOf(m) ? ` · ${GOALS[set.goal].label}` : ""} (avant : ${STATUS[cur.status].label} · ${cur.target})`)));
+      })),
+      favorites.length > 0 && h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "En favori")),
+      favorites.length > 0 && h("div", { class: "list" }, favorites.map(id => h("div", { class: "row" },
+        h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, niceName(exercise(id).name))), pill("Favori", "accent")))),
+      removed.length > 0 && h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Retiré de tes séances"),
+        h("span", { class: "caption" }, "remplacés par les ajouts")),
+      removed.length > 0 && h("div", { class: "list" }, removed.map(({ template: t, item: it }) => h("div", { class: "row" },
+        h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, niceName(exercise(it.exerciseId).name)),
+          h("span", { class: "caption num" }, `${t.name} · ${itemSets(it)} séries`))))),
+      ...additions.flatMap((a, i) => {
+        const t = template(targets[i]);
         return [
-          h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, t.name),
-            h("span", { class: "caption num" }, `${t.items.length} exercices · ${sets} séries · ~${estimate(t)} min`)),
-          h("div", { class: "list" }, t.items.map((it, i) => {
-            const g = groupTag(t.items, i);
-            return h("div", { class: `row${g ? " grouped" : ""}` },
-              h("span", { class: "num-lead", "aria-hidden": "true" }, i + 1),
-              h("div", { class: "row-main" }, h("span", { class: "body-md fort medium" }, niceName(exercise(it.exerciseId).name)),
-                h("span", { class: "caption num" }, g ? `${g.label} ${g.tag} · ` : "", itemLine(it, g && !g.last))));
-          }))];
+          h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, a.name),
+            h("span", { class: "caption num" }, `${a.items.length} exercice${a.items.length > 1 ? "s" : ""} · ${a.items.reduce((x, it) => x + itemSets(it), 0)} séries · à la fin de la séance`)),
+          h("button", { type: "button", class: "row tap", onClick: () => pickTarget(i) },
+            h("div", { class: "row-main" }, h("span", { class: "caption" }, "Ajouté à"), h("span", { class: "body-md fort medium" }, t?.name || "Choisir une séance")),
+            h("span", { class: "btn secondary sm" }, "Changer")),
+          itemRows(a.items)];
       }),
-      total > 0 && btn(`Ajouter ${total > 1 ? `les ${total} séances` : "la séance"}`, { variant: "primary", size: "lg", full: true,
-        onClick: () => { addTemplates(list); toast(total > 1 ? `${total} séances ajoutées` : "Séance ajoutée"); back(); } })
+      ...templates.flatMap(t => [
+        h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, t.name),
+          h("span", { class: "caption num" }, `Nouvelle séance · ${t.items.length} exercices · ${t.items.reduce((a, i) => a + itemSets(i), 0)} séries · ~${estimate(t)} min`)),
+        itemRows(t.items)]),
+      ready && btn(onlyNew ? `Ajouter ${templates.length > 1 ? `les ${templates.length} séances` : "la séance"}` : "Appliquer", { variant: "primary", size: "lg", full: true,
+        onClick: () => {
+          applyImport(p, targets);
+          toast(onlyNew ? (templates.length > 1 ? `${templates.length} séances ajoutées` : "Séance ajoutée") : "Programme mis à jour");
+          back();
+        } })
     ].filter(Boolean));
   };
   draw();
   const el = h("div", { class: "screen no-tabs" },
-    navbar({ back: { label: "Programme", onClick: back }, title: "Coller des séances", subtitle: "préparées par le coach" }),
+    navbar({ back: { label: "Programme", onClick: back }, title: "Coller du coach", subtitle: "séances et réglages préparés par le coach" }),
     body);
   return { el };
 }
