@@ -1,4 +1,4 @@
-import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, STATUS, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, weeklySets, setAbsent, setStack, setWorkoutGear, setWorkoutPlace, sessionGear, sessionPlaceKey, placeOf, placeLoads, reachable, PLACES, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet, supersetCandidates, supersetWith, leaveSuperset, nextOf, isFocus, tabataMoves } from "../store.js";
+import { state, save, exercise, itemSets, logSet, finishWorkout, discardWorkout, deleteSession, session, sessionVolume, sessionSets, sessionRecords, alternatives, variants, swapExercise, keepSwap, setEntryFormat, meltingPot, toggleFav, equipOf, EQUIPS, addExtra, lastPerformance, isInterval, intervalState, startClock, stopClock, groupOf, setEntrySets, moveEntry, removeEntry, linkEntries, template, CYCLES, MUSCLES, STATUS, FORMATS, FORMAT_DEFAULTS, enduranceToday, blocksLabel, blocksTotal, setVolume, weeklySets, setAbsent, setStack, setWorkoutGear, setWorkoutPlace, sessionGear, sessionPlaceKey, placeOf, placeLoads, reachable, PLACES, GEAR, available, isAmrap, amrapMembers, startAmrap, endAmrap, amrapLeft, outdoorGear, GEAR_FORMATS, STACK_STEPS, inLbs, toLbs, editSet, deleteSet, supersetCandidates, supersetWith, leaveSuperset, nextOf, isFocus, tabataMoves, catchUpRounds } from "../store.js";
 import { exerciseAlerts } from "../athletic.js";
 import { h, icon, btn, pill, go, kg, clock, reps, num, int, ago, stepper, chips, radios, sheet, confirmSheet, toast, announce, beep, restBeepPlanned, dateLong, pageHead, navbar, ruler } from "../ui.js";
 import { prefPill, catalogue, exerciseTitle, niceName, groupTag, linkRow, charge, setsLine, chargeStepper } from "./templates.js";
@@ -662,7 +662,7 @@ export function workoutView() {
           h("div", { class: "overline" }, `${FORMATS[e.format]} · round ${e.sets.length + 1} / ${e.target.rounds}`),
           h("div", { class: "display-sm num" }, e.format === "emom" ? clock(e.target.every) : `${e.target.work} / ${e.target.off} s`),
           h("span", { class: "body-sm discret" }, e.format === "emom" ? `${e.target.repsMin} reps au début de chaque minute, le reste sert de repos.`
-            : moves ? `${moves.length} exercices, un par round : ${e.target.work} s d'effort, ${e.target.off} s pour changer. Haltères légers, mouvement propre.` : "Effort puis repos, au chrono. Note tes reps à chaque round.")),
+            : moves ? `${moves.length} exercices, un par round : ${e.target.work} s d'effort, ${e.target.off} s pour changer. Chaque round se note tout seul à la fin de l'effort.` : "Effort puis repos, au chrono. Chaque round se note tout seul à la fin de l'effort ; touche une ligne pour corriger.")),
         moves && h("div", { class: "list" }, moves.map((m, i) => h("div", { class: `set-row${i === e.sets.length ? " cur" : ""}` },
           h("span", { class: "set-idx" }, i < e.sets.length ? icon("check") : String(i + 1)), h("span", { class: "body-md" }, m), h("span")))),
         ...draftSteppers(e.format === "emom" ? "Reps par round" : "Reps du round"));
@@ -869,6 +869,9 @@ export function workoutView() {
       if (interval && e.clock) {
         const x = intervalState(e);
         const key = x.done ? "done" : `${x.round}-${x.phase}`;
+        // Rounds finis au chrono : notés tout seuls (fin de l'effort en Tabata, fin de la minute en EMOM).
+        const finished = x.done ? e.target.rounds : e.format === "tabata" && x.phase !== "effort" ? x.round : x.round - 1;
+        if (catchUpRounds(a.cursor, finished) && !x.done) save();
         if (e.lastBeep !== key) {
           if (e.lastBeep) { beep(x.done ? 660 : x.phase === "effort" ? 880 : 520, 0.15, x.done ? 3 : 1); announce(x.done ? "Chrono terminé." : x.phase === "effort" ? `Effort, round ${x.round}${tabataMoves(e) ? ` : ${tabataMoves(e)[(x.round - 1) % tabataMoves(e).length]}` : ""}.` : "Repos."); }
           e.lastBeep = key;
