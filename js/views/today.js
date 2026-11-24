@@ -1,4 +1,4 @@
-import { state, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklyGoal, history, template, exercise, setHabit, habit, dayKey, stepsAverage, startWorkout, sessionSets, STATUS, MUSCLES, CYCLES, PLACES } from "../store.js";
+import { state, isFocus, estimate, enduranceToday, blocksLabel, itemSets, cyclePosition, weeklyGoal, history, template, exercise, setHabit, habit, dayKey, stepsAverage, startWorkout, sessionSets, STATUS, MUSCLES, CYCLES, PLACES } from "../store.js";
 import { h, icon, btn, pill, go, int, clock, dateLong, ago, stepper, sheet, radios, toast } from "../ui.js";
 import { account } from "../compte.js";
 import { placeSummary } from "./places.js";
@@ -152,7 +152,7 @@ export function todayView() {
 
   // ——— Séance en cours : on la reprend.
   if (a) {
-    const done = sessionSets(a), planned = a.entries.reduce((t, e) => t + itemSets({ format: e.format, sets: e.target.sets, rounds: e.target.rounds }), 0);
+    const done = sessionSets(a), planned = a.entries.reduce((t, e) => t + itemSets({ format: e.format, sets: e.target.sets, rounds: e.target.rounds, work: e.target.work }), 0);
     return screen([
       hero({ date, over: "Séance en cours", top: pill(PLACES[a.place || "gym"].short, "accent"), name: a.name,
         why: h("div", { class: "hero-why vert" }, h("b", null, "Commencée il y a ", h("span", { class: "num", "data-tick": "elapsed" }, clock((Date.now() - a.startedAt) / 1000)))) }),
@@ -204,6 +204,7 @@ export function todayView() {
       h("div", { class: "stat lg" }, h("span", { class: "caption" }, "minutes"), h("b", null, `~${estimate(next)}`))),
     h("div", { class: "plan" }, h("h2", { class: "heading-md" }, "Au programme"),
       planRow(icon("bolt"), `Échauffement · ${warmupLine()}`, "puis séries d'approche sur le premier exercice"),
-      next.items.map((it, i) => planRow(String(i + 1), niceName(exercise(it.exerciseId)?.name || "Exercice"), itemLine(it))))],
+      [...next.items].sort((x, y) => isFocus(y.exerciseId) - isFocus(x.exerciseId)).map((it, i) => planRow(isFocus(it.exerciseId) ? icon("trend") : String(i + 1), niceName(exercise(it.exerciseId)?.name || "Exercice"),
+        [isFocus(it.exerciseId) && "à faire progresser, en premier", itemLine(it)].filter(Boolean).join(" · "), isFocus(it.exerciseId) ? "jaune" : "")))],
     btn(`Démarrer ${next.name}`, { variant: "primary", size: "lg", full: true, onClick: () => { startWorkout(next.id, here); picked = null; go("#/seance"); } }));
 }

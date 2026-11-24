@@ -1,4 +1,5 @@
 import { state, exercise, session, history, exerciseHistory, weeklySets, weeklyGoal, sessionVolume, sessionSets, sessionRecords, deleteSession, cyclePosition, stepsAverage, startOfWeek, e1rm, CYCLES, MUSCLES } from "../store.js";
+import { athleticCard } from "./progression.js";
 import { h, icon, pageHead, navbar, btn, pill, go, kg, num, int, clock, ago, dateLong, dateShort, segmented, confirmSheet, lineChart, spark } from "../ui.js";
 import { stepsCard } from "./today.js";
 import { niceName } from "./templates.js";
@@ -64,6 +65,7 @@ function exosPane() {
   if (!tracked.length) return h("div", { class: "empty" }, icon("trend"), h("h2", { class: "display-xs" }, "Pas encore de courbe"),
     h("p", { class: "body-md", style: { margin: 0 } }, "Dès ta première séance, la progression de chaque exercice s'affiche ici."));
   return [
+    athleticCard({ compact: true }),
     h("div", { class: "section-title" }, h("h2", { class: "heading-md" }, "Tes exercices"), h("span", { class: "caption" }, "1RM estimé · favoris d'abord")),
     h("div", { class: "list" }, tracked.map(({ e, rows }) => {
       const best = Math.max(...rows.map(r => r.best1rm));

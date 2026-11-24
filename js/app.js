@@ -6,6 +6,7 @@ import { workoutView, finishView, editWorkoutView, editSetView, summaryView } fr
 import { progressView, exerciseProgressView, historyView, sessionView } from "./views/progress.js";
 import { profileView, matrixView, muscleView, prefsView, blocView, youView, dataView } from "./views/profile.js";
 import { placeView, placesView } from "./views/places.js";
+import { progressionView, progressionPickView } from "./views/progression.js";
 import { repriseView } from "./views/reprise.js";
 import { signInView, signUpView, confirmView, resetView, stepsAutoView } from "./views/compte.js";
 import { onAccount } from "./compte.js";
@@ -44,6 +45,8 @@ const ROUTES = [
   ["profil/toi", youView],
   ["profil/donnees", dataView],
   ["profil/lieux", placesView],
+  ["profil/progression", progressionView],
+  ["profil/progression/choisir", progressionPickView],
   ["profil/lieux/:place", placeView],
   ["reprise", repriseView]
 ];
