@@ -1,6 +1,6 @@
 # Règles de gestion — Fluide
 
-Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause), la v0.10.0 (refonte en 3 onglets), la v0.11.0 (séances collées du coach), la v0.12.0 (supersets en séance), la v0.13.0 (réglages et séances existantes depuis le coach) et la v0.13.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
+Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séance), la v0.9.0 (reprise après une pause), la v0.10.0 (refonte en 3 onglets), la v0.11.0 (séances collées du coach), la v0.12.0 (supersets en séance), la v0.13.0 (réglages et séances existantes depuis le coach), la v0.14.0 (charges en mémoire, surcharge progressive, repères athlétiques, Tabata de muscle) et la v0.14.1. **Le code fait foi** : ce registre décrit ce que fait l'app, pas ce qu'elle devrait faire. Les différences avec l'intention sont listées dans [Écarts](#écarts).
 
 ## Lire ce registre
 
@@ -14,7 +14,7 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 - **Source** : le fichier et la fonction, plutôt qu'un numéro de ligne qui bougerait. Les fichiers sont dans `js/`, sauf `schema.sql` dans `supabase/`.
 - **Mise à jour** : toute PR qui ajoute, change ou retire une règle met à jour ce fichier.
 
-**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.13.1, essayées aussi dans l'app. Les règles de lieux, de reprise, de la refonte et des séances collées viennent de la lecture des v0.8.0 à v0.13.0, avec quelques scénarios exécutés.
+**Vérification.** Toute la logique a été relue (`store.js`, `compte.js`, les vues, `schema.sql`). Une partie des règles de `store.js` a aussi été exécutée sous Node : équivalences de séries, plafond hebdomadaire, double progression, génération et classement des programmes, deload, matériel du jour, AMRAP, supersets. Les règles d'écran et de Supabase ont été relues, pas exécutées, sauf les 5 corrections de la v0.14.1, essayées aussi dans l'app. Les règles de lieux, de reprise, de la refonte, des séances collées et de la v0.14.0 viennent de la lecture des v0.8.0 à v0.14.0, avec quelques scénarios exécutés (Tabata compté au temps d'effort, charge recalée après une série au-delà de la fourchette, Tabata de muscle jamais proposé en alternative).
 
 ## Décompte
 
@@ -22,19 +22,20 @@ Relevé du 05/11/2026 sur la v0.7.3, mis à jour pour la v0.8.0 (lieux de séanc
 |---|---|---:|
 | Volume et objectif Fluide | VOL | 16 |
 | Blocs et deload | BLC | 9 |
-| Programme recommandé | PRG | 21 |
-| Plan corde à sauter | COR | 11 |
+| Programme recommandé | PRG | 22 |
+| Plan corde à sauter | COR | 12 |
 | Exercices et catalogue | EXE | 9 |
 | Charges | CHG | 12 |
-| Performance et progression | PER | 8 |
-| Séance en cours | SEA | 35 |
+| Performance et progression | PER | 13 |
+| Repères athlétiques | ATH | 6 |
+| Séance en cours | SEA | 38 |
 | Matériel du jour | MAT | 10 |
 | Lieux de séance | LIE | 15 |
 | Reprise après une pause | RPR | 10 |
-| Séances types | TPL | 16 |
+| Séances types | TPL | 20 |
 | Pas du jour | PAS | 8 |
 | Compte et données | CPT | 10 |
-| **Total** | | **190** |
+| **Total** | | **210** |
 
 Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 
@@ -52,7 +53,7 @@ Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 | RG-VOL-08 | Sur l'écran de réglage d'un muscle, rien ne change avant « Enregistrer » ; le retour annule. | `views/profile.js` › `muscleView` | Active |
 | RG-VOL-09 | La semaine va du lundi au dimanche. Le compteur inclut la séance en cours, rattachée à sa date de début. | `store.js` › `weeklySets`, `startOfWeek` | Active |
 | RG-VOL-10 | Objectif de la semaine = somme de min(séries faites, cible) ÷ somme des cibles. Le plafond par muscle empêche un muscle en trop de compenser un muscle en retard. Un muscle est « à la cible » dès que ses séries atteignent sa cible. | `store.js` › `weeklyGoal` | Active |
-| RG-VOL-11 | Un Tabata compte 1 série par tranche de 4 rounds entamée : 8 rounds = 2 séries. | `store.js` › `roundsToSets` | Active |
+| RG-VOL-11 | Un Tabata compte 1 série par 80 s d'effort, arrondi, 1 au minimum : 8 × 20 s = 2 séries, 10 × 30 s = 4 séries (depuis la v0.14.0 ; avant, 1 série par tranche de 4 rounds). | `store.js` › `roundsToSets` | Active |
 | RG-VOL-12 | Un EMOM compte 1 série par tranche de 3 rounds entamée : 3 rounds = 1 série, 10 rounds = 4 séries. | `store.js` › `roundsToSets` | Active |
 | RG-VOL-13 | En AMRAP, un tour vaut une série pour le muscle de chaque exercice du circuit. | `store.js` › `entrySets`, `endAmrap` | Active |
 | RG-VOL-14 | Seules les séries validées comptent : les séries prévues mais non faites ne comptent pas. Une séance supprimée sort de l'objectif. | `views/workout.js` › `finishView` ; `store.js` › `deleteSession` | Active |
@@ -98,6 +99,7 @@ Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 | RG-PRG-19 | L'aperçu d'un programme se modifie, mais rien ne rejoint les séances avant « Utiliser ce programme ». Changer de programme repart de zéro. | `store.js` › `setDrafts` ; `views/templates.js` › `programView` | Active |
 | RG-PRG-20 | Remplacer des séances types existantes demande une confirmation. L'historique, les courbes et l'objectif de la semaine restent. | `views/templates.js` › `programView` | Active |
 | RG-PRG-21 | Les séances s'étalent sur la semaine selon leur nombre : 2 = lundi et jeudi ; 3 = lundi, mercredi, vendredi ; 4 = lundi, mardi, jeudi, vendredi ; 5 = lundi, mardi, mercredi, vendredi, samedi ; 6 = du lundi au samedi. | `store.js` › `SPREAD`, `weekPlan` | Active |
+| RG-PRG-22 | Un muscle qui a un Tabata comme séance (RG-TPL-17) le reçoit dans le programme généré, à la place de ses exercices. | `store.js` › `generateProgram`, `circuitFor` | Active |
 
 ## Plan corde à sauter
 
@@ -114,6 +116,7 @@ Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 | RG-COR-09 | Le jour long tombe le plus loin possible des séances jambes, de préférence un jour sans muscu et le week-end. Le jour récup suit, et les autres jours sont faciles. | `store.js` › `weekPlan` | Active |
 | RG-COR-10 | Avec un objectif d'endurance, les jambes travaillent 2 fois par semaine au plus. Au-delà, la séance garde le haut du corps et les abdos, et « Full body » devient « Haut ». | `store.js` › `generateProgram` | Active |
 | RG-COR-11 | Le travail des mollets devient 2 × 15 montées sur pointes, 3 fois par semaine, d'abord les jours jambes : jamais un exercice assis, repos de 1 min, jamais retirées pour gagner du temps. Les mollets sortent du calcul de couverture. | `store.js` › `generateProgram`, `recommend` | Active |
+| RG-COR-12 | Le plan corde peut être mis en pause (Ta semaine › En pause) : l'échauffement des Réglages reprend, sans jour long, et les jambes n'ont plus de limite (RG-COR-07 à 10 ne jouent plus). Il est en pause d'office depuis le 24/11/2026, migration comprise. | `store.js` › `enduranceOn`, `setEndurancePaused`, `migrate` ; `views/templates.js` › `weekView` | Active |
 
 ## Exercices et catalogue
 
@@ -151,13 +154,29 @@ Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 | ID | Règle | Source | État |
 |---|---|---|---|
 | RG-PER-01 | 1RM estimé (Epley) = charge × (1 + reps ÷ 30). Une série de 1 rep vaut sa charge. | `store.js` › `e1rm` | Active |
-| RG-PER-02 | Double progression : si, à la dernière séance, toutes les séries prévues ont atteint le haut de la fourchette à la charge maximale, on propose le cran de charge suivant et le bas de la fourchette. Jamais au poids du corps. | `store.js` › `suggestion` | Active |
-| RG-PER-03 | Sinon : même charge et 1 rep de plus que le minimum réalisé, sans dépasser le haut de la fourchette. | `store.js` › `suggestion` | Active |
+| RG-PER-02 | Double progression : la charge monte quand toutes les séries prévues ont atteint le haut de la fourchette, ou dès qu'une série le dépasse. Nouvelle charge : celle qui ferait le bas de la fourchette avec 2 reps en réserve d'après le meilleur 1RM estimé, au moins le cran suivant, avec les reps au bas de la fourchette (60 kg × 20 en 8-12 donne 70 kg à la barre). Jamais au poids du corps. | `store.js` › `progressFrom`, `suggestion` | Active |
+| RG-PER-03 | Sinon : même charge et 1 rep de plus que le minimum réalisé, sans dépasser le haut de la fourchette. | `store.js` › `progressFrom` | Active |
 | RG-PER-04 | Sans historique : la charge prévue et le bas de la fourchette, sans indication. | `store.js` › `suggestion` | Active |
 | RG-PER-05 | Un record compare le meilleur 1RM de la séance à tout ce qui précède. La première fois sur un exercice n'est pas un record, et ni un EMOM, ni un Tabata, ni des séries en tempo lent n'en battent. | `store.js` › `sessionRecords` | Active |
 | RG-PER-06 | Les rounds d'EMOM et de Tabata, les séries en tempo lent et les séances de reprise n'entrent ni dans les courbes ni dans le 1RM de l'exercice : leurs charges sont sous-maximales. | `store.js` › `exerciseHistory` | Active |
 | RG-PER-07 | Volume d'une série = charge réelle × reps. | `store.js` › `setVolume` | Active |
 | RG-PER-08 | Le RPE est optionnel et se note de 7 à 10. 10 − RPE donne les reps en réserve. | `views/workout.js` › `rpeField`, `rir` | Active |
+| RG-PER-09 | Toutes les séries à la charge la plus lourde sous le bas de la fourchette : la charge redescend d'un cran, ou plus bas si le 1RM estimé le demande, avec les reps au bas de la fourchette. | `store.js` › `progressFrom` | Active |
+| RG-PER-10 | La progression part de la charge la plus lourde faite, et seules les séries à cette charge comptent : une charge plus lourde que prévu devient la base. | `store.js` › `progressFrom` | Active |
+| RG-PER-11 | Au repère athlétique (RG-ATH-04), la charge ne monte plus : même charge, reps au haut de la fourchette. | `store.js` › `progressFrom` ; `athletic.js` › `athleticCap` | Active |
+| RG-PER-12 | Charges en mémoire : après chaque séance, hors reprise, chaque exercice fait en séries (hors tempo lent) prend dans toutes les séances types la charge de la prochaine fois. Toutes les séances types sont recalées ainsi à l'ouverture de l'app. EMOM, Tabata et AMRAP gardent leur charge. | `store.js` › `rememberLoads`, `syncLoads` | Active |
+| RG-PER-13 | Mouvements à faire progresser : 3 au plus, en ajouter un quatrième fait sortir le plus ancien. Leur charge monte dès qu'une série touche le haut de la fourchette. Absent des séances types, le mouvement entre en tête de celle qui travaille le plus son muscle, en 3 séries, à sa dernière charge maximale ou à une charge courante. | `store.js` › `FOCUS_MAX`, `addFocus`, `progressFrom` ; `views/progression.js` | Active |
+
+## Repères athlétiques
+
+| ID | Règle | Source | État |
+|---|---|---|---|
+| RG-ATH-01 | Poids de référence : le poids de l'utilisateur (75 kg sans réglage), plafonné au poids sec visé pour sa taille (IMC 24) quand elle est renseignée. | `athletic.js` › `referenceWeight` | Active |
+| RG-ATH-02 | Après 35 ans, les repères baissent de 1 % par an, de 25 % au plus (30 ans sans âge renseigné). | `athletic.js` › `ageFactor` | Active |
+| RG-ATH-03 | Repère d'un grand mouvement = 1RM estimé visé, en multiple du poids de référence, selon le mouvement et le matériel (couché à la barre 1,25, rowing 1, développé épaules 0,75, tirage 1, squat 1,5, soulevé de terre 1,75…, par haltère pour les haltères ; incliné × 0,85). Tractions et dips comptent le poids du corps plus le lest. Melting pot et Tabatas n'ont pas de repère. | `athletic.js` › `PATTERNS`, `athleticTarget` | Active |
+| RG-ATH-04 | Charge maximale de travail : celle qui, au bas de la fourchette avec 2 reps en réserve, atteint le repère. | `athletic.js` › `athleticCap` | Active |
+| RG-ATH-05 | Un exercice dont le meilleur 1RM estimé des 8 dernières semaines dépasse son repère de plus de 10 % est signalé « au-dessus du repère », dans Progrès et en séance. | `athletic.js` › `athleticProgress`, `athleticReport`, `exerciseAlerts` | Active |
+| RG-ATH-06 | Déséquilibre : 20 points d'écart, en part du repère, entre les deux mouvements d'une paire (couché / rowing, développé épaules / tirage vertical, développé épaules / élévations latérales, curl / triceps, squat / soulevé de terre), chacun représenté par son meilleur exercice. | `athletic.js` › `PAIRS`, `athleticReport` | Active |
 
 ## Séance en cours
 
@@ -184,7 +203,7 @@ Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 | RG-SEA-19 | Si des séries ou des rounds sont déjà faits, ils restent sur l'exercice d'origine, et le remplaçant reprend le reste dans le même format (1 au minimum). Le chrono en cours s'arrête. | `store.js` › `swapExercise` | E-13 |
 | RG-SEA-20 | « Pas dans ma salle » coché au remplacement : l'exercice choisi le remplace aussi dans la séance type. | `views/workout.js` › `swapSheet` ; `store.js` › `keepSwap` | Active |
 | RG-SEA-21 | Mettre en favori un exercice pris à la place le garde dans la séance type, avec son format. | `views/workout.js` › `favBtn` ; `store.js` › `keepSwap` | Active |
-| RG-SEA-22 | Melting pot : un exercice caché par muscle, proposé en Tabata au remplacement. Ses rounds comptent pour ce muscle. Il n'est jamais proposé par un programme ni comme alternative. | `store.js` › `meltingPot`, `alternatives` ; `views/workout.js` › `swapSheet` | Active |
+| RG-SEA-22 | Melting pot : un exercice caché par muscle, proposé en Tabata au remplacement. Ses rounds comptent pour ce muscle. Il n'est jamais proposé par un programme ni comme alternative. Les Tabatas de muscle (RG-TPL-17) non plus. | `store.js` › `meltingPot`, `alternatives` ; `views/workout.js` › `swapSheet` | Active |
 | RG-SEA-23 | Terminer sans série validée propose d'abandonner : rien n'est enregistré. | `views/workout.js` › `finishSheet`, `abandonSheet` ; `store.js` › `finishWorkout` | Active |
 | RG-SEA-24 | Seuls les exercices avec au moins une série sont enregistrés. Une séance enregistrée marque le jour comme « séance faite ». | `store.js` › `finishWorkout` | Active |
 | RG-SEA-25 | Le ressenti (Difficile, Correct, En forme) et le journal sont optionnels. | `views/workout.js` › `finishView` | E-07 |
@@ -198,6 +217,9 @@ Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 | RG-SEA-33 | Recommencer l'échauffement demande une confirmation après 30 s de chrono. | `views/workout.js` › `workoutView` | Active |
 | RG-SEA-34 | En séance, Options › Superset lie l'exercice en cours, s'il lui reste des séries, au suivant ou à un autre exercice de la séance encore ouvert (en séries, pas en EMOM, Tabata ou AMRAP). L'autre quitte sa place et son groupe pour venir juste après, dans la limite de 3 exercices par groupe. Cela vaut pour cette séance, sauf report en fin de séance (RG-SEA-30). | `store.js` › `supersetCandidates`, `supersetWith` ; `views/workout.js` › `supersetSheet` | Active |
 | RG-SEA-35 | Sortir d'un superset en séance place l'exercice juste après ce qui reste du groupe, avec son propre repos. | `store.js` › `leaveSuperset` | Active |
+| RG-SEA-36 | Les rounds d'un EMOM ou d'un Tabata se notent tout seuls au chrono, à la fin de l'effort ou de la minute, avec la charge et les reps réglées, jusqu'au nombre de rounds prévu. Une ligne se touche pour corriger. | `store.js` › `catchUpRounds` ; `views/workout.js` | Active |
+| RG-SEA-37 | Un Tabata d'exercices variés montre le mouvement du round pendant l'effort, et le suivant pendant le repos. | `store.js` › `tabataMoves` ; `views/workout.js` | Active |
+| RG-SEA-38 | Les mouvements à faire progresser passent en tête de la séance, avec leur superset, dans l'ordre du programme. | `store.js` › `focusFirst` | Active |
 
 ## Matériel du jour
 
@@ -269,6 +291,10 @@ Dont 2 sans accès (RG-SEA-28 et 29) et 1 retirée (RG-SEA-08, en v0.10.0).
 | RG-TPL-14 | Un muscle réglé par le coach prend le statut, la cible (0 à 40 séries) et l'objectif donnés ; ce qui manque garde la valeur actuelle, et un statut seul remet la cible par défaut. Changer l'objectif recale les séances types (RG-VOL-07). Les exercices nommés en favoris passent en favori. | `store.js` › `parseTemplates`, `applyImport` | E-16 |
 | RG-TPL-15 | Les exercices à ajouter vont à la fin d'une séance type existante, choisie dans l'aperçu : par défaut une séance différente pour chaque ajout, d'abord celles qui travaillaient déjà ce muscle. Il faut au moins une séance type. | `store.js` › `parseTemplates`, `applyImport` ; `views/templates.js` › `importView` | Active |
 | RG-TPL-16 | Un muscle à remplacer voit tous ses exercices quitter d'abord toutes les séances types ; l'aperçu les liste avec leur séance. Les supersets qui ne tiennent plus sont déliés. | `store.js` › `replacedItems`, `applyImport` | Active |
+| RG-TPL-17 | Un Tabata collé peut devenir la séance d'un muscle (Objectif par muscle › Séance {muscle}). Dans chaque séance type qui travaille ce muscle, il prend la place du premier exercice du muscle et les autres sortent, sauf les mouvements à faire progresser et les AMRAP. Les supersets qui ne tiennent plus sont déliés. | `store.js` › `applyCircuit`, `setCircuit` ; `views/profile.js` | Active |
+| RG-TPL-18 | Revenir aux exercices du programme ne retire pas le Tabata des séances types. | `store.js` › `setCircuit` | Active |
+| RG-TPL-19 | Le Tabata épaules (10 mouvements aux haltères, 10 rounds de 30 s d'effort et 30 s de repos, 12 reps, 5 kg) est posé d'office comme séance des épaules, sauf s'il avait été désactivé. | `store.js` › `SHOULDER_TABATA`, `seed`, `migrate` | Active |
+| RG-TPL-20 | Le coach peut coller des Tabatas de muscle (`circuits`) : un nom déjà connu sans mouvements reprend le Tabata existant. Dans une séance, il peut aussi coller un Tabata pour cette séance seulement, ou un exercice du catalogue en Tabata ou en EMOM. L'aperçu montre les mouvements, les exercices qui sortent et le volume avant / après. | `store.js` › `parseTemplates`, `readCircuit`, `circuitPreview`, `applyImport` | Active |
 
 ## Pas du jour
 
@@ -317,8 +343,9 @@ Différences entre le code et l'intention écrite (commentaires, textes d'écran
 | E-14 | Bug | Remplacer un exercice après des séries en tempo lent enlève leur marque tempo : elles entrent dans l'historique et font redescendre la charge de référence. Essai : charge prévue 16 kg, une série à 10 kg en tempo, remplacement, et l'historique indique 10 kg. Vient de la v0.8.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-LIE-10 |
 | E-15 | Décision | Pendant une reprise ou un deload, les séances ont moitié moins de séries mais l'objectif de la semaine garde sa cible pleine : il ne peut pas être atteint. Déjà noté « à décider » dans `memoire.md`. | Relu | RG-RPR-10 |
 | E-16 | Bug | Les séances collées (v0.11.0) acceptent un superset de 4 exercices ou plus, et un repos de 0 s, alors qu'ailleurs un groupe compte 3 exercices au plus (RG-SEA-10) et un repos 15 s au moins (RG-TPL-03). Depuis la v0.13.0, une cible de muscle collée peut aller jusqu'à 40 séries, contre 30 à l'écran (RG-VOL-03). Essai : 4 exercices du même groupe et un repos de 0 s, tous acceptés. Vient de la v0.11.0, trouvé en fusionnant, pas corrigé. | Exécuté | RG-TPL-11, RG-TPL-13, RG-TPL-14 |
+| E-17 | Bug | Les Tabatas de muscle sont des exercices cachés, « jamais proposés […] dans le catalogue » selon le commentaire de `store.js`, mais le catalogue n'écarte que le Melting pot : « Tabata épaules » s'y affiche et peut être ajouté à une séance type comme un exercice ordinaire. Vient de la v0.14.0, trouvé en fusionnant, pas corrigé. | Relu | RG-EXE-02, RG-TPL-17 |
 
-### Corrigés en v0.13.1
+### Corrigés en v0.14.1
 
 Les règles concernées décrivent désormais le comportement corrigé. Vérifié sous Node et dans l'app.
 

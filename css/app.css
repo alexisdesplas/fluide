@@ -819,3 +819,15 @@ button.round-tile:active { background: var(--fond-discret); }
 .round-text > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .round-band.three .round-tile { flex-direction: column; align-items: flex-start; gap: var(--spacing-4); padding: var(--spacing-8); }
 .round-band.three .round-text { width: 100%; }
+
+/* Tabata à plusieurs exercices : l'exercice du round en grand, orange pendant l'effort, bleu pendant la pause. */
+.move-now { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-4); text-align: center; padding: var(--spacing-8) var(--spacing-16); border-radius: var(--radius-md); }
+.move-now.orange { background: var(--orange-doux); }
+.move-now.bleu { background: var(--bleu-doux); }
+.move-now .heading-xl { font-size: 32px; line-height: 32px; }
+
+/* Repères athlétiques : une barre par mouvement, le repère au bout. */
+.gauge { display: grid; grid-template-columns: 1fr auto; gap: var(--spacing-4) var(--spacing-8); align-items: baseline; }
+.gauge .vol-track { grid-column: 1 / -1; }
+.vol-fill.over { background: var(--orange); }
+.plan-row .lead.jaune svg { color: var(--jaune); }
